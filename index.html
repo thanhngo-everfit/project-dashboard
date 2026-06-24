@@ -793,7 +793,8 @@ function phaseRow(cat,proj,units,tw){
 function taskRow(p,ph,t,units,tw,last,projStartX,projStartDate){
   const meta=TASK_MAP[t.type];
   const row=document.createElement('div'); row.className='row task';
-  const lblTxt=meta.label+(meta.progress?'  ·  '+(t.progress||0)+'%':'');
+  const showPct=meta.progress && t.progress>0;   // hide 0%
+  const lblTxt=meta.label+(showPct?'  ·  '+t.progress+'%':'');
   const {left}=leftCell(2,null,meta.color,lblTxt,[
     {icon:'✎',title:'Edit',fn:()=>openTaskModal(ph,t)},
     {icon:'🗑',title:'Delete',fn:()=>{ph.tasks=ph.tasks.filter(x=>x!==t);render();}},
@@ -813,7 +814,7 @@ function taskRow(p,ph,t,units,tw,last,projStartX,projStartDate){
     track.appendChild(h);
   }
   if(t.start||t.end){
-    const lbl=meta.label+(meta.progress?' '+(t.progress||0)+'%':'');
+    const lbl=meta.label+(showPct?' '+t.progress+'%':'');
     const bar=makeBar(meta.color, lbl, meta.progress?(t.progress||0):null, ()=>openTaskModal(ph,t));
     placeBar(bar,t,units,projStartDate);
     attachDrag(bar,t,units,'task',ph,projStartDate);
