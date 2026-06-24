@@ -269,6 +269,7 @@ const TASK_TYPES = [
 ];
 // Fixed phase types (name + color) + Custom (needs a name).
 const PHASE_TYPES = [
+  {key:'research',    label:'Research',    color:'#b4e6e0'},
   {key:'development', label:'Development', color:'#bcd1f6'},
   {key:'testing',     label:'Testing',     color:'#fcd9a8'},
   {key:'releasing',   label:'Releasing',   color:'#bfe3c9'},
@@ -1002,7 +1003,7 @@ function openProjectModal(p){
 // Project modal: a Project has a name + one or more Phases (each = a bar on the row).
 function openPhaseModal(category,proj){
   const editing=!!proj;
-  const newDraft=()=>({ptype:'development',name:'Development',start:'',end:'',color:PT('development').color,wip:false,badge:'',advOpen:false});
+  const newDraft=()=>({ptype:PHASE_TYPES[0].key,name:PHASE_TYPES[0].label,start:'',end:'',color:PHASE_TYPES[0].color,wip:false,badge:'',advOpen:false});
   const drafts = editing && proj.segments && proj.segments.length
     ? proj.segments.map(s=>{const pt=inferPhaseType(s);return {ptype:pt,name:s.name||'',start:s.start||'',end:s.end||'',color:s.color||PT(pt).color,wip:!!s.wip,badge:s.badge||'',advOpen:false};})
     : [newDraft()];
