@@ -640,7 +640,7 @@ function renderGantt(){
 
   squad.projects.forEach(p=>{
     grid.appendChild(projectRow(p,units,tw));
-    if(!p.collapsed){
+    {
       p.phases.forEach(ph=>{
         grid.appendChild(phaseRow(p,ph,units,tw));
         if(!ph.collapsed){
@@ -708,8 +708,11 @@ function leftCell(level,caretState,dot,labelText,actions,opts){
     left.appendChild(tree);
   }
   if(level>0){const ind=document.createElement('span');ind.className='indent';ind.style.width=(level*16)+'px';left.appendChild(ind);}
-  const caret=document.createElement('span'); caret.className='caret'+(caretState===null?' hidden':'');
-  caret.textContent=caretState==='open'?'▾':'▸'; left.appendChild(caret);
+  let caret=null;
+  if(caretState!==false){
+    caret=document.createElement('span'); caret.className='caret'+(caretState===null?' hidden':'');
+    caret.textContent=caretState==='open'?'▾':'▸'; left.appendChild(caret);
+  }
   if(dot){const d=document.createElement('span');d.className='dot';d.style.background=dot;left.appendChild(d);}
   const lab=document.createElement('span'); lab.className='label'; lab.textContent=labelText; left.appendChild(lab);
   const acts=document.createElement('span'); acts.className='acts';
@@ -720,12 +723,12 @@ function leftCell(level,caretState,dot,labelText,actions,opts){
 
 function projectRow(p,units,tw){
   const row=document.createElement('div'); row.className='row project';
-  const {left,caret}=leftCell(0,p.collapsed?'closed':'open',null,p.name,[
+  const count=(p.phases||[]).length;
+  const {left}=leftCell(0,false,null,p.name+' ('+count+')',[
     {icon:'＋',title:'Add project',fn:()=>openPhaseModal(p)},
     {icon:'✎',title:'Rename category',fn:()=>openProjectModal(p)},
     {icon:'🗑',title:'Delete',fn:()=>{if(confirm('Delete category "'+p.name+'"?')){p._del=1;activeSquad().projects=activeSquad().projects.filter(x=>x!==p);render();}}},
   ]);
-  caret.onclick=()=>{p.collapsed=!p.collapsed;render();};
   wireDropTarget(row, p.id, null);   // drop a project here -> move into this category
   row.appendChild(left);
   const track=document.createElement('div'); track.className='track'; track.style.width=tw+'px';
