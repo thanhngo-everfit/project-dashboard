@@ -33,6 +33,9 @@
        white-space:nowrap;position:relative;top:1px;max-width:240px;}
   .tab:hover{background:#f5f7fa;}
   .tab.active{background:var(--panel);color:var(--text);box-shadow:0 -2px 6px rgba(0,0,0,.04);}
+  .tab.tab-dragging{opacity:.4;}
+  .tab.tab-before{box-shadow:inset 3px 0 0 0 #4c6fff;}
+  .tab.tab-after{box-shadow:inset -3px 0 0 0 #4c6fff;}
   .tab .tname{outline:none;}
   .tab .x{border:none;background:transparent;color:#98a2b3;cursor:pointer;border-radius:50%;width:20px;height:20px;font-size:14px;line-height:1;}
   .tab .x:hover{background:#e4e7ec;color:#d92d20;}
@@ -264,6 +267,7 @@ let saveTimer = null;
 let pollTimer = null;
 let busy = false;              // true while dragging a bar (don't clobber)
 let dragPhase = null;          // {projectId, phaseId} while dragging a phase row to reorder/move
+let dragTabId = null;          // squad id while dragging a tab to reorder
 
 function save(){
   const json = JSON.stringify(state);
@@ -482,6 +486,21 @@ function render(){
   save();
 }
 
+function clearTabMarks(keepDragging){
+  document.querySelectorAll('.tab-before,.tab-after').forEach(t=>t.classList.remove('tab-before','tab-after'));
+  if(!keepDragging){ document.querySelectorAll('.tab-dragging').forEach(t=>t.classList.remove('tab-dragging')); dragTabId=null; }
+}
+function reorderSquads(dragId,targetId,after){
+  const arr=state.squads;
+  const from=arr.findIndex(s=>s.id===dragId);
+  if(from<0){clearTabMarks();return;}
+  const [moved]=arr.splice(from,1);
+  let to=arr.findIndex(s=>s.id===targetId);
+  if(to<0) to=arr.length; else if(after) to+=1;
+  arr.splice(to,0,moved);
+  clearTabMarks();
+  render();
+}
 function renderTabs(){
   const bar=document.getElementById('tabbar');
   bar.innerHTML='';
@@ -495,7 +514,7 @@ function renderTabs(){
       nameEl.contentEditable='true'; nameEl.focus();
       document.execCommand('selectAll',false,null);
     };
-    nameEl.onblur=()=>{nameEl.contentEditable='false'; s.name=nameEl.textContent.trim()||'Squad'; render();};
+    nameEl.onblur=()=>{nameEl.contentEditable='false'; tab.draggable=true; s.name=nameEl.textContent.trim()||'Squad'; render();};
     nameEl.onkeydown=ev=>{if(ev.key==='Enter'){ev.preventDefault();nameEl.blur();}};
     tab.querySelector('.x').onclick=()=>{
       if(state.squads.length===1){alert('At least one squad is required.');return;}
@@ -504,6 +523,25 @@ function renderTabs(){
       if(state.activeSquad===s.id)state.activeSquad=state.squads[0].id;
       render();
     };
+    // drag to reorder tabs
+    tab.draggable=true;
+    tab.addEventListener('dragstart',e=>{ dragTabId=s.id; tab.classList.add('tab-dragging'); e.dataTransfer.effectAllowed='move'; try{e.dataTransfer.setData('text/plain',s.id);}catch(_){} });
+    tab.addEventListener('dragend',clearTabMarks);
+    tab.addEventListener('dragover',e=>{
+      if(!dragTabId||dragTabId===s.id)return;
+      e.preventDefault();
+      const r=tab.getBoundingClientRect();
+      clearTabMarks(true);
+      tab.classList.add(e.clientX > r.left+r.width/2 ? 'tab-after' : 'tab-before');
+    });
+    tab.addEventListener('drop',e=>{
+      if(!dragTabId||dragTabId===s.id){clearTabMarks();return;}
+      e.preventDefault();
+      const r=tab.getBoundingClientRect();
+      reorderSquads(dragTabId, s.id, e.clientX > r.left+r.width/2);
+    });
+    // editing the name shouldn't start a drag
+    tab.querySelector('.tname').addEventListener('dblclick',()=>{ tab.draggable=false; });
     bar.appendChild(tab);
   });
   const add=document.createElement('button');
