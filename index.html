@@ -7,7 +7,7 @@
 <style>
   :root{
     --bg:#ffffff; --panel:#ffffff; --border:#e8eaef; --text:#101828;
-    --muted:#8a93a3; --left-w:300px; --row-h:42px; --head-h:48px;
+    --muted:#8a93a3; --left-w:328px; --row-h:42px; --head-h:48px;
     --tab-h:40px;
   }
   *{box-sizing:border-box;}
@@ -69,10 +69,10 @@
   .row.task .bar{top:7px;height:18px;font-size:10.5px;border-radius:6px;}
   .row.task .bar .fill{border-radius:6px 0 0 6px;}
   /* dashed connector thread (project -> its dev work), Facebook-comment style */
-  .tree{position:absolute;left:26px;top:0;bottom:0;width:44px;pointer-events:none;z-index:1;}
+  .tree{position:absolute;left:34px;top:0;bottom:0;width:48px;pointer-events:none;z-index:1;}
   .tree .v{position:absolute;left:0;top:0;bottom:0;border-left:2px dashed #ccd2dc;}
   .tree.last .v{bottom:50%;}
-  .tree .h{position:absolute;left:0;width:40px;top:calc(50% - 1px);border-top:2px dashed #ccd2dc;border-bottom-left-radius:8px;}
+  .tree .h{position:absolute;left:0;width:46px;top:calc(50% - 1px);border-top:2px dashed #ccd2dc;border-bottom-left-radius:8px;}
   /* timeline connector thread (in the track), rooted at the project's start column */
   .tl-v{position:absolute;top:0;bottom:0;width:0;border-left:2px dashed #c4cad4;z-index:1;pointer-events:none;}
   .tl-v.last{bottom:calc(50% - 1px);}
@@ -85,7 +85,8 @@
   .row.drop-before .left{box-shadow:inset 0 3px 0 0 #4c6fff;}
 
   .left{position:sticky;left:0;z-index:5;width:var(--left-w);min-width:var(--left-w);
-        display:flex;align-items:center;gap:6px;padding:0 10px;background:inherit;border-right:1px solid var(--border);}
+        display:flex;align-items:center;gap:8px;padding:0 16px;background:inherit;border-right:1px solid var(--border);}
+  .row.project .left{padding-left:18px;}
   .row.project .left{background:#fafbfc;}
   .row.phase .left,.row.task .left{background:#fff;}
   .left .caret{width:16px;text-align:center;cursor:pointer;color:#98a2b3;font-size:11px;user-select:none;flex:none;}
