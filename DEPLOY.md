@@ -62,9 +62,38 @@ The root URL `/` serves the dashboard (via `vercel.json` rewrite).
   `@everfit.io`; anything else is rejected.
 - Using **Internal** OAuth consent (Step 1.2) makes Google enforce the Workspace boundary too.
 
-### Security note (read this)
-Roadmap data is stored in each browser's `localStorage` — it is **per-device, not shared**, and
-there is no backend. This login is an **access gate**, not a hard security boundary: the HTML/JS is
-publicly downloadable on any static host. For *enforced* access control or *shared team data*, you'd
-add a backend (e.g. Vercel Serverless Functions verifying the Google token server-side + a database
-like Vercel KV/Postgres). Ask if you want that upgrade.
+---
+
+## Step 3 — Shared team data (Vercel KV)
+
+The app now stores the roadmap in a **shared backend** (`/api/state`) so everyone on the team sees
+the same data. You must connect a free Redis store once:
+
+1. In the **Vercel dashboard** → your `project-dashboard` project → **Storage** tab → **Create Database**.
+2. Choose **KV** (Upstash Redis). Pick the free plan, a region near you, and **Connect** it to this project
+   (all environments). This automatically adds the `KV_REST_API_URL` / `KV_REST_API_TOKEN` env vars.
+3. **Redeploy** (Deployments → ⋯ → Redeploy, or just `git push`) so the functions pick up the new env vars.
+
+That's it — no code changes needed. The serverless function reads those env vars automatically.
+
+### How it works
+- `GET /api/state` returns the shared roadmap; `POST /api/state` saves it.
+- Every request must carry a valid Google ID token; the function verifies the signature, audience,
+  and that the email is a verified `@everfit.io` account — so the domain restriction is now
+  **enforced server-side**, not just in the browser.
+- The app loads the shared copy on sign-in, auto-saves edits, and polls every ~12s to pick up
+  teammates' changes. A small status (Saving… / Saved / Updated by …) shows in the top bar.
+
+### Concurrency model
+**Last-write-wins.** Good for a small team making occasional edits. The app only adopts a teammate's
+remote version when you have no unsaved local edits, but two people editing *at the same time* can
+still overwrite each other (whoever saves last wins). True real-time co-editing is a larger project.
+
+> Local testing note: `npx serve` does NOT run the `/api` functions, so shared save won't work
+> locally — it falls back to localStorage. Test the shared backend on the deployed Vercel URL,
+> or run `vercel dev` (which serves the functions locally).
+
+## How the @everfit.io restriction is enforced
+- Client gate: Google button uses `hd: "everfit.io"`; the app rejects non-`everfit.io` tokens.
+- Server enforcement: `/api/state` re-verifies the Google token on every read/write (Step 3).
+- Using **Internal** OAuth consent (Step 1.2) makes Google enforce the Workspace boundary too.

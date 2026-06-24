@@ -164,6 +164,7 @@
     <button class="iconbtn" id="exportBtn" title="Export JSON">⤓</button>
     <button class="iconbtn" id="importBtn" title="Import JSON">⤒</button>
     <input type="file" id="importFile" accept="application/json" style="display:none">
+    <span id="syncStatus" style="font-size:12px;font-weight:600;color:var(--muted);min-width:80px;text-align:right;"></span>
     <div class="acct" id="acct">
       <span class="who" id="acctEmail"></span>
       <button class="iconbtn" id="signOut" title="Sign out">⏻</button>
@@ -229,7 +230,114 @@ function load(){
   try{const s=JSON.parse(localStorage.getItem(STORE_KEY)); if(s&&s.squads&&s.squads.length) return s;}catch(e){}
   return seed();
 }
-function save(){localStorage.setItem(STORE_KEY,JSON.stringify(state));}
+/* Local cache + shared-server sync.
+ * - localStorage is an offline cache / fallback.
+ * - The shared copy lives in the backend (/api/state) so the whole team sees it.
+ * - Concurrency model: last-write-wins. We only adopt a teammate's remote copy when
+ *   we have no unsaved local edits, and we suppress redundant pushes to avoid ping-pong. */
+let idToken = null;            // current Google ID token (for API auth)
+let baselineUpdatedAt = 0;     // server timestamp we are currently in sync with
+let lastSyncedJSON = null;     // serialized state last confirmed on the server
+let saveTimer = null;
+let pollTimer = null;
+let busy = false;              // true while dragging a bar (don't clobber)
+
+function save(){
+  const json = JSON.stringify(state);
+  localStorage.setItem(STORE_KEY, json);
+  if(!idToken) return;             // not signed in / offline -> local only
+  if(json === lastSyncedJSON) return; // nothing new to push (prevents loops)
+  scheduleSave();
+}
+function scheduleSave(){
+  if(saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(syncSave, 700);
+}
+function apiFetch(url, opts){
+  opts = opts || {};
+  opts.headers = Object.assign({}, opts.headers, { 'Authorization': 'Bearer ' + idToken });
+  return fetch(url, opts);
+}
+function setSync(text, tone){
+  const el = document.getElementById('syncStatus');
+  if(!el) return;
+  el.textContent = text;
+  el.style.color = tone === 'bad' ? '#d92d20' : tone === 'ok' ? '#067647' : 'var(--muted)';
+}
+async function syncSave(){
+  if(!idToken) return;
+  const payload = JSON.stringify(state);
+  setSync('Saving…');
+  try{
+    const r = await apiFetch('/api/state', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({state})
+    });
+    if(r.status===401){ handleAuthExpired(); return; }
+    if(r.ok){
+      const j = await r.json();
+      lastSyncedJSON = payload;
+      baselineUpdatedAt = j.updatedAt || baselineUpdatedAt;
+      setSync('Saved', 'ok');
+    } else {
+      const j = await r.json().catch(()=>({}));
+      setSync(j.error==='storage_not_configured' ? 'No DB configured' : 'Save failed', 'bad');
+    }
+  }catch(e){ setSync('Offline — saved locally', 'bad'); }
+}
+async function syncLoad(){
+  if(!idToken){ render(); return; }
+  setSync('Loading…');
+  try{
+    const r = await apiFetch('/api/state', {method:'GET'});
+    if(r.status===401){ handleAuthExpired(); return; }
+    if(r.ok){
+      const j = await r.json();
+      const rec = j.record;
+      if(rec && rec.state){
+        state = rec.state;
+        baselineUpdatedAt = rec.updatedAt || 0;
+        lastSyncedJSON = JSON.stringify(state);
+        localStorage.setItem(STORE_KEY, lastSyncedJSON);
+        setSync('Saved', 'ok');
+      } else {
+        // first ever run: seed the shared copy with whatever we have locally
+        await syncSave();
+      }
+    } else {
+      setSync('Offline — using local copy', 'bad');
+    }
+  }catch(e){ setSync('Offline — using local copy', 'bad'); }
+  render();
+}
+async function pollRemote(){
+  if(!idToken || busy) return;
+  if(modalBg.classList.contains('open')) return;          // editing -> don't interrupt
+  if(JSON.stringify(state) !== lastSyncedJSON) return;     // local edits pending -> our save wins
+  try{
+    const r = await apiFetch('/api/state', {method:'GET'});
+    if(r.status===401){ handleAuthExpired(); return; }
+    if(!r.ok) return;
+    const j = await r.json();
+    const rec = j.record;
+    if(rec && rec.state && rec.updatedAt > baselineUpdatedAt){
+      state = rec.state;
+      baselineUpdatedAt = rec.updatedAt;
+      lastSyncedJSON = JSON.stringify(state);
+      localStorage.setItem(STORE_KEY, lastSyncedJSON);
+      render();
+      setSync('Updated by ' + (rec.updatedBy||'teammate'), 'ok');
+    }
+  }catch(e){ /* offline: keep working locally */ }
+}
+function startPolling(){ if(pollTimer) clearInterval(pollTimer); pollTimer = setInterval(pollRemote, 12000); }
+function stopPolling(){ if(pollTimer) clearInterval(pollTimer); pollTimer = null; }
+function handleAuthExpired(){
+  stopPolling();
+  idToken = null;
+  localStorage.removeItem(AUTH_KEY);
+  showGate();
+  authError('Session expired — please sign in again.');
+}
 
 function seed(){
   const t=new Date();
@@ -536,7 +644,7 @@ function attachDrag(bar,obj,units,kind,parent){
   let mode=null,startX=0,moved=false,origStart,origEnd;
   function down(e,m){
     e.preventDefault(); e.stopPropagation();
-    mode=m; startX=e.clientX; moved=false;
+    mode=m; startX=e.clientX; moved=false; busy=true;
     origStart=parse(obj.start); origEnd=parse(obj.end);
     bar.classList.add('dragging');
     window.addEventListener('mousemove',move); window.addEventListener('mouseup',up);
@@ -561,7 +669,7 @@ function attachDrag(bar,obj,units,kind,parent){
     window.removeEventListener('mousemove',move); window.removeEventListener('mouseup',up);
     if(moved){ if(kind==='phase')clampPhase(parent,obj); render(); }
     else { bar._onEdit&&bar._onEdit(); }
-    mode=null;
+    mode=null; busy=false;
   }
   bar.addEventListener('mousedown',e=>down(e,'move'));
   bar.querySelector('.handle.l').addEventListener('mousedown',e=>down(e,'l'));
@@ -686,7 +794,7 @@ function decodeJwt(token){
 }
 function loadAuth(){
   try{const a=JSON.parse(localStorage.getItem(AUTH_KEY));
-    if(a&&a.email&&a.exp&&a.exp>Date.now()&&a.email.toLowerCase().endsWith('@'+ALLOWED_DOMAIN))return a;}catch(e){}
+    if(a&&a.email&&a.exp&&a.exp>Date.now()&&a.idToken&&a.email.toLowerCase().endsWith('@'+ALLOWED_DOMAIN))return a;}catch(e){}
   return null;
 }
 function authError(msg){const e=document.getElementById('gerr');e.textContent=msg;e.style.display='block';}
@@ -696,10 +804,11 @@ function showGate(){
   initGoogle();
 }
 function showApp(auth){
+  idToken = auth.idToken;
   document.getElementById('loginGate').style.display='none';
   document.getElementById('acct').style.display='flex';
   document.getElementById('acctEmail').textContent=auth.email;
-  render();
+  syncLoad().then(startPolling);   // pull the shared copy, then watch for teammates' changes
 }
 function onCredential(resp){
   let p; try{p=decodeJwt(resp.credential);}catch(e){authError('Sign-in failed. Please try again.');return;}
@@ -709,7 +818,7 @@ function onCredential(resp){
     authError('Access is restricted to @'+ALLOWED_DOMAIN+' accounts.');
     return;
   }
-  const auth={email:p.email,name:p.name||'',exp:(p.exp||0)*1000};
+  const auth={email:p.email,name:p.name||'',exp:(p.exp||0)*1000,idToken:resp.credential};
   localStorage.setItem(AUTH_KEY,JSON.stringify(auth));
   showApp(auth);
 }
@@ -721,6 +830,8 @@ function initGoogle(){
   google.accounts.id.prompt();
 }
 document.getElementById('signOut').onclick=()=>{
+  stopPolling();
+  idToken=null; lastSyncedJSON=null; baselineUpdatedAt=0;
   localStorage.removeItem(AUTH_KEY);
   if(window.google&&google.accounts) google.accounts.id.disableAutoSelect();
   showGate();
