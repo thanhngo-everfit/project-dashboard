@@ -560,7 +560,7 @@ function gridlinesEl(units,tw){
   // today line
   const today=new Date(); const tx=dateToX(today,units);
   const tl=document.createElement('div'); tl.className='today'; tl.style.left=tx+'px';
-  tl.innerHTML='<span class="lbl">Today</span>'; gl.appendChild(tl);
+  gl.appendChild(tl);
   return gl;
 }
 // Two-tier header for Week view: month band on top, day-number + weekday letter below.
