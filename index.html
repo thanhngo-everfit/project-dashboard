@@ -294,8 +294,15 @@ function migrate(s){
     }
     if(!Array.isArray(proj.tasks)) proj.tasks=[];
   })));
+  // per-view zoom (was a single shared value)
+  if(!s.zoomByView || typeof s.zoomByView!=='object'){
+    const z=s.zoom||1; s.zoomByView={quarter:z,month:z,week:z};
+  }
+  ['quarter','month','week'].forEach(v=>{ if(!s.zoomByView[v]) s.zoomByView[v]=1; });
   return s;
 }
+function curZoom(){ return (state.zoomByView && state.zoomByView[state.view]) || 1; }
+function setZoom(z){ if(!state.zoomByView) state.zoomByView={}; state.zoomByView[state.view]=z; }
 /* Local cache + shared-server sync.
  * - localStorage is an offline cache / fallback.
  * - The shared copy lives in the backend (/api/state) so the whole team sees it.
@@ -447,7 +454,7 @@ function buildUnits(squad){
   const today=new Date(); if(today<min)min=today; if(today>max)max=today;
 
   const base = state.view==='quarter'?170 : state.view==='month'?95 : 30;
-  const w = base*state.zoom;
+  const w = base*curZoom();
   const units=[]; let x=LEFTPAD;   // leave a left gutter for the connector thread
   if(state.view==='quarter'){
     let cur=quarterStart(min);
@@ -1084,8 +1091,8 @@ function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','
   el.onblur=()=>{el.contentEditable='false';const v=el.textContent.trim()||'Squad';activeSquad().name=v;render();};
 })();
 document.querySelectorAll('#viewToggle button').forEach(b=>b.onclick=()=>{state.view=b.dataset.view;render();});
-document.getElementById('zoomIn').onclick=()=>{state.zoom=Math.min(3,state.zoom*1.25);render();};
-document.getElementById('zoomOut').onclick=()=>{state.zoom=Math.max(.4,state.zoom/1.25);render();};
+document.getElementById('zoomIn').onclick=()=>{setZoom(Math.min(3,curZoom()*1.25));render();};
+document.getElementById('zoomOut').onclick=()=>{setZoom(Math.max(.4,curZoom()/1.25));render();};
 function setAllCollapsed(v){
   activeSquad().projects.forEach(p=>{ p.collapsed=v; p.phases.forEach(ph=>ph.collapsed=v); });
   render();
