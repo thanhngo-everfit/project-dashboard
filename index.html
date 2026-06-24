@@ -149,6 +149,16 @@
   .swatch.sel{border-color:#1d2433;box-shadow:0 0 0 2px #fff inset;}
   .progress-row input[type=range]{width:100%;}
   .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:8px;}
+  /* project modal phase blocks */
+  .phase-block{border:1px solid var(--border);border-radius:10px;padding:12px 12px 6px;margin-bottom:10px;background:#fbfbfc;}
+  .pb-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+  .pb-title{font-size:12px;font-weight:800;color:#475467;text-transform:uppercase;letter-spacing:.4px;}
+  .pb-remove{border:none;background:transparent;color:#98a2b3;cursor:pointer;font-size:12px;font-weight:600;padding:2px 4px;border-radius:5px;}
+  .pb-remove:hover{color:#d92d20;background:#fee4e2;}
+  .pb-adv-toggle{border:none;background:transparent;color:#4c6fff;cursor:pointer;font-size:12px;font-weight:700;padding:4px 0;}
+  .pb-adv{padding-top:6px;}
+  .wiplab{display:flex;align-items:center;gap:8px;font-weight:500;text-transform:none;letter-spacing:0;padding-top:6px;}
+  .wiplab input{width:auto;}
 
   /* ---------- Login gate ---------- */
   .gate{position:fixed;inset:0;z-index:1000;background:#fff;display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px;text-align:center;}
@@ -253,8 +263,24 @@ function addDays(d,n){return new Date(d.getFullYear(),d.getMonth(),d.getDate()+n
 function addMonths(d,n){return new Date(d.getFullYear(),d.getMonth()+n,1);}
 
 function load(){
-  try{const s=JSON.parse(localStorage.getItem(STORE_KEY)); if(s&&s.squads&&s.squads.length) return s;}catch(e){}
-  return seed();
+  try{const s=JSON.parse(localStorage.getItem(STORE_KEY)); if(s&&s.squads&&s.squads.length) return migrate(s);}catch(e){}
+  return migrate(seed());
+}
+/* Model: squad.projects[] = Categories; category.phases[] = Projects (rows);
+ * project.segments[] = Phases (bars on the row); project.tasks[] = dev work.
+ * Migration: older data stored dates/color directly on the Project -> wrap into one Phase. */
+function migrate(s){
+  (s.squads||[]).forEach(sq=>(sq.projects||[]).forEach(cat=>(cat.phases||[]).forEach(proj=>{
+    if(!Array.isArray(proj.segments)){
+      proj.segments=[];
+      if(proj.start||proj.end){
+        proj.segments.push({id:uid(),name:'',start:proj.start||'',end:proj.end||'',color:proj.color||PALETTE[0],wip:!!proj.wip,badge:proj.badge||''});
+      }
+      delete proj.start; delete proj.end; delete proj.color; delete proj.wip; delete proj.badge;
+    }
+    if(!Array.isArray(proj.tasks)) proj.tasks=[];
+  })));
+  return s;
 }
 /* Local cache + shared-server sync.
  * - localStorage is an offline cache / fallback.
@@ -322,7 +348,7 @@ async function syncLoad(){
       const j = await r.json();
       const rec = j.record;
       if(rec && rec.state){
-        state = rec.state;
+        state = migrate(rec.state);
         baselineUpdatedAt = rec.updatedAt || 0;
         lastSyncedJSON = JSON.stringify(state);
         localStorage.setItem(STORE_KEY, lastSyncedJSON);
@@ -348,7 +374,7 @@ async function pollRemote(){
     const j = await r.json();
     const rec = j.record;
     if(rec && rec.state && rec.updatedAt > baselineUpdatedAt){
-      state = rec.state;
+      state = migrate(rec.state);
       baselineUpdatedAt = rec.updatedAt;
       lastSyncedJSON = JSON.stringify(state);
       localStorage.setItem(STORE_KEY, lastSyncedJSON);
@@ -392,9 +418,9 @@ function activeSquad(){return state.squads.find(s=>s.id===state.activeSquad)||st
 /* ============================ Timeline math ============================ */
 function gatherDates(squad){
   const ds=[];
-  squad.projects.forEach(p=>p.phases.forEach(ph=>{
-    if(ph.start)ds.push(parse(ph.start)); if(ph.end)ds.push(parse(ph.end));
-    ph.tasks.forEach(t=>{if(t.start)ds.push(parse(t.start)); if(t.end)ds.push(parse(t.end));});
+  squad.projects.forEach(cat=>cat.phases.forEach(proj=>{
+    (proj.segments||[]).forEach(s=>{if(s.start)ds.push(parse(s.start)); if(s.end)ds.push(parse(s.end));});
+    (proj.tasks||[]).forEach(t=>{if(t.start)ds.push(parse(t.start)); if(t.end)ds.push(parse(t.end));});
   }));
   return ds;
 }
@@ -587,7 +613,7 @@ function renderGantt(){
   head.appendChild(hl); head.appendChild(ht); grid.appendChild(head);
 
   if(!squad.projects.length){
-    const e=document.createElement('div'); e.className='empty'; e.textContent='No projects yet. Click “＋ Project” to start.';
+    const e=document.createElement('div'); e.className='empty'; e.textContent='No categories yet. Click the ＋ in the PROJECT / PHASE / WORK header to add one.';
     grid.appendChild(e); g.appendChild(grid); return;
   }
 
@@ -664,17 +690,17 @@ function leftCell(level,caretState,dot,labelText,actions){
 function projectRow(p,units,tw){
   const row=document.createElement('div'); row.className='row project';
   const {left,caret}=leftCell(0,p.collapsed?'closed':'open',null,p.name,[
-    {icon:'＋',title:'Add phase',fn:()=>openPhaseModal(p)},
-    {icon:'✎',title:'Rename',fn:()=>openProjectModal(p)},
-    {icon:'🗑',title:'Delete',fn:()=>{if(confirm('Delete project "'+p.name+'"?')){p._del=1;activeSquad().projects=activeSquad().projects.filter(x=>x!==p);render();}}},
+    {icon:'＋',title:'Add project',fn:()=>openPhaseModal(p)},
+    {icon:'✎',title:'Rename category',fn:()=>openProjectModal(p)},
+    {icon:'🗑',title:'Delete',fn:()=>{if(confirm('Delete category "'+p.name+'"?')){p._del=1;activeSquad().projects=activeSquad().projects.filter(x=>x!==p);render();}}},
   ]);
   caret.onclick=()=>{p.collapsed=!p.collapsed;render();};
-  wireDropTarget(row, p.id, null);   // drop a phase here -> move into this project
+  wireDropTarget(row, p.id, null);   // drop a project here -> move into this category
   row.appendChild(left);
   const track=document.createElement('div'); track.className='track'; track.style.width=tw+'px';
   track.appendChild(gridlinesEl(units,tw));
-  // summary bar across phases
-  const ds=[]; p.phases.forEach(ph=>{if(ph.start)ds.push(parse(ph.start));if(ph.end)ds.push(parse(ph.end));});
+  // summary bar across all phases of all projects in this category
+  const ds=[]; p.phases.forEach(proj=>(proj.segments||[]).forEach(s=>{if(s.start)ds.push(parse(s.start));if(s.end)ds.push(parse(s.end));}));
   if(ds.length){
     const mn=new Date(Math.min(...ds)),mx=new Date(Math.max(...ds));
     const x=dateToX(mn,units),w=dateToX(addDays(mx,1),units)-x;
@@ -685,24 +711,56 @@ function projectRow(p,units,tw){
   return row;
 }
 
-function phaseRow(p,ph,units,tw){
+// Label rule for a phase bar:
+//  - phase has a name           -> show the phase name
+//  - phase has no name, only 1  -> show the project name
+//  - phase has no name, 2+      -> show nothing
+function segLabel(proj, seg){
+  if(seg.name && seg.name.trim()) return seg.name.trim();
+  if((proj.segments||[]).length===1) return proj.name;
+  return '';
+}
+// Pack phases into lanes so overlapping periods stack instead of hiding each other.
+function laneLayout(segs, units){
+  const items=segs.map(seg=>({seg, s:+effStart(seg,units), e:+addDays(effEnd(seg,units),1)}));
+  items.sort((a,b)=>a.s-b.s || a.e-b.e);
+  const laneEnds=[];
+  items.forEach(it=>{
+    let placed=false;
+    for(let i=0;i<laneEnds.length;i++){ if(it.s>=laneEnds[i]){ laneEnds[i]=it.e; it.lane=i; placed=true; break; } }
+    if(!placed){ it.lane=laneEnds.length; laneEnds.push(it.e); }
+  });
+  return {items, laneCount:Math.max(1,laneEnds.length)};
+}
+function phaseRow(cat,proj,units,tw){
   const row=document.createElement('div'); row.className='row phase';
-  const {left,caret}=leftCell(1,ph.collapsed?'closed':'open',ph.color,ph.name,[
-    {icon:'＋',title:'Add work',fn:()=>openTaskModal(ph)},
-    {icon:'✎',title:'Edit phase',fn:()=>openPhaseModal(p,ph)},
-    {icon:'🗑',title:'Delete',fn:()=>{if(confirm('Delete phase "'+ph.name+'"?')){p.phases=p.phases.filter(x=>x!==ph);render();}}},
+  const segs=proj.segments||[];
+  const dotColor=segs[0]?segs[0].color:'#cdb4f6';
+  const {left,caret}=leftCell(1,proj.collapsed?'closed':'open',dotColor,proj.name,[
+    {icon:'＋',title:'Add work',fn:()=>openTaskModal(proj)},
+    {icon:'✎',title:'Edit project',fn:()=>openPhaseModal(cat,proj)},
+    {icon:'🗑',title:'Delete',fn:()=>{if(confirm('Delete project "'+proj.name+'"?')){cat.phases=cat.phases.filter(x=>x!==proj);render();}}},
   ]);
-  caret.onclick=()=>{ph.collapsed=!ph.collapsed;render();};
-  makePhaseDraggable(left, row, p.id, ph.id);  // drag this label to move/reorder
-  wireDropTarget(row, p.id, ph.id);            // drop another phase here -> insert before this one
+  caret.onclick=()=>{proj.collapsed=!proj.collapsed;render();};
+  makePhaseDraggable(left, row, cat.id, proj.id);  // drag label to move/reorder between categories
+  wireDropTarget(row, cat.id, proj.id);
   row.appendChild(left);
   const track=document.createElement('div'); track.className='track'; track.style.width=tw+'px';
   track.appendChild(gridlinesEl(units,tw));
-  if(ph.start||ph.end){
-    const bar=makeBar(ph.color, ph.name, null, ()=>openPhaseModal(p,ph), {wip:ph.wip, badge:ph.badge});
-    placeBar(bar,ph,units);
-    attachDrag(bar,ph,units,'phase',p);
-    track.appendChild(bar);
+  const drawable=segs.filter(s=>s.start||s.end);
+  const laneH=26, gap=4, pad=6;
+  if(drawable.length){
+    const layout=laneLayout(drawable,units);
+    row.style.height=(layout.laneCount*laneH + (layout.laneCount-1)*gap + pad*2)+'px';
+    layout.items.forEach(it=>{
+      const seg=it.seg;
+      const bar=makeBar(seg.color, segLabel(proj,seg), null, ()=>openPhaseModal(cat,proj), {wip:seg.wip, badge:seg.badge});
+      bar.style.top=(pad+it.lane*(laneH+gap))+'px';
+      bar.style.height=laneH+'px';
+      placeBar(bar,seg,units);
+      attachDrag(bar,seg,units,'phase',proj);
+      track.appendChild(bar);
+    });
   }
   row.appendChild(track);
   return row;
@@ -876,36 +934,71 @@ function openProjectModal(p){
   };
 }
 
-function openPhaseModal(project,ph){
-  const editing=!!ph;
-  const def=ph||{name:'',start:'',end:'',color:PALETTE[project.phases.length%PALETTE.length],wip:false,badge:''};
-  modal.innerHTML=`<h3>${editing?'Edit':'New'} Phase</h3>
-    <div class="field"><label>Phase name</label><input id="m_name" value="${esc(def.name)}" placeholder="e.g. Soft Launch"></div>
-    <div class="field row2">
-      <div><label>Start (optional)</label>${dateField('m_start',def.start)}</div>
-      <div><label>End</label>${dateField('m_end',def.end)}</div>
-    </div>
-    <div class="field" style="margin-top:-6px;"><span style="font-size:11px;color:var(--muted);">Leave <b>start</b> blank to begin at the edge of the current view. End is required.</span></div>
-    <div class="field row2">
-      <div><label>Badge (optional)</label><input id="m_badge" value="${esc(def.badge||'')}" placeholder="e.g. v1.5, PR"></div>
-      <div><label>Style</label><label style="display:flex;align-items:center;gap:8px;font-weight:500;text-transform:none;letter-spacing:0;padding-top:6px;"><input type="checkbox" id="m_wip" ${def.wip?'checked':''} style="width:auto;"> WIP (dashed outline)</label></div>
-    </div>
-    <div class="field"><label>Color</label><div class="swatches" id="m_sw"></div></div>
+// Project modal: a Project has a name + one or more Phases (each = a bar on the row).
+function openPhaseModal(category,proj){
+  const editing=!!proj;
+  const drafts = editing && proj.segments && proj.segments.length
+    ? proj.segments.map(s=>({name:s.name||'',start:s.start||'',end:s.end||'',color:s.color||PALETTE[0],wip:!!s.wip,badge:s.badge||'',advOpen:false}))
+    : [{name:'',start:'',end:'',color:PALETTE[(editing?0:category.phases.length)%PALETTE.length],wip:false,badge:'',advOpen:false}];
+  modal.innerHTML=`<h3>${editing?'Edit':'New'} Project</h3>
+    <div class="field"><label>Project Name</label><input id="m_pname" value="${editing?esc(proj.name):''}" placeholder="e.g. Mobile App"></div>
+    <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin:6px 0 8px;">Phases</div>
+    <div id="m_phases"></div>
+    <button type="button" class="btn" id="m_addphase" style="width:100%;margin-top:2px;">＋ New Phase</button>
     <div class="modal-actions"><button class="btn" id="m_cancel">Cancel</button><button class="btn primary" id="m_save">Save</button></div>`;
-  let color=def.color;
-  const sw=modal.querySelector('#m_sw');
-  PALETTE.forEach(c=>{const d=document.createElement('div');d.className='swatch'+(c===color?' sel':'');d.style.background=c;d.onclick=()=>{color=c;sw.querySelectorAll('.swatch').forEach(s=>s.classList.remove('sel'));d.classList.add('sel');};sw.appendChild(d);});
-  wireDateClears();
-  modalBg.classList.add('open'); modal.querySelector('#m_name').focus();
+  const wrap=modal.querySelector('#m_phases');
+  function renderPhases(){
+    wrap.innerHTML='';
+    drafts.forEach((d,i)=>{
+      const block=document.createElement('div'); block.className='phase-block';
+      block.innerHTML=`
+        <div class="pb-head"><span class="pb-title">Phase ${i+1}</span>${drafts.length>1?'<button type="button" class="pb-remove">✕ Remove</button>':''}</div>
+        <div class="field"><label>Phase Name (optional)</label><input class="pb-name" value="${esc(d.name)}" placeholder="Leave blank to use project name"></div>
+        <div class="field row2">
+          <div><label>Start (optional)</label><div class="datewrap"><input type="date" class="pb-start" value="${d.start}"><button type="button" class="dateclear">×</button></div></div>
+          <div><label>End</label><div class="datewrap"><input type="date" class="pb-end" value="${d.end}"><button type="button" class="dateclear">×</button></div></div>
+        </div>
+        <button type="button" class="pb-adv-toggle">${d.advOpen?'▾':'▸'} Advanced</button>
+        <div class="pb-adv" style="display:${d.advOpen?'block':'none'}">
+          <div class="field row2">
+            <div><label>Badge</label><input class="pb-badge" value="${esc(d.badge)}" placeholder="e.g. v1.5, PR"></div>
+            <div><label>Style</label><label class="wiplab"><input type="checkbox" class="pb-wip" ${d.wip?'checked':''}> WIP (dashed)</label></div>
+          </div>
+          <div class="field"><label>Color</label><div class="swatches pb-sw"></div></div>
+        </div>`;
+      block.querySelector('.pb-name').oninput=e=>d.name=e.target.value;
+      block.querySelector('.pb-start').oninput=e=>d.start=e.target.value;
+      block.querySelector('.pb-end').oninput=e=>d.end=e.target.value;
+      block.querySelectorAll('.datewrap').forEach(w=>{
+        const inp=w.querySelector('input'), btn=w.querySelector('.dateclear');
+        const sync=()=>btn.style.display=inp.value?'flex':'none'; sync();
+        inp.addEventListener('input',sync);
+        btn.onclick=()=>{inp.value='';inp.dispatchEvent(new Event('input'));};
+      });
+      block.querySelector('.pb-adv-toggle').onclick=()=>{d.advOpen=!d.advOpen;renderPhases();};
+      const badge=block.querySelector('.pb-badge'); if(badge)badge.oninput=e=>d.badge=e.target.value;
+      const wip=block.querySelector('.pb-wip'); if(wip)wip.onchange=e=>d.wip=e.target.checked;
+      const sw=block.querySelector('.pb-sw');
+      if(sw)PALETTE.forEach(c=>{const sd=document.createElement('div');sd.className='swatch'+(c===d.color?' sel':'');sd.style.background=c;sd.onclick=()=>{d.color=c;sw.querySelectorAll('.swatch').forEach(x=>x.classList.remove('sel'));sd.classList.add('sel');};sw.appendChild(sd);});
+      const rm=block.querySelector('.pb-remove'); if(rm)rm.onclick=()=>{drafts.splice(i,1);renderPhases();};
+      wrap.appendChild(block);
+    });
+  }
+  renderPhases();
+  modal.querySelector('#m_addphase').onclick=()=>{drafts.push({name:'',start:'',end:'',color:PALETTE[drafts.length%PALETTE.length],wip:false,badge:'',advOpen:false});renderPhases();};
+  modalBg.classList.add('open'); modal.querySelector('#m_pname').focus();
   modal.querySelector('#m_cancel').onclick=closeModal;
   modal.querySelector('#m_save').onclick=()=>{
-    const name=modal.querySelector('#m_name').value.trim()||'Phase';
-    const start=modal.querySelector('#m_start').value, end=modal.querySelector('#m_end').value;
-    const wip=modal.querySelector('#m_wip').checked, badge=modal.querySelector('#m_badge').value.trim();
-    if(!end){alert('End date is required.');return;}
-    if(start&&end<start){alert('End date must be on or after start date.');return;}
-    if(editing){Object.assign(ph,{name,start,end,color,wip,badge});}
-    else project.phases.push({id:uid(),name,start,end,color,wip,badge,collapsed:true,tasks:[]});
+    const name=modal.querySelector('#m_pname').value.trim()||'New Project';
+    const segs=[];
+    for(const d of drafts){
+      if(!d.name.trim() && !d.start && !d.end) continue;        // drop empty phase blocks
+      if(!d.end){alert('Each phase needs an End date.');return;}
+      if(d.start && d.end<d.start){alert('End date must be on or after start date.');return;}
+      segs.push({id:uid(),name:d.name.trim(),start:d.start,end:d.end,color:d.color,wip:d.wip,badge:d.badge.trim()});
+    }
+    if(editing){ proj.name=name; proj.segments=segs; }
+    else category.phases.push({id:uid(),name,collapsed:true,segments:segs,tasks:[]});
     closeModal();render();
   };
 }
