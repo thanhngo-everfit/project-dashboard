@@ -839,17 +839,18 @@ function makeBar(color,label,progress,onEdit,opts){
   opts=opts||{};
   const bar=document.createElement('div'); bar.className='bar'+(opts.wip?' wip':'');
   if(opts.wip){ bar.style.color=mix(color,0.55); }
-  else{
+  else if(progress===null){
+    // phase bar: light "band" with a bold colored outline + colored label — visually distinct
+    // from the solid dev-work bars, and overlaps stay readable (two outlines, no muddy blend).
+    bar.style.background= rgba(color,.14);
+    bar.style.border= '2px solid '+rgba(color,.9);
+    bar.style.color = mix(color,0.5);
+  } else {
+    // dev-work bar: solid translucent fill with a progress fill
+    bar.style.background= rgba(color,.28);
     bar.style.color = '#1d2433';
-    if(progress===null){
-      // phase bar: translucent fill + crisp outline so overlapping phases keep visible edges
-      bar.style.background= rgba(color,.4);
-      bar.style.border= '1.5px solid '+rgba(color,.95);
-    } else {
-      bar.style.background= rgba(color,.28);
-      const fill=document.createElement('div'); fill.className='fill'; fill.style.width=Math.min(100,progress)+'%'; fill.style.background=rgba(color,.85);
-      bar.appendChild(fill);
-    }
+    const fill=document.createElement('div'); fill.className='fill'; fill.style.width=Math.min(100,progress)+'%'; fill.style.background=rgba(color,.85);
+    bar.appendChild(fill);
   }
   const span=document.createElement('span'); span.className='barlabel'; span.textContent=label; bar.appendChild(span);
   if(opts.badge){const bg=document.createElement('span');bg.className='badge';bg.textContent=opts.badge;bar.appendChild(bg);}
