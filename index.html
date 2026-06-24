@@ -267,6 +267,19 @@ const TASK_TYPES = [
   {key:'qa',     label:'QA',       color:'#ef4444', progress:true},
   {key:'custom', label:'Custom',   color:'#6366f1', progress:true},
 ];
+// Fixed phase types (name + color) + Custom (needs a name).
+const PHASE_TYPES = [
+  {key:'development', label:'Development', color:'#bcd1f6'},
+  {key:'testing',     label:'Testing',     color:'#fcd9a8'},
+  {key:'releasing',   label:'Releasing',   color:'#bfe3c9'},
+  {key:'custom',      label:'Custom',      color:'#cdb4f6'},
+];
+function PT(key){ return PHASE_TYPES.find(p=>p.key===key) || PHASE_TYPES[PHASE_TYPES.length-1]; }
+function inferPhaseType(seg){
+  if(seg.ptype) return seg.ptype;
+  const m=PHASE_TYPES.find(p=>p.key!=='custom' && p.label===seg.name);
+  return m ? m.key : 'custom';
+}
 const TASK_MAP = Object.fromEntries(TASK_TYPES.map(t=>[t.key,t]));
 
 let state = load();
@@ -989,9 +1002,10 @@ function openProjectModal(p){
 // Project modal: a Project has a name + one or more Phases (each = a bar on the row).
 function openPhaseModal(category,proj){
   const editing=!!proj;
+  const newDraft=()=>({ptype:'development',name:'Development',start:'',end:'',color:PT('development').color,wip:false,badge:'',advOpen:false});
   const drafts = editing && proj.segments && proj.segments.length
-    ? proj.segments.map(s=>({name:s.name||'',start:s.start||'',end:s.end||'',color:s.color||PALETTE[0],wip:!!s.wip,badge:s.badge||'',advOpen:false}))
-    : [{name:'',start:'',end:'',color:PALETTE[(editing?0:category.phases.length)%PALETTE.length],wip:false,badge:'',advOpen:false}];
+    ? proj.segments.map(s=>{const pt=inferPhaseType(s);return {ptype:pt,name:s.name||'',start:s.start||'',end:s.end||'',color:s.color||PT(pt).color,wip:!!s.wip,badge:s.badge||'',advOpen:false};})
+    : [newDraft()];
   modal.innerHTML=`<h3>${editing?'Edit':'New'} Project</h3>
     <div class="field"><label>Project Name</label><input id="m_pname" value="${editing?esc(proj.name):''}" placeholder="e.g. Mobile App"></div>
     <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin:6px 0 8px;">Phases</div>
@@ -1003,9 +1017,13 @@ function openPhaseModal(category,proj){
     wrap.innerHTML='';
     drafts.forEach((d,i)=>{
       const block=document.createElement('div'); block.className='phase-block';
+      const isCustom=d.ptype==='custom';
       block.innerHTML=`
         <div class="pb-head"><span class="pb-title">Phase ${i+1}</span>${drafts.length>1?'<button type="button" class="pb-remove">✕ Remove</button>':''}</div>
-        <div class="field"><label>Phase Name (optional)</label><input class="pb-name" value="${esc(d.name)}" placeholder="Leave blank to use project name"></div>
+        <div class="field row2">
+          <div><label>Phase</label><select class="pb-type">${PHASE_TYPES.map(pt=>`<option value="${pt.key}" ${pt.key===d.ptype?'selected':''}>${pt.label}</option>`).join('')}</select></div>
+          <div class="pb-namecol" style="display:${isCustom?'block':'none'}"><label>Name</label><input class="pb-name" value="${esc(isCustom?d.name:'')}" placeholder="Custom phase name"></div>
+        </div>
         <div class="field row2">
           <div><label>Start (optional)</label><div class="datewrap"><input type="date" class="pb-start" value="${d.start}"><button type="button" class="dateclear">×</button></div></div>
           <div><label>End</label><div class="datewrap"><input type="date" class="pb-end" value="${d.end}"><button type="button" class="dateclear">×</button></div></div>
@@ -1018,7 +1036,13 @@ function openPhaseModal(category,proj){
           </div>
           <div class="field"><label>Color</label><div class="swatches pb-sw"></div></div>
         </div>`;
-      block.querySelector('.pb-name').oninput=e=>d.name=e.target.value;
+      block.querySelector('.pb-type').onchange=e=>{
+        d.ptype=e.target.value;
+        if(d.ptype!=='custom'){ d.name=PT(d.ptype).label; d.color=PT(d.ptype).color; }
+        else { d.name=''; }
+        renderPhases();
+      };
+      const nm=block.querySelector('.pb-name'); if(nm)nm.oninput=e=>d.name=e.target.value;
       block.querySelector('.pb-start').oninput=e=>d.start=e.target.value;
       block.querySelector('.pb-end').oninput=e=>d.end=e.target.value;
       block.querySelectorAll('.datewrap').forEach(w=>{
@@ -1037,17 +1061,19 @@ function openPhaseModal(category,proj){
     });
   }
   renderPhases();
-  modal.querySelector('#m_addphase').onclick=()=>{drafts.push({name:'',start:'',end:'',color:PALETTE[drafts.length%PALETTE.length],wip:false,badge:'',advOpen:false});renderPhases();};
+  modal.querySelector('#m_addphase').onclick=()=>{drafts.push(newDraft());renderPhases();};
   modalBg.classList.add('open'); modal.querySelector('#m_pname').focus();
   modal.querySelector('#m_cancel').onclick=closeModal;
   modal.querySelector('#m_save').onclick=()=>{
     const name=modal.querySelector('#m_pname').value.trim()||'New Project';
     const segs=[];
     for(const d of drafts){
-      if(!d.name.trim() && !d.start && !d.end) continue;        // drop empty phase blocks
+      if(!d.start && !d.end) continue;                          // no dates -> no bar, drop
       if(!d.end){alert('Each phase needs an End date.');return;}
       if(d.start && d.end<d.start){alert('End date must be on or after start date.');return;}
-      segs.push({id:uid(),name:d.name.trim(),start:d.start,end:d.end,color:d.color,wip:d.wip,badge:d.badge.trim()});
+      const nm = d.ptype==='custom' ? d.name.trim() : PT(d.ptype).label;
+      if(d.ptype==='custom' && !nm){alert('A custom phase needs a name.');return;}
+      segs.push({id:uid(),ptype:d.ptype,name:nm,start:d.start,end:d.end,color:d.color,wip:d.wip,badge:d.badge.trim()});
     }
     if(editing){ proj.name=name; proj.segments=segs; }
     else category.phases.push({id:uid(),name,collapsed:true,segments:segs,tasks:[]});
