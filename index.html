@@ -840,9 +840,13 @@ function makeBar(color,label,progress,onEdit,opts){
   const bar=document.createElement('div'); bar.className='bar'+(opts.wip?' wip':'');
   if(opts.wip){ bar.style.color=mix(color,0.55); }
   else{
-    bar.style.background= progress===null? rgba(color,.55) : rgba(color,.28);
     bar.style.color = '#1d2433';
-    if(progress!==null){
+    if(progress===null){
+      // phase bar: translucent fill + crisp outline so overlapping phases keep visible edges
+      bar.style.background= rgba(color,.4);
+      bar.style.border= '1.5px solid '+rgba(color,.95);
+    } else {
+      bar.style.background= rgba(color,.28);
       const fill=document.createElement('div'); fill.className='fill'; fill.style.width=Math.min(100,progress)+'%'; fill.style.background=rgba(color,.85);
       bar.appendChild(fill);
     }
