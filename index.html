@@ -41,7 +41,9 @@
 
   /* ---------- Toolbar under tabs ---------- */
   .subbar{display:flex;align-items:center;gap:10px;padding:8px 16px;background:var(--panel);border-bottom:1px solid var(--border);}
-  .subbar .squad-name{font-weight:800;font-size:15px;}
+  .subbar .squad-name{font-weight:800;font-size:15px;cursor:text;padding:3px 7px;border-radius:7px;outline:none;}
+  .subbar .squad-name:hover{background:#f0f1f4;}
+  .subbar .squad-name[contenteditable="true"]{background:#fff;box-shadow:0 0 0 2px #4c6fff;}
   .subbar .spacer{flex:1;}
   .btn{border:1px solid var(--border);background:#fff;color:var(--text);padding:7px 12px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;}
   .btn:hover{background:#f5f7fa;}
@@ -653,6 +655,13 @@ function openTaskModal(phase,t){
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 
 document.getElementById('addProject').onclick=()=>openProjectModal();
+(function(){
+  const el=document.getElementById('squadName');
+  el.title='Double-click to rename squad';
+  el.ondblclick=()=>{el.contentEditable='true';el.focus();document.execCommand('selectAll',false,null);};
+  el.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();el.blur();}else if(e.key==='Escape'){el.textContent=activeSquad().name;el.blur();}};
+  el.onblur=()=>{el.contentEditable='false';const v=el.textContent.trim()||'Squad';activeSquad().name=v;render();};
+})();
 document.querySelectorAll('#viewToggle button').forEach(b=>b.onclick=()=>{state.view=b.dataset.view;render();});
 document.getElementById('zoomIn').onclick=()=>{state.zoom=Math.min(3,state.zoom*1.25);render();};
 document.getElementById('zoomOut').onclick=()=>{state.zoom=Math.max(.4,state.zoom/1.25);render();};
