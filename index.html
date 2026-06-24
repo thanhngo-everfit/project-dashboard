@@ -93,6 +93,8 @@
   /* header */
   .head{position:sticky;top:0;z-index:8;display:flex;height:var(--head-h);background:var(--panel);}
   .head .left{z-index:9;font-weight:800;font-size:12px;color:var(--muted);background:var(--panel);letter-spacing:.4px;text-transform:uppercase;}
+  .hdr-add{margin-left:auto;flex:none;width:24px;height:24px;border:1px solid var(--border);background:#fff;color:#4c6fff;border-radius:7px;cursor:pointer;font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;padding:0;}
+  .hdr-add:hover{background:#4c6fff;color:#fff;border-color:#4c6fff;}
   .head .track{display:flex;}
   .headcell{position:absolute;top:0;height:var(--head-h);
             display:flex;align-items:center;gap:5px;padding-left:14px;font-size:15px;font-weight:800;color:#fff;letter-spacing:.3px;}
@@ -198,7 +200,6 @@
 
   <div class="subbar">
     <span class="squad-name" id="squadName"></span>
-    <button class="btn primary" id="addProject">＋ Project</button>
     <div class="spacer"></div>
     <button class="btn" id="expandAll" title="Expand all projects and phases">⊞ Expand All</button>
     <button class="btn" id="collapseAll" title="Collapse all projects and phases">⊟ Collapse All</button>
@@ -560,7 +561,11 @@ function renderGantt(){
 
   // header
   const head=document.createElement('div'); head.className='head'+(state.view==='week'?' week':'');
-  const hl=document.createElement('div'); hl.className='left'; hl.textContent='PROJECT / PHASE / WORK';
+  const hl=document.createElement('div'); hl.className='left';
+  hl.innerHTML='<span>PROJECT / PHASE / WORK</span>';
+  const addCat=document.createElement('button'); addCat.className='hdr-add'; addCat.textContent='+'; addCat.title='New category';
+  addCat.onclick=()=>openProjectModal();
+  hl.appendChild(addCat);
   const ht=document.createElement('div'); ht.className='track'; ht.style.width=tw+'px';
   if(state.view==='week'){
     buildWeekHeader(units,ht);
@@ -858,13 +863,13 @@ modalBg.onclick=e=>{if(e.target===modalBg)closeModal();};
 
 function openProjectModal(p){
   const editing=!!p;
-  modal.innerHTML=`<h3>${editing?'Edit':'New'} Project</h3>
-    <div class="field"><label>Name</label><input id="m_name" value="${editing?esc(p.name):''}" placeholder="Project name"></div>
+  modal.innerHTML=`<h3>${editing?'Edit':'New'} Category</h3>
+    <div class="field"><label>Name</label><input id="m_name" value="${editing?esc(p.name):''}" placeholder="Category name"></div>
     <div class="modal-actions"><button class="btn" id="m_cancel">Cancel</button><button class="btn primary" id="m_save">Save</button></div>`;
   modalBg.classList.add('open'); modal.querySelector('#m_name').focus();
   modal.querySelector('#m_cancel').onclick=closeModal;
   modal.querySelector('#m_save').onclick=()=>{
-    const name=modal.querySelector('#m_name').value.trim()||'Untitled';
+    const name=modal.querySelector('#m_name').value.trim()||'New Category';
     if(editing)p.name=name;
     else activeSquad().projects.push({id:uid(),name,collapsed:false,phases:[]});
     closeModal();render();
@@ -942,7 +947,6 @@ function openTaskModal(phase,t){
 /* ============================ Misc UI ============================ */
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 
-document.getElementById('addProject').onclick=()=>openProjectModal();
 (function(){
   const el=document.getElementById('squadName');
   el.title='Double-click to rename squad';
