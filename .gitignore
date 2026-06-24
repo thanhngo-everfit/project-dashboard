@@ -1,0 +1,11 @@
+# OS / editor
+.DS_Store
+*.log
+
+# Node / tooling
+node_modules/
+.vercel
+
+# Local env (never commit secrets)
+.env
+.env.*
