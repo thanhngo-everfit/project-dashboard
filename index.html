@@ -254,7 +254,8 @@ const AUTH_KEY = 'roadmapAuth';
 
 /* ============================ State ============================ */
 const STORE_KEY = 'roadmapDashboardV2';
-const PALETTE = ['#cdb4f6','#fcd9a8','#bfe3c9','#bcd9ec','#f6bcbc','#bcd1f6','#cfe6b4','#f6c6e0','#b4e6e0','#d9d2c4'];
+const LEFTPAD = 20;   // left gutter (px) before the first date column, room for the connector thread
+const PALETTE =['#cdb4f6','#fcd9a8','#bfe3c9','#bcd9ec','#f6bcbc','#bcd1f6','#cfe6b4','#f6c6e0','#b4e6e0','#d9d2c4'];
 const TASK_TYPES = [
   {key:'design', label:'Design',   color:'#9b6dff', progress:false},
   {key:'ba',     label:'BA',       color:'#12b3a6', progress:true},
@@ -447,7 +448,7 @@ function buildUnits(squad){
 
   const base = state.view==='quarter'?170 : state.view==='month'?95 : 30;
   const w = base*state.zoom;
-  const units=[]; let x=0;
+  const units=[]; let x=LEFTPAD;   // leave a left gutter for the connector thread
   if(state.view==='quarter'){
     let cur=quarterStart(min);
     const end=quarterStart(max);
@@ -483,13 +484,13 @@ const DOW=['S','M','T','W','T','F','S'];   // index by getDay() (0=Sun)
 function totalWidth(units){return units.length?units[units.length-1].x+units[units.length-1].width:0;}
 function dateToX(d,units){
   if(!units.length)return 0;
-  if(d<=units[0].start)return 0;
+  if(d<=units[0].start)return units[0].x;
   const last=units[units.length-1];
   if(d>=last.end)return last.x+last.width;
   for(const u of units){
     if(d>=u.start&&d<u.end) return u.x+(d-u.start)/(u.end-u.start)*u.width;
   }
-  return 0;
+  return units[0].x;
 }
 function xToDate(x,units){
   if(!units.length)return new Date();
