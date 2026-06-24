@@ -7,7 +7,7 @@
 <style>
   :root{
     --bg:#ffffff; --panel:#ffffff; --border:#e8eaef; --text:#101828;
-    --muted:#8a93a3; --left-w:328px; --row-h:42px; --head-h:48px;
+    --muted:#8a93a3; --left-w:328px; --row-h:46px; --head-h:48px;
     --tab-h:40px;
   }
   *{box-sizing:border-box;}
@@ -783,7 +783,7 @@ function phaseRow(cat,proj,units,tw){
   const track=document.createElement('div'); track.className='track'; track.style.width=tw+'px';
   track.appendChild(gridlinesEl(units,tw));
   const drawable=segs.filter(s=>s.start||s.end);
-  const laneH=26, gap=4, pad=6;
+  const laneH=26, gap=5, pad=10;   // pad = top/bottom breathing room so 2-line names clear the divider
   if(drawable.length){
     const layout=laneLayout(drawable,units);
     row.style.height=(layout.laneCount*laneH + (layout.laneCount-1)*gap + pad*2)+'px';
