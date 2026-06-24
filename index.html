@@ -638,9 +638,9 @@ function renderGantt(){
         if(!ph.collapsed){
           // x of the project's earliest phase start -> root of the timeline connector thread
           const draw=(ph.segments||[]).filter(s=>s.start||s.end);
-          let projStartX=0;
-          if(draw.length){ const e0=draw.reduce((m,s)=>{const d=effStart(s,units);return d<m?d:m;}, effStart(draw[0],units)); projStartX=dateToX(e0,units); }
-          ph.tasks.forEach((t,ti)=>grid.appendChild(taskRow(p,ph,t,units,tw, ti===ph.tasks.length-1, projStartX)));
+          let projStartX=0, projStartDate=null;
+          if(draw.length){ const e0=draw.reduce((m,s)=>{const d=effStart(s,units);return d<m?d:m;}, effStart(draw[0],units)); projStartX=dateToX(e0,units); projStartDate=e0; }
+          ph.tasks.forEach((t,ti)=>grid.appendChild(taskRow(p,ph,t,units,tw, ti===ph.tasks.length-1, projStartX, projStartDate)));
         }
       });
     }
@@ -789,7 +789,7 @@ function phaseRow(cat,proj,units,tw){
   return row;
 }
 
-function taskRow(p,ph,t,units,tw,last,projStartX){
+function taskRow(p,ph,t,units,tw,last,projStartX,projStartDate){
   const meta=TASK_MAP[t.type];
   const row=document.createElement('div'); row.className='row task';
   const lblTxt=meta.label+(meta.progress?'  ·  '+(t.progress||0)+'%':'');
@@ -803,7 +803,7 @@ function taskRow(p,ph,t,units,tw,last,projStartX){
   // dashed connector thread on the timeline: a vertical line in the margin just left of the
   // project's start, with a visible elbow branching into each work bar.
   if(typeof projStartX==='number'){
-    const bx=dateToX(effStart(t,units),units);
+    const bx=dateToX(effStart(t,units,projStartDate),units);
     const cx=Math.max(2, projStartX-14);             // sit in the gutter, left of the bars
     const v=document.createElement('div'); v.className='tl-v'+(last?' last':''); v.style.left=cx+'px';
     track.appendChild(v);
@@ -814,8 +814,8 @@ function taskRow(p,ph,t,units,tw,last,projStartX){
   if(t.start||t.end){
     const lbl=meta.label+(meta.progress?' '+(t.progress||0)+'%':'');
     const bar=makeBar(meta.color, lbl, meta.progress?(t.progress||0):null, ()=>openTaskModal(ph,t));
-    placeBar(bar,t,units);
-    attachDrag(bar,t,units,'task',ph);
+    placeBar(bar,t,units,projStartDate);
+    attachDrag(bar,t,units,'task',ph,projStartDate);
     track.appendChild(bar);
   }
   row.appendChild(track);
@@ -843,21 +843,21 @@ function makeBar(color,label,progress,onEdit,opts){
 }
 function mix(hex,t){const h=hex.replace('#','');let r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16);r=Math.round(r*(1-t));g=Math.round(g*(1-t));b=Math.round(b*(1-t));return `rgb(${r},${g},${b})`;}
 // Effective dates: blank start -> first date in view; blank end -> last date in view.
-function effStart(obj,units){ return obj.start ? parse(obj.start) : (units.length?units[0].start:new Date()); }
+function effStart(obj,units,fb){ return obj.start ? parse(obj.start) : (fb || (units.length?units[0].start:new Date())); }
 function effEnd(obj,units){ return obj.end ? parse(obj.end) : (units.length?addDays(units[units.length-1].end,-1):new Date()); }
-function placeBar(bar,obj,units){
-  const x=dateToX(effStart(obj,units),units);
+function placeBar(bar,obj,units,fb){
+  const x=dateToX(effStart(obj,units,fb),units);
   const w=Math.max(dateToX(addDays(effEnd(obj,units),1),units)-x, 6);
   bar.style.left=x+'px'; bar.style.width=w+'px';
 }
 
 /* ---------- Drag move / resize ---------- */
-function attachDrag(bar,obj,units,kind,parent){
+function attachDrag(bar,obj,units,kind,parent,fb){
   let mode=null,startX=0,moved=false,origStart,origEnd;
   function down(e,m){
     e.preventDefault(); e.stopPropagation();
     mode=m; startX=e.clientX; moved=false; busy=true;
-    origStart=effStart(obj,units); origEnd=effEnd(obj,units);
+    origStart=effStart(obj,units,fb); origEnd=effEnd(obj,units);
     bar.classList.add('dragging');
     window.addEventListener('mousemove',move); window.addEventListener('mouseup',up);
   }
