@@ -74,9 +74,9 @@
   .tree.last .v{bottom:50%;}
   .tree .h{position:absolute;left:0;width:40px;top:calc(50% - 1px);border-top:2px dashed #ccd2dc;border-bottom-left-radius:8px;}
   /* timeline connector thread (in the track), rooted at the project's start column */
-  .tl-v{position:absolute;top:0;bottom:0;width:0;border-left:2px dashed #c7d8c9;z-index:1;pointer-events:none;}
-  .tl-v.last{bottom:50%;}
-  .tl-h{position:absolute;top:calc(50% - 1px);height:0;border-top:2px dashed #c7d8c9;z-index:1;pointer-events:none;}
+  .tl-v{position:absolute;top:0;bottom:0;width:0;border-left:2px dashed #c4cad4;z-index:1;pointer-events:none;}
+  .tl-v.last{bottom:calc(50% - 1px);}
+  .tl-h{position:absolute;top:calc(50% - 1px);height:0;border-top:2px dashed #c4cad4;z-index:1;pointer-events:none;}
   /* phase row drag-and-drop (move between projects / reorder) */
   .row.phase .left.drag-src{cursor:grab;}
   .row.phase .left.drag-src:active{cursor:grabbing;}
@@ -800,10 +800,11 @@ function taskRow(p,ph,t,units,tw,last,projStartX){
   row.appendChild(left);
   const track=document.createElement('div'); track.className='track'; track.style.width=tw+'px';
   track.appendChild(gridlinesEl(units,tw));
-  // dashed connector thread on the timeline: vertical at the project's start column, elbow to this bar
+  // dashed connector thread on the timeline: a vertical line in the margin just left of the
+  // project's start, with a visible elbow branching into each work bar.
   if(typeof projStartX==='number'){
     const bx=dateToX(effStart(t,units),units);
-    const cx=projStartX;
+    const cx=Math.max(2, projStartX-14);             // sit in the gutter, left of the bars
     const v=document.createElement('div'); v.className='tl-v'+(last?' last':''); v.style.left=cx+'px';
     track.appendChild(v);
     const h=document.createElement('div'); h.className='tl-h';
