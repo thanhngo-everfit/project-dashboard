@@ -133,10 +133,10 @@
   .field{margin-bottom:14px;}
   .field label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px;}
   .field input,.field select{width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;}
-  .datewrap{position:relative;}
-  .datewrap input[type=date]{padding-right:52px;}
-  .dateclear{position:absolute;right:34px;top:50%;transform:translateY(-50%);width:18px;height:18px;border:none;background:#eef0f3;color:#667085;border-radius:50%;cursor:pointer;font-size:13px;line-height:1;display:flex;align-items:center;justify-content:center;padding:0;}
-  .dateclear:hover{background:#e4e7ec;color:#101828;}
+  .datewrap{display:flex;align-items:center;gap:6px;}
+  .datewrap input[type=date]{flex:1;min-width:0;}
+  .dateclear{flex:none;width:30px;height:36px;border:1px solid var(--border);background:#fff;color:#98a2b3;border-radius:8px;cursor:pointer;font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;padding:0;}
+  .dateclear:hover{background:#f5f7fa;color:#d92d20;border-color:#fecdca;}
   .field.row2{display:flex;gap:10px;}
   .field.row2>div{flex:1;}
   .swatches{display:flex;gap:8px;flex-wrap:wrap;}
