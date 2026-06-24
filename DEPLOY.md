@@ -1,6 +1,6 @@
 # Roadmap Dashboard — Google Login + Vercel Deploy
 
-This app is a single static file (`roadmap-dashboard.html`) gated behind Google Sign-In,
+This app is a single static file (`index.html`) gated behind Google Sign-In,
 restricted to **@everfit.io** accounts. Below are the two setup steps.
 
 ---
@@ -19,7 +19,7 @@ restricted to **@everfit.io** accounts. Below are the two setup steps.
      - `https://YOUR-APP.vercel.app`  ← add this after Step 2 gives you the URL
    - (Leave "Authorized redirect URIs" empty — Google Identity Services doesn't need it.)
    - Click **Create** and copy the **Client ID** (looks like `1234-abc.apps.googleusercontent.com`).
-4. Open `roadmap-dashboard.html`, find this line near the top of the `<script>`:
+4. Open `index.html`, find this line near the top of the `<script>`:
    ```js
    const GOOGLE_CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com';
    ```

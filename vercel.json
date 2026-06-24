@@ -1,9 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
-  "rewrites": [
-    { "source": "/", "destination": "/roadmap-dashboard.html" }
-  ],
   "headers": [
     {
       "source": "/(.*)",
