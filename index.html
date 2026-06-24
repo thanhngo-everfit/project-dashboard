@@ -63,7 +63,16 @@
   .row.project{background:#fafbfc;}
   .row.project .left{font-weight:800;}
   .row.phase .left{font-weight:600;}
+  .row.task{height:32px;}
   .row.task .left{font-weight:500;color:#475467;}
+  .row.task .left .label{font-size:12px;}
+  .row.task .bar{top:7px;height:18px;font-size:10.5px;border-radius:6px;}
+  .row.task .bar .fill{border-radius:6px 0 0 6px;}
+  /* dashed connector thread (project -> its dev work), Facebook-comment style */
+  .tree{position:absolute;left:26px;top:0;bottom:0;width:44px;pointer-events:none;z-index:1;}
+  .tree .v{position:absolute;left:0;top:0;bottom:0;border-left:2px dashed #ccd2dc;}
+  .tree.last .v{bottom:50%;}
+  .tree .h{position:absolute;left:0;width:40px;top:calc(50% - 1px);border-top:2px dashed #ccd2dc;border-bottom-left-radius:8px;}
   /* phase row drag-and-drop (move between projects / reorder) */
   .row.phase .left.drag-src{cursor:grab;}
   .row.phase .left.drag-src:active{cursor:grabbing;}
@@ -623,7 +632,7 @@ function renderGantt(){
       p.phases.forEach(ph=>{
         grid.appendChild(phaseRow(p,ph,units,tw));
         if(!ph.collapsed){
-          ph.tasks.forEach(t=>grid.appendChild(taskRow(p,ph,t,units,tw)));
+          ph.tasks.forEach((t,ti)=>grid.appendChild(taskRow(p,ph,t,units,tw, ti===ph.tasks.length-1)));
         }
       });
     }
@@ -674,8 +683,14 @@ function buildWeekHeader(units,ht){
   });
 }
 
-function leftCell(level,caretState,dot,labelText,actions){
+function leftCell(level,caretState,dot,labelText,actions,opts){
+  opts=opts||{};
   const left=document.createElement('div'); left.className='left';
+  if(opts.connector){
+    const tree=document.createElement('span'); tree.className='tree'+(opts.last?' last':'');
+    tree.innerHTML='<span class="v"></span><span class="h"></span>';
+    left.appendChild(tree);
+  }
   if(level>0){const ind=document.createElement('span');ind.className='indent';ind.style.width=(level*16)+'px';left.appendChild(ind);}
   const caret=document.createElement('span'); caret.className='caret'+(caretState===null?' hidden':'');
   caret.textContent=caretState==='open'?'▾':'▸'; left.appendChild(caret);
@@ -766,14 +781,14 @@ function phaseRow(cat,proj,units,tw){
   return row;
 }
 
-function taskRow(p,ph,t,units,tw){
+function taskRow(p,ph,t,units,tw,last){
   const meta=TASK_MAP[t.type];
   const row=document.createElement('div'); row.className='row task';
   const lblTxt=meta.label+(meta.progress?'  ·  '+(t.progress||0)+'%':'');
   const {left}=leftCell(2,null,meta.color,lblTxt,[
     {icon:'✎',title:'Edit',fn:()=>openTaskModal(ph,t)},
     {icon:'🗑',title:'Delete',fn:()=>{ph.tasks=ph.tasks.filter(x=>x!==t);render();}},
-  ]);
+  ],{connector:true,last:!!last});
   row.appendChild(left);
   const track=document.createElement('div'); track.className='track'; track.style.width=tw+'px';
   track.appendChild(gridlinesEl(units,tw));
