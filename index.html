@@ -133,6 +133,10 @@
   .field{margin-bottom:14px;}
   .field label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px;}
   .field input,.field select{width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;}
+  .datewrap{position:relative;}
+  .datewrap input[type=date]{padding-right:52px;}
+  .dateclear{position:absolute;right:34px;top:50%;transform:translateY(-50%);width:18px;height:18px;border:none;background:#eef0f3;color:#667085;border-radius:50%;cursor:pointer;font-size:13px;line-height:1;display:flex;align-items:center;justify-content:center;padding:0;}
+  .dateclear:hover{background:#e4e7ec;color:#101828;}
   .field.row2{display:flex;gap:10px;}
   .field.row2>div{flex:1;}
   .swatches{display:flex;gap:8px;flex-wrap:wrap;}
@@ -797,6 +801,19 @@ function movePhase(src,destProjectId,beforePhaseId){
 /* ============================ Modals ============================ */
 const modalBg=document.getElementById('modalBg'), modal=document.getElementById('modal');
 function closeModal(){modalBg.classList.remove('open');modal.innerHTML='';}
+// Date input with a clear (×) button. Wire with wireDateClears() after innerHTML is set.
+function dateField(id,val){
+  return `<div class="datewrap"><input type="date" id="${id}" value="${val||''}"><button type="button" class="dateclear" data-for="${id}" title="Clear date">×</button></div>`;
+}
+function wireDateClears(){
+  modal.querySelectorAll('.dateclear').forEach(b=>{
+    const inp=modal.querySelector('#'+b.dataset.for);
+    const sync=()=>{ b.style.display = inp.value ? 'flex' : 'none'; };
+    sync();
+    inp.addEventListener('input',sync);
+    b.onclick=()=>{ inp.value=''; sync(); inp.focus(); };
+  });
+}
 modalBg.onclick=e=>{if(e.target===modalBg)closeModal();};
 
 function openProjectModal(p){
@@ -816,14 +833,14 @@ function openProjectModal(p){
 
 function openPhaseModal(project,ph){
   const editing=!!ph;
-  const def=ph||{name:'',start:todayISO(),end:fmt(addDays(new Date(),30)),color:PALETTE[project.phases.length%PALETTE.length],wip:false,badge:''};
+  const def=ph||{name:'',start:'',end:'',color:PALETTE[project.phases.length%PALETTE.length],wip:false,badge:''};
   modal.innerHTML=`<h3>${editing?'Edit':'New'} Phase</h3>
     <div class="field"><label>Phase name</label><input id="m_name" value="${esc(def.name)}" placeholder="e.g. Soft Launch"></div>
     <div class="field row2">
-      <div><label>Start (optional)</label><input type="date" id="m_start" value="${def.start||''}"></div>
-      <div><label>End (optional)</label><input type="date" id="m_end" value="${def.end||''}"></div>
+      <div><label>Start (optional)</label>${dateField('m_start',def.start)}</div>
+      <div><label>End</label>${dateField('m_end',def.end)}</div>
     </div>
-    <div class="field" style="margin-top:-6px;"><span style="font-size:11px;color:var(--muted);">Leave a date blank to extend the bar to the edge of the current view.</span></div>
+    <div class="field" style="margin-top:-6px;"><span style="font-size:11px;color:var(--muted);">Leave <b>start</b> blank to begin at the edge of the current view. End is required.</span></div>
     <div class="field row2">
       <div><label>Badge (optional)</label><input id="m_badge" value="${esc(def.badge||'')}" placeholder="e.g. v1.5, PR"></div>
       <div><label>Style</label><label style="display:flex;align-items:center;gap:8px;font-weight:500;text-transform:none;letter-spacing:0;padding-top:6px;"><input type="checkbox" id="m_wip" ${def.wip?'checked':''} style="width:auto;"> WIP (dashed outline)</label></div>
@@ -833,13 +850,15 @@ function openPhaseModal(project,ph){
   let color=def.color;
   const sw=modal.querySelector('#m_sw');
   PALETTE.forEach(c=>{const d=document.createElement('div');d.className='swatch'+(c===color?' sel':'');d.style.background=c;d.onclick=()=>{color=c;sw.querySelectorAll('.swatch').forEach(s=>s.classList.remove('sel'));d.classList.add('sel');};sw.appendChild(d);});
+  wireDateClears();
   modalBg.classList.add('open'); modal.querySelector('#m_name').focus();
   modal.querySelector('#m_cancel').onclick=closeModal;
   modal.querySelector('#m_save').onclick=()=>{
     const name=modal.querySelector('#m_name').value.trim()||'Phase';
     const start=modal.querySelector('#m_start').value, end=modal.querySelector('#m_end').value;
     const wip=modal.querySelector('#m_wip').checked, badge=modal.querySelector('#m_badge').value.trim();
-    if(start&&end&&end<start){alert('End date must be on or after start date.');return;}
+    if(!end){alert('End date is required.');return;}
+    if(start&&end<start){alert('End date must be on or after start date.');return;}
     if(editing){Object.assign(ph,{name,start,end,color,wip,badge});}
     else project.phases.push({id:uid(),name,start,end,color,wip,badge,collapsed:true,tasks:[]});
     closeModal();render();
@@ -849,14 +868,14 @@ function openPhaseModal(project,ph){
 function openTaskModal(phase,t){
   const editing=!!t;
   const used=phase.tasks.map(x=>x.type);
-  const def=t||{type:(TASK_TYPES.find(tt=>!used.includes(tt.key))||TASK_TYPES[0]).key,start:phase.start||todayISO(),end:phase.end||fmt(addDays(new Date(),14)),progress:0};
+  const def=t||{type:(TASK_TYPES.find(tt=>!used.includes(tt.key))||TASK_TYPES[0]).key,start:'',end:'',progress:0};
   modal.innerHTML=`<h3>${editing?'Edit':'Add'} Development Work</h3>
     <div class="field"><label>Discipline</label><select id="m_type">${TASK_TYPES.map(tt=>`<option value="${tt.key}" ${tt.key===def.type?'selected':''}>${tt.label}</option>`).join('')}</select></div>
     <div class="field row2">
-      <div><label>Start (optional)</label><input type="date" id="m_start" value="${def.start||''}"></div>
-      <div><label>End (optional)</label><input type="date" id="m_end" value="${def.end||''}"></div>
+      <div><label>Start (optional)</label>${dateField('m_start',def.start)}</div>
+      <div><label>End</label>${dateField('m_end',def.end)}</div>
     </div>
-    <div class="field" style="margin-top:-6px;"><span style="font-size:11px;color:var(--muted);">Leave a date blank to extend to the edge of the current view.</span></div>
+    <div class="field" style="margin-top:-6px;"><span style="font-size:11px;color:var(--muted);">Leave <b>start</b> blank to begin at the edge of the current view. End is required.</span></div>
     <div class="field progress-row" id="m_prow"><label>Progress: <span id="m_pval">${def.progress||0}</span>%</label><input type="range" min="0" max="100" id="m_prog" value="${def.progress||0}"></div>
     <div class="modal-actions"><button class="btn" id="m_cancel">Cancel</button><button class="btn primary" id="m_save">Save</button></div>`;
   const typeSel=modal.querySelector('#m_type'), prow=modal.querySelector('#m_prow');
@@ -864,13 +883,15 @@ function openTaskModal(phase,t){
   function syncProg(){prow.style.display=TASK_MAP[typeSel.value].progress?'block':'none';}
   syncProg(); typeSel.onchange=syncProg;
   prog.oninput=()=>pval.textContent=prog.value;
+  wireDateClears();
   modalBg.classList.add('open');
   modal.querySelector('#m_cancel').onclick=closeModal;
   modal.querySelector('#m_save').onclick=()=>{
     const type=typeSel.value;
     if(!editing && used.includes(type) && !confirm(TASK_MAP[type].label+' work already exists in this phase. Add another?'))return;
     const start=modal.querySelector('#m_start').value,end=modal.querySelector('#m_end').value;
-    if(start&&end&&end<start){alert('End date must be on or after start date.');return;}
+    if(!end){alert('End date is required.');return;}
+    if(start&&end<start){alert('End date must be on or after start date.');return;}
     const progress=TASK_MAP[type].progress?Number(prog.value):0;
     if(editing)Object.assign(t,{type,start,end,progress});
     else phase.tasks.push({id:uid(),type,start,end,progress});
