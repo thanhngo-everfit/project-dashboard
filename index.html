@@ -197,6 +197,8 @@
     <span class="squad-name" id="squadName"></span>
     <button class="btn primary" id="addProject">＋ Project</button>
     <div class="spacer"></div>
+    <button class="btn" id="expandAll" title="Expand all projects and phases">⊞ Expand All</button>
+    <button class="btn" id="collapseAll" title="Collapse all projects and phases">⊟ Collapse All</button>
     <div class="zoom">
       <span style="font-size:12px;color:var(--muted);font-weight:600;margin-right:4px;">Zoom</span>
       <button id="zoomOut">−</button>
@@ -913,6 +915,12 @@ document.getElementById('addProject').onclick=()=>openProjectModal();
 document.querySelectorAll('#viewToggle button').forEach(b=>b.onclick=()=>{state.view=b.dataset.view;render();});
 document.getElementById('zoomIn').onclick=()=>{state.zoom=Math.min(3,state.zoom*1.25);render();};
 document.getElementById('zoomOut').onclick=()=>{state.zoom=Math.max(.4,state.zoom/1.25);render();};
+function setAllCollapsed(v){
+  activeSquad().projects.forEach(p=>{ p.collapsed=v; p.phases.forEach(ph=>ph.collapsed=v); });
+  render();
+}
+document.getElementById('expandAll').onclick=()=>setAllCollapsed(false);
+document.getElementById('collapseAll').onclick=()=>setAllCollapsed(true);
 
 document.getElementById('exportBtn').onclick=()=>{
   const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
