@@ -61,6 +61,12 @@
   .row.project .left{font-weight:800;}
   .row.phase .left{font-weight:600;}
   .row.task .left{font-weight:500;color:#475467;}
+  /* phase row drag-and-drop (move between projects / reorder) */
+  .row.phase .left.drag-src{cursor:grab;}
+  .row.phase .left.drag-src:active{cursor:grabbing;}
+  .row.row-dragging{opacity:.4;}
+  .row.drop-into .left{box-shadow:inset 0 0 0 2px #4c6fff;border-radius:6px;}
+  .row.drop-before .left{box-shadow:inset 0 3px 0 0 #4c6fff;}
 
   .left{position:sticky;left:0;z-index:5;width:var(--left-w);min-width:var(--left-w);
         display:flex;align-items:center;gap:6px;padding:0 10px;background:inherit;border-right:1px solid var(--border);}
@@ -251,6 +257,7 @@ let lastSyncedJSON = null;     // serialized state last confirmed on the server
 let saveTimer = null;
 let pollTimer = null;
 let busy = false;              // true while dragging a bar (don't clobber)
+let dragPhase = null;          // {projectId, phaseId} while dragging a phase row to reorder/move
 
 function save(){
   const json = JSON.stringify(state);
@@ -613,6 +620,7 @@ function projectRow(p,units,tw){
     {icon:'🗑',title:'Delete',fn:()=>{if(confirm('Delete project "'+p.name+'"?')){p._del=1;activeSquad().projects=activeSquad().projects.filter(x=>x!==p);render();}}},
   ]);
   caret.onclick=()=>{p.collapsed=!p.collapsed;render();};
+  wireDropTarget(row, p.id, null);   // drop a phase here -> move into this project
   row.appendChild(left);
   const track=document.createElement('div'); track.className='track'; track.style.width=tw+'px';
   track.appendChild(gridlinesEl(units,tw));
@@ -636,6 +644,8 @@ function phaseRow(p,ph,units,tw){
     {icon:'🗑',title:'Delete',fn:()=>{if(confirm('Delete phase "'+ph.name+'"?')){p.phases=p.phases.filter(x=>x!==ph);render();}}},
   ]);
   caret.onclick=()=>{ph.collapsed=!ph.collapsed;render();};
+  makePhaseDraggable(left, row, p.id, ph.id);  // drag this label to move/reorder
+  wireDropTarget(row, p.id, ph.id);            // drop another phase here -> insert before this one
   row.appendChild(left);
   const track=document.createElement('div'); track.className='track'; track.style.width=tw+'px';
   track.appendChild(gridlinesEl(units,tw));
@@ -736,6 +746,53 @@ function attachDrag(bar,obj,units,kind,parent){
   bar.querySelector('.handle.r').addEventListener('mousedown',e=>down(e,'r'));
 }
 function clampPhase(){/* hook for future auto-expand of phase to fit tasks */}
+
+/* ---------- Drag a phase row between projects / reorder ---------- */
+function clearDropMarks(){
+  document.querySelectorAll('.drop-into,.drop-before,.row-dragging')
+    .forEach(el=>el.classList.remove('drop-into','drop-before','row-dragging'));
+}
+function wireDropTarget(row,projectId,beforePhaseId){
+  row.addEventListener('dragover',e=>{
+    if(!dragPhase)return;
+    e.preventDefault(); e.dataTransfer.dropEffect='move';
+    clearDropMarks();
+    row.classList.add(beforePhaseId ? 'drop-before' : 'drop-into');
+  });
+  row.addEventListener('drop',e=>{
+    if(!dragPhase)return;
+    e.preventDefault();
+    movePhase(dragPhase, projectId, beforePhaseId);
+  });
+}
+function makePhaseDraggable(left,row,projectId,phaseId){
+  left.setAttribute('draggable','true');
+  left.classList.add('drag-src');
+  left.addEventListener('dragstart',e=>{
+    dragPhase={projectId,phaseId};
+    e.dataTransfer.effectAllowed='move';
+    try{e.dataTransfer.setData('text/plain',phaseId);}catch(_){}
+    row.classList.add('row-dragging');
+  });
+  left.addEventListener('dragend',()=>{ dragPhase=null; clearDropMarks(); });
+}
+function movePhase(src,destProjectId,beforePhaseId){
+  const squad=activeSquad();
+  const srcProj=squad.projects.find(x=>x.id===src.projectId);
+  const destProj=squad.projects.find(x=>x.id===destProjectId);
+  if(!srcProj||!destProj){ dragPhase=null; clearDropMarks(); return; }
+  const idx=srcProj.phases.findIndex(x=>x.id===src.phaseId);
+  if(idx<0){ dragPhase=null; clearDropMarks(); return; }
+  const [phase]=srcProj.phases.splice(idx,1);
+  if(beforePhaseId && beforePhaseId!==phase.id){
+    const bidx=destProj.phases.findIndex(x=>x.id===beforePhaseId);
+    destProj.phases.splice(bidx<0?destProj.phases.length:bidx,0,phase);
+  } else {
+    destProj.phases.push(phase);
+  }
+  destProj.collapsed=false;   // reveal where it landed
+  dragPhase=null; clearDropMarks(); render();
+}
 
 /* ============================ Modals ============================ */
 const modalBg=document.getElementById('modalBg'), modal=document.getElementById('modal');
