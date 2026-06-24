@@ -88,6 +88,15 @@
   .headcell{position:absolute;top:0;height:var(--head-h);
             display:flex;align-items:center;gap:5px;padding-left:14px;font-size:15px;font-weight:800;color:#fff;letter-spacing:.3px;}
   .headcell small{font-weight:600;opacity:.7;font-size:12px;}
+  /* week view two-tier header */
+  .head.week{height:58px;}
+  .monthband{position:absolute;top:0;height:26px;display:flex;align-items:center;padding-left:10px;font-size:13px;font-weight:800;color:#fff;letter-spacing:.3px;border-right:1px solid rgba(255,255,255,.15);}
+  .daycell{position:absolute;top:26px;height:32px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;border-left:1px solid #eef0f3;font-size:11px;color:#475467;}
+  .daycell .dnum{font-weight:700;line-height:1.1;}
+  .daycell .ddow{font-size:9px;color:#98a2b3;line-height:1.1;}
+  .daycell.weekend{background:#f4f5f7;}
+  .daycell.istoday{background:#fee4e2;}
+  .daycell.istoday .dnum{color:#d92d20;}
 
   /* bars */
   .bar{position:absolute;top:6px;height:calc(var(--row-h) - 12px);border-radius:9px;cursor:grab;
@@ -160,6 +169,7 @@
     <div class="ctrl-group" id="viewToggle">
       <button data-view="quarter" class="active">Quarter</button>
       <button data-view="month">Month</button>
+      <button data-view="week">Week</button>
     </div>
     <button class="iconbtn" id="exportBtn" title="Export JSON">⤓</button>
     <button class="iconbtn" id="importBtn" title="Import JSON">⤒</button>
@@ -378,7 +388,7 @@ function buildUnits(squad){
   else{min=new Date();max=addMonths(new Date(),3);}
   const today=new Date(); if(today<min)min=today; if(today>max)max=today;
 
-  const base = state.view==='quarter'?170:95;
+  const base = state.view==='quarter'?170 : state.view==='month'?95 : 30;
   const w = base*state.zoom;
   const units=[]; let x=0;
   if(state.view==='quarter'){
@@ -390,18 +400,29 @@ function buildUnits(squad){
       units.push({start:cur,end:next,x,width:w,label:'Q'+q,sub:String(cur.getFullYear())});
       x+=w; cur=next;
     }
-  }else{
+  }else if(state.view==='month'){
     let cur=new Date(min.getFullYear(),min.getMonth(),1);
     const end=new Date(max.getFullYear(),max.getMonth(),1);
-    const MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     while(cur<=end){
       const next=addMonths(cur,1);
-      units.push({start:cur,end:next,x,width:w,label:MN[cur.getMonth()],sub:"'"+String(cur.getFullYear()).slice(2)});
+      units.push({start:cur,end:next,x,width:w,label:MONTHS[cur.getMonth()],sub:"'"+String(cur.getFullYear()).slice(2)});
+      x+=w; cur=next;
+    }
+  }else{ // week = day-level columns, grouped by month, with weekday letters
+    let cur=new Date(min.getFullYear(),min.getMonth(),min.getDate());
+    let end=new Date(max.getFullYear(),max.getMonth(),max.getDate());
+    while(cur.getDay()!==1) cur=addDays(cur,-1);   // snap start back to Monday
+    while(end.getDay()!==0) end=addDays(end,1);     // snap end forward to Sunday
+    while(cur<=end){
+      const next=addDays(cur,1);
+      units.push({start:cur,end:next,x,width:w,day:cur.getDate(),dow:cur.getDay()});
       x+=w; cur=next;
     }
   }
   return units;
 }
+const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const DOW=['S','M','T','W','T','F','S'];   // index by getDay() (0=Sun)
 function totalWidth(units){return units.length?units[units.length-1].x+units[units.length-1].width:0;}
 function dateToX(d,units){
   if(!units.length)return 0;
@@ -487,22 +508,26 @@ function renderGantt(){
   const grid=document.createElement('div'); grid.className='grid';
 
   // header
-  const head=document.createElement('div'); head.className='head';
+  const head=document.createElement('div'); head.className='head'+(state.view==='week'?' week':'');
   const hl=document.createElement('div'); hl.className='left'; hl.textContent='PROJECT / PHASE / WORK';
   const ht=document.createElement('div'); ht.className='track'; ht.style.width=tw+'px';
-  const baseYear=units.length?units[0].start.getFullYear():new Date().getFullYear();
-  units.forEach((u,i)=>{
-    const c=document.createElement('div'); c.className='headcell';
-    c.style.left=u.x+'px'; c.style.width=u.width+'px';
-    const shade=headShade(i,units.length);
-    c.style.background=shade.bg; c.style.color=shade.fg;
-    const yr=u.start.getFullYear();
-    let txt=u.label;
-    if(state.view==='quarter'){ if(yr!==baseYear) txt=u.label+'/'+yr; }
-    else { txt=`${u.label} <small>${u.sub}</small>`; }
-    c.innerHTML=txt;
-    ht.appendChild(c);
-  });
+  if(state.view==='week'){
+    buildWeekHeader(units,ht);
+  }else{
+    const baseYear=units.length?units[0].start.getFullYear():new Date().getFullYear();
+    units.forEach((u,i)=>{
+      const c=document.createElement('div'); c.className='headcell';
+      c.style.left=u.x+'px'; c.style.width=u.width+'px';
+      const shade=headShade(i,units.length);
+      c.style.background=shade.bg; c.style.color=shade.fg;
+      const yr=u.start.getFullYear();
+      let txt=u.label;
+      if(state.view==='quarter'){ if(yr!==baseYear) txt=u.label+'/'+yr; }
+      else { txt=`${u.label} <small>${u.sub}</small>`; }
+      c.innerHTML=txt;
+      ht.appendChild(c);
+    });
+  }
   head.appendChild(hl); head.appendChild(ht); grid.appendChild(head);
 
   if(!squad.projects.length){
@@ -526,12 +551,45 @@ function renderGantt(){
 
 function gridlinesEl(units,tw){
   const gl=document.createElement('div'); gl.className='gridlines';
-  units.forEach(u=>{const c=document.createElement('div');c.className='col';c.style.left=u.x+'px';c.style.width=u.width+'px';gl.appendChild(c);});
+  const wk=state.view==='week';
+  units.forEach(u=>{
+    const c=document.createElement('div');c.className='col';c.style.left=u.x+'px';c.style.width=u.width+'px';
+    if(wk && (u.dow===0||u.dow===6)) c.style.background='rgba(16,24,40,.035)';   // shade weekends
+    gl.appendChild(c);
+  });
   // today line
   const today=new Date(); const tx=dateToX(today,units);
   const tl=document.createElement('div'); tl.className='today'; tl.style.left=tx+'px';
   tl.innerHTML='<span class="lbl">Today</span>'; gl.appendChild(tl);
   return gl;
+}
+// Two-tier header for Week view: month band on top, day-number + weekday letter below.
+function buildWeekHeader(units,ht){
+  // month groups (top band)
+  const groups=[]; let g=null;
+  units.forEach(u=>{
+    const key=u.start.getFullYear()+'-'+u.start.getMonth();
+    if(!g||g.key!==key){ g={key,label:MONTHS[u.start.getMonth()]+" '"+String(u.start.getFullYear()).slice(2),x:u.x,width:u.width}; groups.push(g); }
+    else g.width+=u.width;
+  });
+  groups.forEach((gr,i)=>{
+    const c=document.createElement('div'); c.className='monthband';
+    c.style.left=gr.x+'px'; c.style.width=gr.width+'px';
+    const shade=headShade(i,groups.length);
+    c.style.background=shade.bg; c.style.color=shade.fg;
+    c.textContent=gr.label;
+    ht.appendChild(c);
+  });
+  // day cells (bottom)
+  const todayKey=fmt(new Date());
+  units.forEach(u=>{
+    const c=document.createElement('div'); c.className='daycell';
+    if(u.dow===0||u.dow===6) c.classList.add('weekend');
+    if(fmt(u.start)===todayKey) c.classList.add('istoday');
+    c.style.left=u.x+'px'; c.style.width=u.width+'px';
+    c.innerHTML=`<span class="dnum">${u.day}</span><span class="ddow">${DOW[u.dow]}</span>`;
+    ht.appendChild(c);
+  });
 }
 
 function leftCell(level,caretState,dot,labelText,actions){
