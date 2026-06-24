@@ -73,6 +73,10 @@
   .tree .v{position:absolute;left:0;top:0;bottom:0;border-left:2px dashed #ccd2dc;}
   .tree.last .v{bottom:50%;}
   .tree .h{position:absolute;left:0;width:40px;top:calc(50% - 1px);border-top:2px dashed #ccd2dc;border-bottom-left-radius:8px;}
+  /* timeline connector thread (in the track), rooted at the project's start column */
+  .tl-v{position:absolute;top:0;bottom:0;width:0;border-left:2px dashed #c7d8c9;z-index:1;pointer-events:none;}
+  .tl-v.last{bottom:50%;}
+  .tl-h{position:absolute;top:calc(50% - 1px);height:0;border-top:2px dashed #c7d8c9;z-index:1;pointer-events:none;}
   /* phase row drag-and-drop (move between projects / reorder) */
   .row.phase .left.drag-src{cursor:grab;}
   .row.phase .left.drag-src:active{cursor:grabbing;}
@@ -632,7 +636,11 @@ function renderGantt(){
       p.phases.forEach(ph=>{
         grid.appendChild(phaseRow(p,ph,units,tw));
         if(!ph.collapsed){
-          ph.tasks.forEach((t,ti)=>grid.appendChild(taskRow(p,ph,t,units,tw, ti===ph.tasks.length-1)));
+          // x of the project's earliest phase start -> root of the timeline connector thread
+          const draw=(ph.segments||[]).filter(s=>s.start||s.end);
+          let projStartX=0;
+          if(draw.length){ const e0=draw.reduce((m,s)=>{const d=effStart(s,units);return d<m?d:m;}, effStart(draw[0],units)); projStartX=dateToX(e0,units); }
+          ph.tasks.forEach((t,ti)=>grid.appendChild(taskRow(p,ph,t,units,tw, ti===ph.tasks.length-1, projStartX)));
         }
       });
     }
@@ -781,7 +789,7 @@ function phaseRow(cat,proj,units,tw){
   return row;
 }
 
-function taskRow(p,ph,t,units,tw,last){
+function taskRow(p,ph,t,units,tw,last,projStartX){
   const meta=TASK_MAP[t.type];
   const row=document.createElement('div'); row.className='row task';
   const lblTxt=meta.label+(meta.progress?'  ·  '+(t.progress||0)+'%':'');
@@ -792,6 +800,16 @@ function taskRow(p,ph,t,units,tw,last){
   row.appendChild(left);
   const track=document.createElement('div'); track.className='track'; track.style.width=tw+'px';
   track.appendChild(gridlinesEl(units,tw));
+  // dashed connector thread on the timeline: vertical at the project's start column, elbow to this bar
+  if(typeof projStartX==='number'){
+    const bx=dateToX(effStart(t,units),units);
+    const cx=projStartX;
+    const v=document.createElement('div'); v.className='tl-v'+(last?' last':''); v.style.left=cx+'px';
+    track.appendChild(v);
+    const h=document.createElement('div'); h.className='tl-h';
+    h.style.left=Math.min(cx,bx)+'px'; h.style.width=Math.max(2,Math.abs(bx-cx))+'px';
+    track.appendChild(h);
+  }
   if(t.start||t.end){
     const lbl=meta.label+(meta.progress?' '+(t.progress||0)+'%':'');
     const bar=makeBar(meta.color, lbl, meta.progress?(t.progress||0):null, ()=>openTaskModal(ph,t));
