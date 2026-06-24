@@ -784,14 +784,12 @@ function phaseRow(cat,proj,units,tw){
   const track=document.createElement('div'); track.className='track'; track.style.width=tw+'px';
   track.appendChild(gridlinesEl(units,tw));
   const drawable=segs.filter(s=>s.start||s.end);
-  const laneH=26, gap=5, pad=10;   // pad = top/bottom breathing room so 2-line names clear the divider
+  const laneH=26, pad=10;   // pad = top/bottom breathing room so 2-line names clear the divider
   if(drawable.length){
-    const layout=laneLayout(drawable,units);
-    row.style.height=(layout.laneCount*laneH + (layout.laneCount-1)*gap + pad*2)+'px';
-    layout.items.forEach(it=>{
-      const seg=it.seg;
+    row.style.height=(laneH + pad*2)+'px';   // all phases share one row; overlaps draw on top of each other
+    drawable.forEach(seg=>{
       const bar=makeBar(seg.color, segLabel(proj,seg), null, ()=>openPhaseModal(cat,proj), {wip:seg.wip, badge:seg.badge});
-      bar.style.top=(pad+it.lane*(laneH+gap))+'px';
+      bar.style.top=pad+'px';
       bar.style.height=laneH+'px';
       placeBar(bar,seg,units);
       attachDrag(bar,seg,units,'phase',proj);
