@@ -309,14 +309,18 @@ function migrate(s){
       delete proj.start; delete proj.end; delete proj.color; delete proj.wip; delete proj.badge;
     }
     if(!Array.isArray(proj.tasks)) proj.tasks=[];
+    delete proj.collapsed;   // collapse is now personal (state.uiCollapsed), not shared data
   })));
   // per-view zoom (was a single shared value)
   if(!s.zoomByView || typeof s.zoomByView!=='object'){
     const z=s.zoom||1; s.zoomByView={quarter:z,month:z,week:z};
   }
   ['quarter','month','week'].forEach(v=>{ if(!s.zoomByView[v]) s.zoomByView[v]=1; });
+  if(!s.uiCollapsed || typeof s.uiCollapsed!=='object') s.uiCollapsed={};   // personal, projectId -> true(collapsed)/false
   return s;
 }
+function isCollapsed(p){ return state.uiCollapsed[p.id] !== false; }   // default: collapsed
+function toggleCollapsed(p){ state.uiCollapsed[p.id] = isCollapsed(p) ? false : true; }
 function curZoom(){ return (state.zoomByView && state.zoomByView[state.view]) || 1; }
 function setZoom(z){ if(!state.zoomByView) state.zoomByView={}; state.zoomByView[state.view]=z; }
 /* Local cache + shared-server sync.
@@ -333,11 +337,14 @@ let busy = false;              // true while dragging a bar (don't clobber)
 let dragPhase = null;          // {projectId, phaseId} while dragging a phase row to reorder/move
 let dragTabId = null;          // squad id while dragging a tab to reorder
 
+// Only the roadmap DATA (squads) is shared. View mode, active tab, zoom and collapse
+// state live in `state` too but are NEVER sent to the backend and never overwritten by
+// a teammate's copy — they persist per-browser via localStorage only.
+function dataJSON(){ return JSON.stringify(state.squads); }
 function save(){
-  const json = JSON.stringify(state);
-  localStorage.setItem(STORE_KEY, json);
-  if(!idToken) return;             // not signed in / offline -> local only
-  if(json === lastSyncedJSON) return; // nothing new to push (prevents loops)
+  localStorage.setItem(STORE_KEY, JSON.stringify(state));   // full local cache incl. personal view
+  if(!idToken) return;
+  if(dataJSON() === lastSyncedJSON) return;   // data unchanged (only view/UI changed) -> don't push
   scheduleSave();
 }
 function scheduleSave(){
@@ -357,11 +364,11 @@ function setSync(text, tone){
 }
 async function syncSave(){
   if(!idToken) return;
-  const payload = JSON.stringify(state);
+  const payload = dataJSON();
   setSync('Saving…');
   try{
     const r = await apiFetch('/api/state', {
-      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({state})
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({state:{squads:state.squads}})
     });
     if(r.status===401){ handleAuthExpired(); return; }
     if(r.ok){
@@ -384,11 +391,8 @@ async function syncLoad(){
     if(r.ok){
       const j = await r.json();
       const rec = j.record;
-      if(rec && rec.state){
-        state = migrate(rec.state);
-        baselineUpdatedAt = rec.updatedAt || 0;
-        lastSyncedJSON = JSON.stringify(state);
-        localStorage.setItem(STORE_KEY, lastSyncedJSON);
+      if(rec && rec.state && rec.state.squads){
+        adoptRemoteData(migrate(rec.state).squads, rec.updatedAt);
         setSync('Saved', 'ok');
       } else {
         // first ever run: seed the shared copy with whatever we have locally
@@ -400,22 +404,27 @@ async function syncLoad(){
   }catch(e){ setSync('Offline — using local copy', 'bad'); }
   render();
 }
+// Replace only the shared data; keep this browser's personal view/tab/zoom/collapse.
+function adoptRemoteData(squads, updatedAt){
+  state.squads = squads;
+  if(!state.squads.find(s=>s.id===state.activeSquad) && state.squads[0]) state.activeSquad=state.squads[0].id;
+  baselineUpdatedAt = updatedAt || 0;
+  lastSyncedJSON = dataJSON();
+  localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  render();
+}
 async function pollRemote(){
   if(!idToken || busy) return;
-  if(modalBg.classList.contains('open')) return;          // editing -> don't interrupt
-  if(JSON.stringify(state) !== lastSyncedJSON) return;     // local edits pending -> our save wins
+  if(modalBg.classList.contains('open')) return;     // editing -> don't interrupt
+  if(dataJSON() !== lastSyncedJSON) return;           // local data edits pending -> our save wins
   try{
     const r = await apiFetch('/api/state', {method:'GET'});
     if(r.status===401){ handleAuthExpired(); return; }
     if(!r.ok) return;
     const j = await r.json();
     const rec = j.record;
-    if(rec && rec.state && rec.updatedAt > baselineUpdatedAt){
-      state = migrate(rec.state);
-      baselineUpdatedAt = rec.updatedAt;
-      lastSyncedJSON = JSON.stringify(state);
-      localStorage.setItem(STORE_KEY, lastSyncedJSON);
-      render();
+    if(rec && rec.state && rec.state.squads && rec.updatedAt > baselineUpdatedAt){
+      adoptRemoteData(migrate(rec.state).squads, rec.updatedAt);
       setSync('Updated by ' + (rec.updatedBy||'teammate'), 'ok');
     }
   }catch(e){ /* offline: keep working locally */ }
@@ -659,7 +668,7 @@ function renderGantt(){
     {
       p.phases.forEach(ph=>{
         grid.appendChild(phaseRow(p,ph,units,tw));
-        if(!ph.collapsed){
+        if(!isCollapsed(ph)){
           // x of the project's earliest phase start -> root of the timeline connector thread
           const draw=(ph.segments||[]).filter(s=>s.start||s.end);
           let projStartX=0, projStartDate=null;
@@ -786,12 +795,12 @@ function phaseRow(cat,proj,units,tw){
   const row=document.createElement('div'); row.className='row phase';
   const segs=proj.segments||[];
   const dotColor=segs[0]?segs[0].color:'#cdb4f6';
-  const {left,caret}=leftCell(1,proj.collapsed?'closed':'open',dotColor,proj.name,[
+  const {left,caret}=leftCell(1,isCollapsed(proj)?'closed':'open',dotColor,proj.name,[
     {icon:'＋',title:'Add work',fn:()=>openTaskModal(proj)},
     {icon:'✎',title:'Edit project',fn:()=>openPhaseModal(cat,proj)},
     {icon:'🗑',title:'Delete',fn:()=>{if(confirm('Delete project "'+proj.name+'"?')){cat.phases=cat.phases.filter(x=>x!==proj);render();}}},
   ]);
-  caret.onclick=()=>{proj.collapsed=!proj.collapsed;render();};
+  caret.onclick=()=>{toggleCollapsed(proj);render();};
   makePhaseDraggable(left, row, cat.id, proj.id);  // drag label to move/reorder between categories
   wireDropTarget(row, cat.id, proj.id);
   row.appendChild(left);
@@ -963,7 +972,6 @@ function movePhase(src,destProjectId,beforePhaseId){
   } else {
     destProj.phases.push(phase);
   }
-  destProj.collapsed=false;   // reveal where it landed
   dragPhase=null; clearDropMarks(); render();
 }
 
@@ -1077,7 +1085,7 @@ function openPhaseModal(category,proj){
       segs.push({id:uid(),ptype:d.ptype,name:nm,start:d.start,end:d.end,color:d.color,wip:d.wip,badge:d.badge.trim()});
     }
     if(editing){ proj.name=name; proj.segments=segs; }
-    else category.phases.push({id:uid(),name,collapsed:true,segments:segs,tasks:[]});
+    else category.phases.push({id:uid(),name,segments:segs,tasks:[]});
     closeModal();render();
   };
 }
@@ -1136,7 +1144,7 @@ document.querySelectorAll('#viewToggle button').forEach(b=>b.onclick=()=>{state.
 document.getElementById('zoomIn').onclick=()=>{setZoom(Math.min(3,curZoom()*1.25));render();};
 document.getElementById('zoomOut').onclick=()=>{setZoom(Math.max(.4,curZoom()/1.25));render();};
 function setAllCollapsed(v){
-  activeSquad().projects.forEach(p=>{ p.collapsed=v; p.phases.forEach(ph=>ph.collapsed=v); });
+  activeSquad().projects.forEach(cat=>cat.phases.forEach(proj=>{ state.uiCollapsed[proj.id]=v; }));
   render();
 }
 document.getElementById('expandAll').onclick=()=>setAllCollapsed(false);
