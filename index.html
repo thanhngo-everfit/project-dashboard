@@ -317,12 +317,15 @@ function migrate(s){
   }
   ['quarter','month','week'].forEach(v=>{ if(!s.zoomByView[v]) s.zoomByView[v]=1; });
   if(!s.uiCollapsed || typeof s.uiCollapsed!=='object') s.uiCollapsed={};   // personal, projectId -> true(collapsed)/false
+  if(!s.viewBySquad || typeof s.viewBySquad!=='object') s.viewBySquad={};   // personal, squadId -> 'quarter'|'month'|'week'
   return s;
 }
 function isCollapsed(p){ return state.uiCollapsed[p.id] !== false; }   // default: collapsed
 function toggleCollapsed(p){ state.uiCollapsed[p.id] = isCollapsed(p) ? false : true; }
-function curZoom(){ return (state.zoomByView && state.zoomByView[state.view]) || 1; }
-function setZoom(z){ if(!state.zoomByView) state.zoomByView={}; state.zoomByView[state.view]=z; }
+function curView(){ return (state.viewBySquad && state.viewBySquad[state.activeSquad]) || state.view || 'quarter'; }
+function setView(v){ if(!state.viewBySquad) state.viewBySquad={}; state.viewBySquad[state.activeSquad]=v; }
+function curZoom(){ return (state.zoomByView && state.zoomByView[curView()]) || 1; }
+function setZoom(z){ if(!state.zoomByView) state.zoomByView={}; state.zoomByView[curView()]=z; }
 /* Local cache + shared-server sync.
  * - localStorage is an offline cache / fallback.
  * - The shared copy lives in the backend (/api/state) so the whole team sees it.
@@ -478,10 +481,11 @@ function buildUnits(squad){
   else{min=new Date();max=addMonths(new Date(),3);}
   const today=new Date(); if(today<min)min=today; if(today>max)max=today;
 
-  const base = state.view==='quarter'?170 : state.view==='month'?95 : 30;
+  const view=curView();
+  const base = view==='quarter'?170 : view==='month'?95 : 30;
   const w = base*curZoom();
   const units=[]; let x=LEFTPAD;   // leave a left gutter for the connector thread
-  if(state.view==='quarter'){
+  if(view==='quarter'){
     let cur=quarterStart(min);
     const end=quarterStart(max);
     while(cur<=end){
@@ -490,7 +494,7 @@ function buildUnits(squad){
       units.push({start:cur,end:next,x,width:w,label:'Q'+q,sub:String(cur.getFullYear())});
       x+=w; cur=next;
     }
-  }else if(state.view==='month'){
+  }else if(view==='month'){
     let cur=new Date(min.getFullYear(),min.getMonth(),1);
     const end=new Date(max.getFullYear(),max.getMonth(),1);
     while(cur<=end){
@@ -554,7 +558,7 @@ function headShade(i,n){
 function render(){
   renderTabs();
   document.getElementById('squadName').textContent=activeSquad().name;
-  document.querySelectorAll('#viewToggle button').forEach(b=>b.classList.toggle('active',b.dataset.view===state.view));
+  document.querySelectorAll('#viewToggle button').forEach(b=>b.classList.toggle('active',b.dataset.view===curView()));
   renderGantt();
   save();
 }
@@ -632,14 +636,14 @@ function renderGantt(){
   const grid=document.createElement('div'); grid.className='grid';
 
   // header
-  const head=document.createElement('div'); head.className='head'+(state.view==='week'?' week':'');
+  const head=document.createElement('div'); head.className='head'+(curView()==='week'?' week':'');
   const hl=document.createElement('div'); hl.className='left';
   hl.innerHTML='<span>PROJECT / PHASE / WORK</span>';
   const addCat=document.createElement('button'); addCat.className='hdr-add'; addCat.textContent='+'; addCat.title='New category';
   addCat.onclick=()=>openProjectModal();
   hl.appendChild(addCat);
   const ht=document.createElement('div'); ht.className='track'; ht.style.width=tw+'px';
-  if(state.view==='week'){
+  if(curView()==='week'){
     buildWeekHeader(units,ht);
   }else{
     const baseYear=units.length?units[0].start.getFullYear():new Date().getFullYear();
@@ -650,7 +654,7 @@ function renderGantt(){
       c.style.background=shade.bg; c.style.color=shade.fg;
       const yr=u.start.getFullYear();
       let txt=u.label;
-      if(state.view==='quarter'){ if(yr!==baseYear) txt=u.label+'/'+yr; }
+      if(curView()==='quarter'){ if(yr!==baseYear) txt=u.label+'/'+yr; }
       else { txt=`${u.label} <small>${u.sub}</small>`; }
       c.innerHTML=txt;
       ht.appendChild(c);
@@ -683,7 +687,7 @@ function renderGantt(){
 
 function gridlinesEl(units,tw){
   const gl=document.createElement('div'); gl.className='gridlines';
-  const wk=state.view==='week';
+  const wk=curView()==='week';
   units.forEach(u=>{
     const c=document.createElement('div');c.className='col';c.style.left=u.x+'px';c.style.width=u.width+'px';
     if(wk && (u.dow===0||u.dow===6)) c.style.background='rgba(16,24,40,.035)';   // shade weekends
@@ -1140,7 +1144,7 @@ function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','
   el.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();el.blur();}else if(e.key==='Escape'){el.textContent=activeSquad().name;el.blur();}};
   el.onblur=()=>{el.contentEditable='false';const v=el.textContent.trim()||'Squad';activeSquad().name=v;render();};
 })();
-document.querySelectorAll('#viewToggle button').forEach(b=>b.onclick=()=>{state.view=b.dataset.view;render();});
+document.querySelectorAll('#viewToggle button').forEach(b=>b.onclick=()=>{setView(b.dataset.view);render();});
 document.getElementById('zoomIn').onclick=()=>{setZoom(Math.min(3,curZoom()*1.25));render();};
 document.getElementById('zoomOut').onclick=()=>{setZoom(Math.max(.4,curZoom()/1.25));render();};
 function setAllCollapsed(v){
