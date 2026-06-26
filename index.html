@@ -1103,9 +1103,9 @@ function openTaskModal(phase,t){
     <div class="field" id="m_namerow"><label>Work name</label><input id="m_cname" value="${esc(def.customName||'')}" placeholder="e.g. Data migration, Spike, Review"></div>
     <div class="field row2">
       <div><label>Start (optional)</label>${dateField('m_start',def.start)}</div>
-      <div><label>End</label>${dateField('m_end',def.end)}</div>
+      <div><label>End (optional)</label>${dateField('m_end',def.end)}</div>
     </div>
-    <div class="field" style="margin-top:-6px;"><span style="font-size:11px;color:var(--muted);">Leave <b>start</b> blank to begin at the edge of the current view. End is required.</span></div>
+    <div class="field" style="margin-top:-6px;"><span style="font-size:11px;color:var(--muted);">Leave a date blank to extend to the edge of the current view.</span></div>
     <div class="field progress-row" id="m_prow"><label>Progress: <span id="m_pval">${def.progress||0}</span>%</label><input type="range" min="0" max="100" id="m_prog" value="${def.progress||0}"></div>
     <div class="modal-actions"><button class="btn" id="m_cancel">Cancel</button><button class="btn primary" id="m_save">Save</button></div>`;
   const typeSel=modal.querySelector('#m_type'), prow=modal.querySelector('#m_prow'), namerow=modal.querySelector('#m_namerow');
@@ -1125,8 +1125,7 @@ function openTaskModal(phase,t){
     if(type==='custom' && !customName){alert('Please enter a name for the custom work.');return;}
     if(type!=='custom' && !editing && used.includes(type) && !confirm(TASK_MAP[type].label+' work already exists in this phase. Add another?'))return;
     const start=modal.querySelector('#m_start').value,end=modal.querySelector('#m_end').value;
-    if(!end){alert('End date is required.');return;}
-    if(start&&end<start){alert('End date must be on or after start date.');return;}
+    if(start&&end&&end<start){alert('End date must be on or after start date.');return;}
     const progress=TASK_MAP[type].progress?Number(prog.value):0;
     if(editing)Object.assign(t,{type,start,end,progress,customName});
     else phase.tasks.push({id:uid(),type,start,end,progress,customName});
