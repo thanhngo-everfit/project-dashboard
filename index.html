@@ -151,7 +151,8 @@
   .modal h3{margin:0 0 16px;font-size:17px;}
   .field{margin-bottom:14px;}
   .field label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px;}
-  .field input,.field select{width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;}
+  .field input,.field select,.field textarea{width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;}
+  .field textarea{resize:vertical;min-height:60px;line-height:1.4;}
   .datewrap{display:flex;align-items:center;gap:6px;}
   .datewrap input[type=date]{flex:1;min-width:0;}
   .dateclear{flex:none;width:30px;height:36px;border:1px solid var(--border);background:#fff;color:#98a2b3;border-radius:8px;cursor:pointer;font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;padding:0;}
@@ -832,11 +833,13 @@ function taskRow(p,ph,t,units,tw,last,projStartX,projStartDate){
   const row=document.createElement('div'); row.className='row task';
   const baseLabel = t.type==='custom' ? (t.customName||'Custom') : meta.label;
   const showPct=meta.progress && t.progress>0;   // hide 0%
-  const lblTxt=baseLabel+(showPct?'  ·  '+t.progress+'%':'');
+  const hasNote=!!(t.note && t.note.trim());
+  const lblTxt=baseLabel+(showPct?'  ·  '+t.progress+'%':'')+(hasNote?'  📝':'');
   const {left}=leftCell(2,null,meta.color,lblTxt,[
     {icon:'✎',title:'Edit',fn:()=>openTaskModal(ph,t)},
     {icon:'🗑',title:'Delete',fn:()=>{ph.tasks=ph.tasks.filter(x=>x!==t);render();}},
   ],{connector:true,last:!!last});
+  if(hasNote) row.title=t.note;   // hover to read the note
   row.appendChild(left);
   const track=document.createElement('div'); track.className='track'; track.style.width=tw+'px';
   track.appendChild(gridlinesEl(units,tw));
@@ -1097,7 +1100,7 @@ function openPhaseModal(category,proj){
 function openTaskModal(phase,t){
   const editing=!!t;
   const used=phase.tasks.map(x=>x.type);
-  const def=t||{type:(TASK_TYPES.find(tt=>tt.key!=='custom'&&!used.includes(tt.key))||TASK_TYPES[0]).key,start:'',end:'',progress:0,customName:''};
+  const def=t||{type:(TASK_TYPES.find(tt=>tt.key!=='custom'&&!used.includes(tt.key))||TASK_TYPES[0]).key,start:'',end:'',progress:0,customName:'',note:''};
   modal.innerHTML=`<h3>${editing?'Edit':'Add'} Development Work</h3>
     <div class="field"><label>Discipline</label><select id="m_type">${TASK_TYPES.map(tt=>`<option value="${tt.key}" ${tt.key===def.type?'selected':''}>${tt.label}</option>`).join('')}</select></div>
     <div class="field" id="m_namerow"><label>Work name</label><input id="m_cname" value="${esc(def.customName||'')}" placeholder="e.g. Data migration, Spike, Review"></div>
@@ -1107,6 +1110,7 @@ function openTaskModal(phase,t){
     </div>
     <div class="field" style="margin-top:-6px;"><span style="font-size:11px;color:var(--muted);">Leave a date blank to extend to the edge of the current view.</span></div>
     <div class="field progress-row" id="m_prow"><label>Progress: <span id="m_pval">${def.progress||0}</span>%</label><input type="range" min="0" max="100" id="m_prog" value="${def.progress||0}"></div>
+    <div class="field"><label>Note</label><textarea id="m_note" rows="3" placeholder="Optional note for this work…">${esc(def.note||'')}</textarea></div>
     <div class="modal-actions"><button class="btn" id="m_cancel">Cancel</button><button class="btn primary" id="m_save">Save</button></div>`;
   const typeSel=modal.querySelector('#m_type'), prow=modal.querySelector('#m_prow'), namerow=modal.querySelector('#m_namerow');
   const prog=modal.querySelector('#m_prog'), pval=modal.querySelector('#m_pval');
@@ -1127,8 +1131,9 @@ function openTaskModal(phase,t){
     const start=modal.querySelector('#m_start').value,end=modal.querySelector('#m_end').value;
     if(start&&end&&end<start){alert('End date must be on or after start date.');return;}
     const progress=TASK_MAP[type].progress?Number(prog.value):0;
-    if(editing)Object.assign(t,{type,start,end,progress,customName});
-    else phase.tasks.push({id:uid(),type,start,end,progress,customName});
+    const note=modal.querySelector('#m_note').value.trim();
+    if(editing)Object.assign(t,{type,start,end,progress,customName,note});
+    else phase.tasks.push({id:uid(),type,start,end,progress,customName,note});
     closeModal();render();
   };
 }
