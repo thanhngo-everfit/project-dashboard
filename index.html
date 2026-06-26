@@ -163,6 +163,17 @@
   .field label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px;}
   .field input,.field select,.field textarea{width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;}
   .field textarea{resize:vertical;min-height:60px;line-height:1.4;}
+  /* blockers checklist */
+  .checklist{display:flex;flex-direction:column;gap:6px;margin-bottom:8px;}
+  .chk-item{display:flex;align-items:center;gap:8px;}
+  .chk-item input[type=checkbox]{width:18px;height:18px;flex:none;cursor:pointer;accent-color:#d92d20;}
+  .chk-item .txt{flex:1;padding:6px 8px;font-size:13px;border:1px solid var(--border);border-radius:7px;}
+  .chk-item.done .txt{text-decoration:line-through;color:#98a2b3;}
+  .chk-item .del{flex:none;border:none;background:transparent;color:#98a2b3;cursor:pointer;font-size:13px;width:24px;height:24px;border-radius:6px;}
+  .chk-item .del:hover{background:#fee4e2;color:#d92d20;}
+  .addrow{display:flex;gap:6px;}
+  .addrow input{flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;}
+  .addrow .btn{flex:none;}
   .datewrap{display:flex;align-items:center;gap:6px;}
   .datewrap input[type=date]{flex:1;min-width:0;}
   .dateclear{flex:none;width:30px;height:36px;border:1px solid var(--border);background:#fff;color:#98a2b3;border-radius:8px;cursor:pointer;font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;padding:0;}
@@ -854,12 +865,16 @@ function taskRow(p,ph,t,units,tw,last,projStartX,projStartDate){
   const baseLabel = t.type==='custom' ? (t.customName||'Custom') : meta.label;
   const showPct=meta.progress && t.progress>0;   // hide 0%
   const hasNote=!!(t.note && t.note.trim());
-  const lblTxt=baseLabel+(showPct?'  ·  '+t.progress+'%':'')+(hasNote?'  📝':'');
+  const openBlk=(t.blockers||[]).filter(b=>!b.done).length;
+  const lblTxt=baseLabel+(showPct?'  ·  '+t.progress+'%':'')+(openBlk?'  ⛔'+openBlk:'')+(hasNote?'  📝':'');
   const {left}=leftCell(2,null,meta.color,lblTxt,[
     {icon:'✎',title:'Edit',fn:()=>openTaskModal(ph,t)},
     {icon:'🗑',title:'Delete',fn:()=>{ph.tasks=ph.tasks.filter(x=>x!==t);render();}},
   ],{connector:true,last:!!last});
-  if(hasNote) row.title=t.note;   // hover to read the note
+  const tip=[];
+  if(openBlk) tip.push('Blockers:\n'+(t.blockers||[]).filter(b=>!b.done).map(b=>'• '+b.text).join('\n'));
+  if(hasNote) tip.push('Note:\n'+t.note);
+  if(tip.length) row.title=tip.join('\n\n');   // hover to read blockers / note
   row.appendChild(left);
   const track=document.createElement('div'); track.className='track'; track.style.width=tw+'px';
   track.appendChild(gridlinesEl(units,tw));
@@ -1136,6 +1151,10 @@ function openTaskModal(phase,t){
     </div>
     <div class="field" style="margin-top:-6px;"><span style="font-size:11px;color:var(--muted);">Leave a date blank to extend to the edge of the current view.</span></div>
     <div class="field progress-row" id="m_prow"><label>Progress: <span id="m_pval">${def.progress||0}</span>%</label><input type="range" min="0" max="100" id="m_prog" value="${def.progress||0}"></div>
+    <div class="field"><label>Blockers</label>
+      <div id="m_blockers" class="checklist"></div>
+      <div class="addrow"><input id="m_blkinput" placeholder="Add a blocker…"><button type="button" class="btn" id="m_blkadd">Add</button></div>
+    </div>
     <div class="modal-actions"><button class="btn" id="m_cancel">Cancel</button><button class="btn primary" id="m_save">Save</button></div>`;
   const typeSel=modal.querySelector('#m_type'), prow=modal.querySelector('#m_prow'), namerow=modal.querySelector('#m_namerow');
   const prog=modal.querySelector('#m_prog'), pval=modal.querySelector('#m_pval');
@@ -1159,6 +1178,25 @@ function openTaskModal(phase,t){
   syncNote();
   noteBtn.onclick=()=>{ noteOpen=!noteOpen; syncNote(); if(noteOpen) noteTa.focus(); };
   noteTa.oninput=()=>noteBtn.classList.toggle('has',noteTa.value.trim()!=='');
+  // Blockers checklist (Jira-style): add items, check done, remove
+  const blockers=(def.blockers||[]).map(b=>({id:b.id||uid(),text:b.text||'',done:!!b.done}));
+  const blkWrap=modal.querySelector('#m_blockers');
+  function renderBlockers(){
+    blkWrap.innerHTML='';
+    blockers.forEach((b,i)=>{
+      const r=document.createElement('div'); r.className='chk-item'+(b.done?' done':'');
+      r.innerHTML=`<input type="checkbox" ${b.done?'checked':''}><input class="txt" value="${esc(b.text)}" placeholder="Blocker…"><button type="button" class="del" title="Remove">✕</button>`;
+      r.querySelector('input[type=checkbox]').onchange=e=>{b.done=e.target.checked;renderBlockers();};
+      r.querySelector('.txt').oninput=e=>b.text=e.target.value;
+      r.querySelector('.del').onclick=()=>{blockers.splice(i,1);renderBlockers();};
+      blkWrap.appendChild(r);
+    });
+  }
+  renderBlockers();
+  const blkInput=modal.querySelector('#m_blkinput');
+  function addBlk(){ const v=blkInput.value.trim(); if(!v)return; blockers.push({id:uid(),text:v,done:false}); blkInput.value=''; renderBlockers(); blkInput.focus(); }
+  modal.querySelector('#m_blkadd').onclick=addBlk;
+  blkInput.onkeydown=e=>{ if(e.key==='Enter'){e.preventDefault();addBlk();} };
   wireDateClears();
   modalBg.classList.add('open');
   modal.querySelector('#m_cancel').onclick=closeModal;
@@ -1171,8 +1209,9 @@ function openTaskModal(phase,t){
     if(start&&end&&end<start){alert('End date must be on or after start date.');return;}
     const progress=TASK_MAP[type].progress?Number(prog.value):0;
     const note=document.getElementById('m_note').value.trim();
-    if(editing)Object.assign(t,{type,start,end,progress,customName,note});
-    else phase.tasks.push({id:uid(),type,start,end,progress,customName,note});
+    const blk=blockers.filter(b=>b.text.trim()).map(b=>({id:b.id,text:b.text.trim(),done:b.done}));
+    if(editing)Object.assign(t,{type,start,end,progress,customName,note,blockers:blk});
+    else phase.tasks.push({id:uid(),type,start,end,progress,customName,note,blockers:blk});
     closeModal();render();
   };
 }
