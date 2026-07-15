@@ -340,23 +340,24 @@ function load(){
  * name + start/end + color); project.tasks[] = dev work.
  * Migration: older data used project.segments[] (multiple phases) -> collapse into one start/end. */
 function migrate(s){
-  (s.squads||[]).forEach(sq=>(sq.projects||[]).forEach(cat=>(cat.phases||[]).forEach(proj=>{
-    // simplified model: a project is a single bar with start/end (no phases/segments)
-    if(Array.isArray(proj.segments)){
-      const starts=proj.segments.filter(x=>x.start).map(x=>x.start).sort();
-      const ends=proj.segments.filter(x=>x.end).map(x=>x.end).sort();
-      proj.start = starts[0] || '';
-      proj.end = ends.length ? ends[ends.length-1] : '';
-      proj.color = (proj.segments[0] && proj.segments[0].color) || proj.color || PALETTE[0];
-      delete proj.segments;
-    }
-    if(typeof proj.start!=='string') proj.start='';
-    if(typeof proj.end!=='string') proj.end='';
-    if(!proj.color) proj.color=PALETTE[0];
-    delete proj.wip; delete proj.badge;
-    if(!Array.isArray(proj.tasks)) proj.tasks=[];
-    delete proj.collapsed;   // collapse is now personal (state.uiCollapsed), not shared data
-  })));
+  (s.squads||[]).forEach(sq=>(sq.projects||[]).forEach((cat,ci)=>{
+    if(!cat.color) cat.color = (cat.phases && cat.phases[0] && cat.phases[0].color) || PALETTE[ci%PALETTE.length];  // color is now per-category
+    (cat.phases||[]).forEach(proj=>{
+      // simplified model: a project is a single bar with start/end (no phases/segments)
+      if(Array.isArray(proj.segments)){
+        const starts=proj.segments.filter(x=>x.start).map(x=>x.start).sort();
+        const ends=proj.segments.filter(x=>x.end).map(x=>x.end).sort();
+        proj.start = starts[0] || '';
+        proj.end = ends.length ? ends[ends.length-1] : '';
+        delete proj.segments;
+      }
+      if(typeof proj.start!=='string') proj.start='';
+      if(typeof proj.end!=='string') proj.end='';
+      delete proj.color; delete proj.wip; delete proj.badge;   // color comes from the category now
+      if(!Array.isArray(proj.tasks)) proj.tasks=[];
+      delete proj.collapsed;   // collapse is now personal (state.uiCollapsed), not shared data
+    });
+  }));
   // per-view zoom (was a single shared value)
   if(!s.zoomByView || typeof s.zoomByView!=='object'){
     const z=s.zoom||1; s.zoomByView={quarter:z,month:z,week:z};
@@ -800,7 +801,7 @@ function leftCell(level,caretState,dot,labelText,actions,opts){
 function projectRow(p,units,tw){
   const row=document.createElement('div'); row.className='row project';
   const count=(p.phases||[]).length;
-  const {left}=leftCell(0,false,null,p.name+' ('+count+')',[
+  const {left}=leftCell(0,false,p.color||null,p.name+' ('+count+')',[
     {icon:'＋',title:'Add project',fn:()=>openPhaseModal(p)},
     {icon:'✎',title:'Rename category',fn:()=>openProjectModal(p)},
     {icon:'🗑',title:'Delete',fn:()=>{if(confirm('Delete category "'+p.name+'"?')){p._del=1;activeSquad().projects=activeSquad().projects.filter(x=>x!==p);render();}}},
@@ -826,7 +827,7 @@ function projectRow(p,units,tw){
 // A project renders as a single bar labelled with the project name.
 function phaseRow(cat,proj,units,tw){
   const row=document.createElement('div'); row.className='row phase';
-  const {left,caret}=leftCell(1,isCollapsed(proj)?'closed':'open',proj.color||'#cdb4f6',proj.name,[
+  const {left,caret}=leftCell(1,isCollapsed(proj)?'closed':'open',cat.color||'#cdb4f6',proj.name,[
     {icon:'＋',title:'Add work',fn:()=>openTaskModal(proj)},
     {icon:'✎',title:'Edit project',fn:()=>openPhaseModal(cat,proj)},
     {icon:'🗑',title:'Delete',fn:()=>{if(confirm('Delete project "'+proj.name+'"?')){cat.phases=cat.phases.filter(x=>x!==proj);render();}}},
@@ -838,7 +839,7 @@ function phaseRow(cat,proj,units,tw){
   const track=document.createElement('div'); track.className='track'; track.style.width=tw+'px';
   track.appendChild(gridlinesEl(units,tw));
   if(proj.start||proj.end){
-    const bar=makeBar(proj.color, proj.name, null, ()=>openPhaseModal(cat,proj), {});
+    const bar=makeBar(cat.color, proj.name, null, ()=>openPhaseModal(cat,proj), {});
     placeBar(bar,proj,units);
     attachDrag(bar,proj,units,'phase',cat);
     track.appendChild(bar);
@@ -893,11 +894,10 @@ function makeBar(color,label,progress,onEdit,opts){
   const bar=document.createElement('div'); bar.className='bar'+(opts.wip?' wip':'');
   if(opts.wip){ bar.style.color=mix(color,0.55); }
   else if(progress===null){
-    // phase bar: light "band" with a bold colored outline + colored label — visually distinct
-    // from the solid dev-work bars, and overlaps stay readable (two outlines, no muddy blend).
-    bar.style.background= rgba(color,.14);
-    bar.style.border= '2px solid '+rgba(color,.9);
-    bar.style.color = mix(color,0.5);
+    // project bar: Miro-style solid pastel fill + darker matching-hue text
+    bar.style.background= color;
+    bar.style.color = mix(color,0.62);
+    bar.style.boxShadow = '0 1px 2px rgba(16,24,40,.12)';
   } else {
     // dev-work bar: solid translucent fill with a progress fill
     bar.style.background= rgba(color,.28);
@@ -1072,15 +1072,19 @@ modalBg.onclick=e=>{if(e.target===modalBg)closeModal();};
 function openProjectModal(p){
   hideNoteDock();
   const editing=!!p;
+  let color = editing ? (p.color||PALETTE[0]) : PALETTE[activeSquad().projects.length%PALETTE.length];
   modal.innerHTML=`<h3>${editing?'Edit':'New'} Category</h3>
     <div class="field"><label>Name</label><input id="m_name" value="${editing?esc(p.name):''}" placeholder="Category name"></div>
+    <div class="field"><label>Color (shared by all projects in this category)</label><div class="swatches" id="m_sw"></div></div>
     <div class="modal-actions"><button class="btn" id="m_cancel">Cancel</button><button class="btn primary" id="m_save">Save</button></div>`;
+  const sw=modal.querySelector('#m_sw');
+  PALETTE.forEach(c=>{const d=document.createElement('div');d.className='swatch'+(c===color?' sel':'');d.style.background=c;d.onclick=()=>{color=c;sw.querySelectorAll('.swatch').forEach(s=>s.classList.remove('sel'));d.classList.add('sel');};sw.appendChild(d);});
   modalBg.classList.add('open'); modal.querySelector('#m_name').focus();
   modal.querySelector('#m_cancel').onclick=closeModal;
   modal.querySelector('#m_save').onclick=()=>{
     const name=modal.querySelector('#m_name').value.trim()||'New Category';
-    if(editing)p.name=name;
-    else activeSquad().projects.push({id:uid(),name,collapsed:false,phases:[]});
+    if(editing){ p.name=name; p.color=color; }
+    else activeSquad().projects.push({id:uid(),name,color,phases:[]});
     closeModal();render();
   };
 }
@@ -1089,7 +1093,7 @@ function openProjectModal(p){
 function openPhaseModal(category,proj){
   hideNoteDock();
   const editing=!!proj;
-  const def=proj||{name:'',start:'',end:'',color:PALETTE[category.phases.length%PALETTE.length]};
+  const def=proj||{name:'',start:'',end:''};
   modal.innerHTML=`<h3>${editing?'Edit':'New'} Project</h3>
     <div class="field"><label>Project Name</label><input id="m_pname" value="${editing?esc(proj.name):''}" placeholder="e.g. Mobile App"></div>
     <div class="field row2">
@@ -1106,7 +1110,7 @@ function openPhaseModal(category,proj){
     const start=modal.querySelector('#m_start').value, end=modal.querySelector('#m_end').value;
     if(start&&end&&end<start){alert('End date must be on or after start date.');return;}
     if(editing){ proj.name=name; proj.start=start; proj.end=end; }
-    else category.phases.push({id:uid(),name,start,end,color:def.color,tasks:[]});
+    else category.phases.push({id:uid(),name,start,end,tasks:[]});
     closeModal();render();
   };
 }
