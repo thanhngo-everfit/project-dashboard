@@ -131,12 +131,12 @@
 
   /* bars */
   .bar{position:absolute;top:6px;height:calc(var(--row-h) - 12px);border-radius:9px;cursor:grab;
-       display:flex;align-items:center;justify-content:center;gap:6px;padding:0 10px;font-size:11.5px;font-weight:700;overflow:hidden;
+       display:flex;align-items:center;justify-content:flex-start;gap:6px;padding:0 10px;font-size:10.5px;font-weight:600;overflow:hidden;
        user-select:none;}
   .bar.dragging{cursor:grabbing;opacity:.9;z-index:20;box-shadow:0 6px 16px rgba(16,24,40,.22);}
   .bar.wip{background:transparent!important;border:1.5px dashed currentColor;font-weight:700;}
   .bar.wip .fill{display:none;}
-  .bar .barlabel{position:relative;z-index:2;overflow:hidden;text-align:center;line-height:1.2;
+  .bar .barlabel{position:relative;z-index:2;overflow:hidden;text-align:left;line-height:1.25;
        display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;word-break:break-word;}
   .row.task .bar .barlabel{-webkit-line-clamp:1;line-clamp:1;white-space:nowrap;text-overflow:ellipsis;}
   .bar .fill{position:absolute;left:0;top:0;bottom:0;border-radius:9px 0 0 9px;z-index:1;}
