@@ -83,6 +83,12 @@
   .row.row-dragging{opacity:.4;}
   .row.drop-into .left{box-shadow:inset 0 0 0 2px #4c6fff;border-radius:6px;}
   .row.drop-before .left{box-shadow:inset 0 3px 0 0 #4c6fff;}
+  /* category reorder */
+  .row.project .left.drag-src{cursor:grab;}
+  .row.project .left.drag-src:active{cursor:grabbing;}
+  .row.cat-dragging{opacity:.4;}
+  .row.cat-before{box-shadow:inset 0 3px 0 0 #4c6fff;}
+  .row.cat-after{box-shadow:inset 0 -3px 0 0 #4c6fff;}
 
   .left{position:sticky;left:0;z-index:5;width:var(--left-w);min-width:var(--left-w);
         display:flex;align-items:center;gap:8px;padding:0 16px;background:inherit;border-right:1px solid var(--border);}
@@ -376,6 +382,7 @@ let saveTimer = null;
 let pollTimer = null;
 let busy = false;              // true while dragging a bar (don't clobber)
 let dragPhase = null;          // {projectId, phaseId} while dragging a phase row to reorder/move
+let dragCat = null;            // categoryId while dragging a whole category to reorder
 let dragTabId = null;          // squad id while dragging a tab to reorder
 
 // Only the roadmap DATA (squads) is shared. View mode, active tab, zoom and collapse
@@ -796,6 +803,8 @@ function projectRow(p,units,tw){
     {icon:'🗑',title:'Delete',fn:()=>{if(confirm('Delete category "'+p.name+'"?')){p._del=1;activeSquad().projects=activeSquad().projects.filter(x=>x!==p);render();}}},
   ]);
   wireDropTarget(row, p.id, null);   // drop a project here -> move into this category
+  makeCatDraggable(left, row, p.id); // drag the category label to reorder categories
+  wireCatDrop(row, p.id);            // drop a category here -> reorder
   row.appendChild(left);
   const track=document.createElement('div'); track.className='track'; track.style.width=tw+'px';
   track.appendChild(gridlinesEl(units,tw));
@@ -991,6 +1000,48 @@ function movePhase(src,destProjectId,beforePhaseId){
     destProj.phases.push(phase);
   }
   dragPhase=null; clearDropMarks(); render();
+}
+
+/* ---------- Drag a whole category to reorder (its projects move with it) ---------- */
+function clearCatMarks(){
+  document.querySelectorAll('.cat-before,.cat-after,.cat-dragging')
+    .forEach(el=>el.classList.remove('cat-before','cat-after','cat-dragging'));
+}
+function makeCatDraggable(left,row,catId){
+  left.setAttribute('draggable','true');
+  left.classList.add('drag-src');
+  left.addEventListener('dragstart',e=>{
+    dragCat=catId;
+    e.dataTransfer.effectAllowed='move';
+    try{e.dataTransfer.setData('text/plain',catId);}catch(_){}
+    row.classList.add('cat-dragging');
+  });
+  left.addEventListener('dragend',()=>{ dragCat=null; clearCatMarks(); });
+}
+function wireCatDrop(row,catId){
+  row.addEventListener('dragover',e=>{
+    if(!dragCat || dragCat===catId) return;
+    e.preventDefault(); e.dataTransfer.dropEffect='move';
+    clearCatMarks();
+    const r=row.getBoundingClientRect();
+    row.classList.add(e.clientY > r.top+r.height/2 ? 'cat-after' : 'cat-before');
+  });
+  row.addEventListener('drop',e=>{
+    if(!dragCat || dragCat===catId) return;
+    e.preventDefault();
+    const r=row.getBoundingClientRect();
+    reorderCategories(dragCat, catId, e.clientY > r.top+r.height/2);
+  });
+}
+function reorderCategories(dragId,targetId,after){
+  const arr=activeSquad().projects;
+  const from=arr.findIndex(c=>c.id===dragId);
+  if(from<0){ dragCat=null; clearCatMarks(); return; }
+  const [moved]=arr.splice(from,1);
+  let to=arr.findIndex(c=>c.id===targetId);
+  if(to<0) to=arr.length; else if(after) to+=1;
+  arr.splice(to,0,moved);
+  dragCat=null; clearCatMarks(); render();
 }
 
 /* ============================ Modals ============================ */
