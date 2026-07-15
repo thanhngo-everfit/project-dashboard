@@ -153,8 +153,11 @@
   .bar .handle.r{right:0;}
   .bar.summary{cursor:default;opacity:.5;height:5px;top:calc(50% - 2.5px);box-shadow:none;border-radius:3px;}
 
-  .today{position:absolute;top:0;bottom:0;width:2px;background:#f04438;z-index:7;pointer-events:none;}
-  .today .lbl{position:absolute;top:2px;left:3px;font-size:9px;color:#f04438;font-weight:700;background:#fff;padding:0 2px;border-radius:3px;}
+  .today{position:absolute;top:0;bottom:0;width:0;border-left:2px dashed #f04438;z-index:7;pointer-events:none;transform:translateX(-1px);}
+  /* Today marker (dot + label) pinned at the top of the timeline */
+  .today-mark{position:absolute;bottom:-1px;transform:translateX(-6px);display:flex;align-items:center;gap:5px;z-index:11;pointer-events:none;}
+  .today-mark .dot{width:9px;height:9px;border-radius:50%;background:#f04438;box-shadow:0 0 0 2px #fff;}
+  .today-mark .lbl{font-size:11px;font-weight:800;color:#f04438;white-space:nowrap;background:#fff;padding:1px 5px;border-radius:5px;box-shadow:0 1px 3px rgba(16,24,40,.15);}
 
   .empty{padding:40px;text-align:center;color:var(--muted);}
 
@@ -717,6 +720,11 @@ function renderGantt(){
       ht.appendChild(c);
     });
   }
+  // "Today" dot + label pinned at the bottom of the header, above the dashed line
+  const tmx=dateToX(new Date(),units);
+  const tmark=document.createElement('div'); tmark.className='today-mark'; tmark.style.left=tmx+'px';
+  tmark.innerHTML='<span class="dot"></span><span class="lbl">Today</span>';
+  ht.appendChild(tmark);
   head.appendChild(hl); head.appendChild(ht); grid.appendChild(head);
 
   if(!squad.projects.length){
