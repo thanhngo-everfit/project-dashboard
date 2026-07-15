@@ -136,7 +136,9 @@
   .bar.dragging{cursor:grabbing;opacity:.9;z-index:20;box-shadow:0 6px 16px rgba(16,24,40,.22);}
   .bar.wip{background:transparent!important;border:1.5px dashed currentColor;font-weight:700;}
   .bar.wip .fill{display:none;}
-  .bar .barlabel{position:relative;z-index:2;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;}
+  .bar .barlabel{position:relative;z-index:2;overflow:hidden;text-align:center;line-height:1.2;
+       display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;word-break:break-word;}
+  .row.task .bar .barlabel{-webkit-line-clamp:1;line-clamp:1;white-space:nowrap;text-overflow:ellipsis;}
   .bar .fill{position:absolute;left:0;top:0;bottom:0;border-radius:9px 0 0 9px;z-index:1;}
   .bar .badge{position:relative;z-index:2;background:#101828;color:#fff;font-size:9.5px;font-weight:800;
        padding:2px 6px;border-radius:5px;letter-spacing:.3px;flex:none;}
@@ -528,37 +530,38 @@ function buildUnits(squad){
 
   const view=curView();
   const base = view==='quarter'?170 : view==='month'?95 : 30;
-  const w = base*curZoom();
-  const units=[]; let x=LEFTPAD;   // leave a left gutter for the connector thread
+  // pass 1: build the unit list (no widths yet)
+  const units=[];
   if(view==='quarter'){
-    let cur=quarterStart(min);
-    const end=quarterStart(max);
-    while(cur<=end){
-      const next=addMonths(cur,3);
-      const q=Math.floor(cur.getMonth()/3)+1;
-      units.push({start:cur,end:next,x,width:w,label:'Q'+q,sub:String(cur.getFullYear())});
-      x+=w; cur=next;
-    }
+    let cur=quarterStart(min);const end=quarterStart(max);
+    while(cur<=end){ const next=addMonths(cur,3); const q=Math.floor(cur.getMonth()/3)+1;
+      units.push({start:cur,end:next,label:'Q'+q,sub:String(cur.getFullYear())}); cur=next; }
   }else if(view==='month'){
-    let cur=new Date(min.getFullYear(),min.getMonth(),1);
-    const end=new Date(max.getFullYear(),max.getMonth(),1);
-    while(cur<=end){
-      const next=addMonths(cur,1);
-      units.push({start:cur,end:next,x,width:w,label:MONTHS[cur.getMonth()],sub:"'"+String(cur.getFullYear()).slice(2)});
-      x+=w; cur=next;
-    }
-  }else{ // week = day-level columns, grouped by month, with weekday letters
+    let cur=new Date(min.getFullYear(),min.getMonth(),1);const end=new Date(max.getFullYear(),max.getMonth(),1);
+    while(cur<=end){ const next=addMonths(cur,1);
+      units.push({start:cur,end:next,label:MONTHS[cur.getMonth()],sub:"'"+String(cur.getFullYear()).slice(2)}); cur=next; }
+  }else{ // week = day-level columns
     let cur=new Date(min.getFullYear(),min.getMonth(),min.getDate());
     let end=new Date(max.getFullYear(),max.getMonth(),max.getDate());
     while(cur.getDay()!==1) cur=addDays(cur,-1);   // snap start back to Monday
     while(end.getDay()!==0) end=addDays(end,1);     // snap end forward to Sunday
-    while(cur<=end){
-      const next=addDays(cur,1);
-      units.push({start:cur,end:next,x,width:w,day:cur.getDate(),dow:cur.getDay()});
-      x+=w; cur=next;
-    }
+    while(cur<=end){ const next=addDays(cur,1);
+      units.push({start:cur,end:next,day:cur.getDate(),dow:cur.getDay()}); cur=next; }
   }
+  // pass 2: size columns — stretch to fill the viewport when the range is short
+  let w = base*curZoom();
+  const avail = availTrackWidth();
+  if(units.length && avail>0){ const fit=(avail-LEFTPAD)/units.length; if(fit>w) w=fit; }
+  let x=LEFTPAD;   // left gutter for the connector thread
+  units.forEach(u=>{ u.x=x; u.width=w; x+=w; });
   return units;
+}
+// visible width available for the timeline track (viewport minus the sticky left panel)
+function availTrackWidth(){
+  const g=document.getElementById('gantt');
+  if(!g) return 0;
+  const leftW=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--left-w'))||328;
+  return Math.max(0, g.clientWidth - leftW - 1);
 }
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const DOW=['S','M','T','W','T','F','S'];   // index by getDay() (0=Sun)
@@ -1205,6 +1208,12 @@ function setAllCollapsed(v){
 }
 document.getElementById('expandAll').onclick=()=>setAllCollapsed(false);
 document.getElementById('collapseAll').onclick=()=>setAllCollapsed(true);
+// re-fit the timeline width when the window resizes
+let _resizeTimer=null;
+window.addEventListener('resize',()=>{
+  clearTimeout(_resizeTimer);
+  _resizeTimer=setTimeout(()=>{ if(document.getElementById('loginGate').style.display==='none') renderGantt(); },150);
+});
 
 document.getElementById('exportBtn').onclick=()=>{
   const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
