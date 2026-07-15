@@ -721,7 +721,7 @@ function renderGantt(){
     });
   }
   // "Today" dot + label pinned at the bottom of the header, above the dashed line
-  const tmx=dateToX(new Date(),units);
+  const tmx=todayCenterX(units);
   const tmark=document.createElement('div'); tmark.className='today-mark'; tmark.style.left=tmx+'px';
   tmark.innerHTML='<span class="dot"></span><span class="lbl">Today</span>';
   ht.appendChild(tmark);
@@ -749,6 +749,11 @@ function renderGantt(){
   g.appendChild(grid);
 }
 
+// x centered on today's day block (avg of the day's left and right edges)
+function todayCenterX(units){
+  const n=new Date(); const t0=new Date(n.getFullYear(),n.getMonth(),n.getDate()); const t1=addDays(t0,1);
+  return (dateToX(t0,units)+dateToX(t1,units))/2;
+}
 function gridlinesEl(units,tw){
   const gl=document.createElement('div'); gl.className='gridlines';
   const view=curView(), wk=view==='week', mo=view==='month';
@@ -758,9 +763,8 @@ function gridlinesEl(units,tw){
     gl.appendChild(c);
     if(mo){ for(let k=1;k<4;k++){ const s=document.createElement('div');s.className='subcol';s.style.left=(u.x+k*u.width/4)+'px';gl.appendChild(s); } }  // W1-W4 lines
   });
-  // today line
-  const today=new Date(); const tx=dateToX(today,units);
-  const tl=document.createElement('div'); tl.className='today'; tl.style.left=tx+'px';
+  // today line (centered on today's day block)
+  const tl=document.createElement('div'); tl.className='today'; tl.style.left=todayCenterX(units)+'px';
   gl.appendChild(tl);
   return gl;
 }
