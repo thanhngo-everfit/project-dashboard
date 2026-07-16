@@ -33,6 +33,9 @@
        white-space:nowrap;position:relative;top:1px;max-width:240px;}
   .tab:hover{background:#f5f7fa;}
   .tab.active{background:var(--panel);color:var(--text);box-shadow:0 -2px 6px rgba(0,0,0,.04);}
+  .tab.tab-virtual{background:#f3f0ff;color:#5b21b6;font-weight:700;}
+  .tab.tab-virtual.active{background:var(--panel);color:#5b21b6;}
+  .tab.tab-virtual .vt-ico{font-size:12px;}
   .tab.tab-dragging{opacity:.4;}
   .tab.tab-before{box-shadow:inset 3px 0 0 0 #4c6fff;}
   .tab.tab-after{box-shadow:inset -3px 0 0 0 #4c6fff;}
@@ -340,6 +343,21 @@ const LEFTPAD = 20;   // left gutter (px) before the first date column, room for
 const NOTE_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5h14M5 10h14M5 15h9"/></svg>';
 const PREDEFINED_TAGS = ["Jon's request","Long's request"];
 function shortTag(t){ return t.replace(/'s request$/i,''); }
+// Fixed virtual squads: aggregate projects by tag across all real squads (read-only structure)
+const VIRTUAL_VIEWS = [
+  {id:'view:jon',  name:"Jon's Requests",  tag:"Jon's request"},
+  {id:'view:long', name:"Long's Requests", tag:"Long's request"},
+];
+function activeVirtual(){ return VIRTUAL_VIEWS.find(v=>v.id===state.activeSquad); }
+function inVirtual(){ return !!activeVirtual(); }
+function buildVirtualSquad(v){
+  const cats=[];
+  state.squads.forEach(sq=>(sq.projects||[]).forEach(cat=>{
+    const projs=(cat.phases||[]).filter(p=>p.tag===v.tag);
+    if(projs.length) cats.push({id:'v_'+sq.id+'_'+cat.id, name:cat.name+'  ·  '+sq.name, color:cat.color, phases:projs, _virtual:true, _srcCat:cat});
+  }));
+  return {id:v.id, name:v.name, projects:cats, _virtual:true};
+}
 const PALETTE =['#cdb4f6','#fcd9a8','#bfe3c9','#bcd9ec','#f6bcbc','#bcd1f6','#cfe6b4','#f6c6e0','#b4e6e0','#d9d2c4'];
 const TASK_TYPES = [
   {key:'design', label:'Design',   color:'#9b6dff', progress:true},
@@ -558,7 +576,10 @@ function seed(){
   };
 }
 
-function activeSquad(){return state.squads.find(s=>s.id===state.activeSquad)||state.squads[0];}
+function activeSquad(){
+  const v=activeVirtual(); if(v) return buildVirtualSquad(v);
+  return state.squads.find(s=>s.id===state.activeSquad)||state.squads[0];
+}
 
 /* ============================ Timeline math ============================ */
 function gatherDates(squad){
@@ -727,6 +748,15 @@ function renderTabs(){
     tab.querySelector('.tname').addEventListener('dblclick',()=>{ tab.draggable=false; });
     bar.appendChild(tab);
   });
+  // fixed virtual views (cross-squad, by tag) — cannot be removed/renamed/reordered
+  VIRTUAL_VIEWS.forEach(v=>{
+    const tab=document.createElement('div');
+    tab.className='tab tab-virtual'+(v.id===state.activeSquad?' active':'');
+    tab.innerHTML='<span class="vt-ico">🏷️</span><span class="tname">'+esc(v.name)+'</span>';
+    tab.title=v.name+' — all "'+v.tag+'" projects across squads';
+    tab.onclick=()=>{ state.activeSquad=v.id; render(); };
+    bar.appendChild(tab);
+  });
   const add=document.createElement('button');
   add.className='tab-add'; add.textContent='+'; add.title='New squad';
   add.onclick=()=>{const id=uid();state.squads.push({id,name:'Squad '+(state.squads.length+1),projects:[]});state.activeSquad=id;render();};
@@ -746,9 +776,11 @@ function renderGantt(){
   const head=document.createElement('div'); head.className='head'+(hdView==='week'?' week':hdView==='month'?' month':'');
   const hl=document.createElement('div'); hl.className='left';
   hl.innerHTML='<span>PROJECT / PHASE / WORK</span>';
-  const addCat=document.createElement('button'); addCat.className='hdr-add'; addCat.textContent='+'; addCat.title='New category';
-  addCat.onclick=()=>openProjectModal();
-  hl.appendChild(addCat);
+  if(!inVirtual()){
+    const addCat=document.createElement('button'); addCat.className='hdr-add'; addCat.textContent='+'; addCat.title='New category';
+    addCat.onclick=()=>openProjectModal();
+    hl.appendChild(addCat);
+  }
   const ht=document.createElement('div'); ht.className='track'; ht.style.width=tw+'px';
   if(hdView==='week'){
     buildWeekHeader(units,ht);
@@ -776,7 +808,8 @@ function renderGantt(){
   head.appendChild(hl); head.appendChild(ht); grid.appendChild(head);
 
   if(!squad.projects.length){
-    const e=document.createElement('div'); e.className='empty'; e.textContent='No categories yet. Click the ＋ in the PROJECT / PHASE / WORK header to add one.';
+    const e=document.createElement('div'); e.className='empty';
+    e.textContent=inVirtual()?('No projects tagged "'+activeVirtual().tag+'" across squads yet.'):'No categories yet. Click the ＋ in the PROJECT / PHASE / WORK header to add one.';
     grid.appendChild(e); g.appendChild(grid); return;
   }
 
@@ -893,14 +926,17 @@ function projectRow(p,units,tw){
   let vis = tf ? (p.phases||[]).filter(x=>x.tag===tf) : (p.phases||[]);
   if(q && !catMatch) vis = vis.filter(x=>x.name.toLowerCase().includes(q));
   const count=vis.length;
-  const {left}=leftCell(0,false,p.color||null,p.name+' ('+count+')',[
+  const acts = inVirtual() ? [] : [
     {icon:'＋',title:'Add project',fn:()=>openPhaseModal(p)},
     {icon:'✎',title:'Rename category',fn:()=>openProjectModal(p)},
     {icon:'🗑',title:'Delete',fn:()=>{if(confirm('Delete category "'+p.name+'"?')){p._del=1;activeSquad().projects=activeSquad().projects.filter(x=>x!==p);render();}}},
-  ]);
-  wireDropTarget(row, p.id, null);   // drop a project here -> move into this category
-  makeCatDraggable(left, row, p.id); // drag the category label to reorder categories
-  wireCatDrop(row, p.id);            // drop a category here -> reorder
+  ];
+  const {left}=leftCell(0,false,p.color||null,p.name+' ('+count+')',acts);
+  if(!inVirtual()){
+    wireDropTarget(row, p.id, null);   // drop a project here -> move into this category
+    makeCatDraggable(left, row, p.id); // drag the category label to reorder categories
+    wireCatDrop(row, p.id);            // drop a category here -> reorder
+  }
   row.appendChild(left);
   const track=document.createElement('div'); track.className='track'; track.style.width=tw+'px';
   track.appendChild(gridlinesEl(units,tw));
@@ -919,17 +955,20 @@ function projectRow(p,units,tw){
 // A project renders as a single bar labelled with the project name.
 function phaseRow(cat,proj,units,tw){
   const row=document.createElement('div'); row.className='row phase';
+  const delHost=cat._srcCat||cat;   // in virtual view, delete from the real category
   const {left,caret}=leftCell(1,isCollapsed(proj)?'closed':'open',null,proj.name,[
     {icon:'＋',title:'Add work',fn:()=>openTaskModal(proj)},
     {icon:'✎',title:'Edit project',fn:()=>openPhaseModal(cat,proj)},
-    {icon:'🗑',title:'Delete',fn:()=>{if(confirm('Delete project "'+proj.name+'"?')){cat.phases=cat.phases.filter(x=>x!==proj);render();}}},
+    {icon:'🗑',title:'Delete',fn:()=>{if(confirm('Delete project "'+proj.name+'"?')){delHost.phases=delHost.phases.filter(x=>x!==proj);render();}}},
   ]);
   caret.onclick=()=>{toggleCollapsed(proj);render();};
   const q=(state.search||'').trim().toLowerCase();
   if(q){ const lab=left.querySelector('.label'); if(lab) lab.innerHTML=highlight(proj.name,q); }
   if(proj.tag && state.showTags!==false){ const chip=document.createElement('span'); chip.className='tagchip'; chip.textContent=shortTag(proj.tag); chip.title='Tag: '+proj.tag; left.insertBefore(chip, left.querySelector('.acts')); }
-  makePhaseDraggable(left, row, cat.id, proj.id);  // drag label to move/reorder between categories
-  wireDropTarget(row, cat.id, proj.id);
+  if(!inVirtual()){
+    makePhaseDraggable(left, row, cat.id, proj.id);  // drag label to move/reorder between categories
+    wireDropTarget(row, cat.id, proj.id);
+  }
   row.appendChild(left);
   const track=document.createElement('div'); track.className='track'; track.style.width=tw+'px';
   track.appendChild(gridlinesEl(units,tw));
@@ -1313,9 +1352,9 @@ function highlight(text,q){
 (function(){
   const el=document.getElementById('squadName');
   el.title='Double-click to rename squad';
-  el.ondblclick=()=>{el.contentEditable='true';el.focus();document.execCommand('selectAll',false,null);};
+  el.ondblclick=()=>{ if(inVirtual())return; el.contentEditable='true';el.focus();document.execCommand('selectAll',false,null);};
   el.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();el.blur();}else if(e.key==='Escape'){el.textContent=activeSquad().name;el.blur();}};
-  el.onblur=()=>{el.contentEditable='false';const v=el.textContent.trim()||'Squad';activeSquad().name=v;render();};
+  el.onblur=()=>{el.contentEditable='false';if(inVirtual())return;const v=el.textContent.trim()||'Squad';activeSquad().name=v;render();};
 })();
 document.querySelectorAll('#viewToggle button').forEach(b=>b.onclick=()=>{setView(b.dataset.view);render();});
 document.getElementById('zoomIn').onclick=()=>{setZoom(Math.min(3,curZoom()*1.25));render();};
