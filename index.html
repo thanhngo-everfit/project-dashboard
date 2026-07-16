@@ -1071,11 +1071,11 @@ function projectRow(p,units,tw){
 function phaseRow(cat,proj,units,tw){
   const row=document.createElement('div'); row.className='row phase';
   const delHost=(cat._srcCatByProj&&cat._srcCatByProj[proj.id])||cat._srcCat||cat;   // in virtual view, delete from the real category
-  const {left,caret}=leftCell(1,isCollapsed(proj)?'closed':'open',null,proj.name,[
-    {icon:'＋',title:'Add work',fn:()=>openTaskModal(proj)},
-    {icon:'✎',title:'Edit project',fn:()=>openPhaseModal(cat,proj)},
-    {icon:'🗑',title:'Delete',fn:()=>{if(confirm('Delete project "'+proj.name+'"?')){delHost.phases=delHost.phases.filter(x=>x!==proj);render();}}},
-  ]);
+  const acts=[];
+  if(!inVirtual()) acts.push({icon:'＋',title:'Add work',fn:()=>openTaskModal(proj)});   // no add-work in Jon/Long views
+  acts.push({icon:'✎',title:'Edit project',fn:()=>openPhaseModal(cat,proj)});
+  acts.push({icon:'🗑',title:'Delete',fn:()=>{if(confirm('Delete project "'+proj.name+'"?')){delHost.phases=delHost.phases.filter(x=>x!==proj);render();}}});
+  const {left,caret}=leftCell(1,isCollapsed(proj)?'closed':'open',null,proj.name,acts);
   caret.onclick=()=>{toggleCollapsed(proj);render();};
   const q=(state.search||'').trim().toLowerCase();
   if(q){ const lab=left.querySelector('.label'); if(lab) lab.innerHTML=highlight(proj.name,q); }
