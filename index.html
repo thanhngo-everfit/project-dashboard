@@ -859,7 +859,15 @@ function renderGantt(){
   const hdView=curView();
   const head=document.createElement('div'); head.className='head'+(hdView==='week'?' week':hdView==='month'?' month':' quarter');
   const hl=document.createElement('div'); hl.className='left';
-  hl.innerHTML='<span>PROJECT / PHASE / WORK</span>';
+  const tf0=state.tagFilter||'', q0=(state.search||'').trim().toLowerCase();
+  let projCount=0;
+  squad.projects.forEach(p=>{
+    const catMatch=q0 && p.name.toLowerCase().includes(q0);
+    let ps = tf0 ? (p.phases||[]).filter(x=>x.tag===tf0) : (p.phases||[]);
+    if(q0 && !catMatch) ps=ps.filter(x=>x.name.toLowerCase().includes(q0));
+    projCount+=ps.length;
+  });
+  hl.innerHTML='<span>ALL PROJECTS ('+projCount+')</span>';
   if(!inVirtual()){
     const addCat=document.createElement('button'); addCat.className='hdr-add'; addCat.textContent='+'; addCat.title='New category';
     addCat.onclick=()=>openProjectModal();
