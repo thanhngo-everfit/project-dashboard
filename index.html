@@ -101,6 +101,9 @@
   .left .label{flex:1;font-size:13px;line-height:1.2;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;word-break:break-word;}
   .tagchip{flex:none;font-size:10px;font-weight:700;color:#5b21b6;background:#ede9fe;border:1px solid #ddd6fe;border-radius:999px;padding:1px 7px;white-space:nowrap;}
   .tagfilter{border:1px solid var(--border);background:#fff;border-radius:8px;padding:6px 8px;font-size:13px;font-family:inherit;font-weight:600;cursor:pointer;}
+  .searchbox{border:1px solid var(--border);background:#fff;border-radius:8px;padding:7px 12px;font-size:13px;font-family:inherit;width:220px;margin-left:10px;}
+  .searchbox:focus{outline:none;border-color:#4c6fff;box-shadow:0 0 0 2px rgba(76,111,255,.15);}
+  mark{background:#fde68a;color:inherit;border-radius:2px;padding:0 1px;}
   /* settings menu */
   .settings-wrap{position:relative;}
   .settings-btn{display:flex;align-items:center;gap:7px;border:1px solid var(--border);background:#fff;border-radius:8px;padding:7px 12px;cursor:pointer;font-size:13px;font-weight:600;color:var(--text);}
@@ -278,6 +281,7 @@
 
   <div class="subbar">
     <span class="squad-name" id="squadName"></span>
+    <input id="searchBox" class="searchbox" type="search" placeholder="Search projects…" autocomplete="off">
     <div style="display:flex;align-items:center;gap:6px;margin-left:6px;">
       <span style="font-size:12px;color:var(--muted);font-weight:600;">Tag</span>
       <select id="tagFilter" class="tagfilter"></select>
@@ -408,6 +412,7 @@ function migrate(s){
   if(!s.viewBySquad || typeof s.viewBySquad!=='object') s.viewBySquad={};   // personal, squadId -> 'quarter'|'month'|'week'
   if(typeof s.tagFilter!=='string') s.tagFilter='';   // personal tag filter
   if(typeof s.showTags!=='boolean') s.showTags=true;   // personal: show tag chip next to project name
+  if(typeof s.search!=='string') s.search='';   // personal search query
   return s;
 }
 function isCollapsed(p){ return state.uiCollapsed[p.id] !== false; }   // default: collapsed
@@ -776,9 +781,12 @@ function renderGantt(){
   }
 
   const tf=state.tagFilter||'';
+  const q=(state.search||'').trim().toLowerCase();
   squad.projects.forEach(p=>{
-    const projs = tf ? p.phases.filter(x=>x.tag===tf) : p.phases;
-    if(tf && projs.length===0) return;   // hide categories with no matching projects under a filter
+    const catMatch = q && p.name.toLowerCase().includes(q);
+    let projs = tf ? p.phases.filter(x=>x.tag===tf) : p.phases;
+    if(q && !catMatch) projs = projs.filter(x=>x.name.toLowerCase().includes(q));
+    if((tf||q) && projs.length===0) return;   // hide categories with no matching projects
     grid.appendChild(projectRow(p,units,tw));
     projs.forEach(ph=>{
       grid.appendChild(phaseRow(p,ph,units,tw));
@@ -880,7 +888,11 @@ function leftCell(level,caretState,dot,labelText,actions,opts){
 function projectRow(p,units,tw){
   const row=document.createElement('div'); row.className='row project';
   const tf=state.tagFilter||'';
-  const count=(tf?(p.phases||[]).filter(x=>x.tag===tf):(p.phases||[])).length;
+  const q=(state.search||'').trim().toLowerCase();
+  const catMatch=q && p.name.toLowerCase().includes(q);
+  let vis = tf ? (p.phases||[]).filter(x=>x.tag===tf) : (p.phases||[]);
+  if(q && !catMatch) vis = vis.filter(x=>x.name.toLowerCase().includes(q));
+  const count=vis.length;
   const {left}=leftCell(0,false,p.color||null,p.name+' ('+count+')',[
     {icon:'＋',title:'Add project',fn:()=>openPhaseModal(p)},
     {icon:'✎',title:'Rename category',fn:()=>openProjectModal(p)},
@@ -913,6 +925,8 @@ function phaseRow(cat,proj,units,tw){
     {icon:'🗑',title:'Delete',fn:()=>{if(confirm('Delete project "'+proj.name+'"?')){cat.phases=cat.phases.filter(x=>x!==proj);render();}}},
   ]);
   caret.onclick=()=>{toggleCollapsed(proj);render();};
+  const q=(state.search||'').trim().toLowerCase();
+  if(q){ const lab=left.querySelector('.label'); if(lab) lab.innerHTML=highlight(proj.name,q); }
   if(proj.tag && state.showTags!==false){ const chip=document.createElement('span'); chip.className='tagchip'; chip.textContent=shortTag(proj.tag); chip.title='Tag: '+proj.tag; left.insertBefore(chip, left.querySelector('.acts')); }
   makePhaseDraggable(left, row, cat.id, proj.id);  // drag label to move/reorder between categories
   wireDropTarget(row, cat.id, proj.id);
@@ -1290,6 +1304,11 @@ function openTaskModal(phase,t){
 
 /* ============================ Misc UI ============================ */
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function highlight(text,q){
+  if(!q) return esc(text);
+  const i=text.toLowerCase().indexOf(q); if(i<0) return esc(text);
+  return esc(text.slice(0,i))+'<mark>'+esc(text.slice(i,i+q.length))+'</mark>'+esc(text.slice(i+q.length));
+}
 
 (function(){
   const el=document.getElementById('squadName');
@@ -1308,6 +1327,7 @@ function setAllCollapsed(v){
 document.getElementById('expandAll').onclick=()=>setAllCollapsed(false);
 document.getElementById('collapseAll').onclick=()=>setAllCollapsed(true);
 document.getElementById('tagFilter').onchange=e=>{ state.tagFilter=e.target.value; render(); };
+(function(){ const sb=document.getElementById('searchBox'); sb.value=state.search||''; sb.oninput=e=>{ state.search=e.target.value; render(); }; })();
 (function(){
   const btn=document.getElementById('settingsBtn'), menu=document.getElementById('settingsMenu'), tog=document.getElementById('showTags');
   btn.onclick=e=>{ e.stopPropagation(); const open=menu.style.display==='none'; menu.style.display=open?'flex':'none'; if(open) tog.checked=state.showTags!==false; };
