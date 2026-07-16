@@ -339,6 +339,9 @@
 const GOOGLE_CLIENT_ID = '292601272916-9kkgsjlp8fdo9eskuj0lelufve2h7cvq.apps.googleusercontent.com';
 const ALLOWED_DOMAIN  = 'everfit.io';
 const AUTH_KEY = 'roadmapAuth';
+const ADMIN_EMAIL = 'thanhngo@everfit.io';   // only this user can add/remove squads
+let currentEmail = '';
+function isAdmin(){ return currentEmail === ADMIN_EMAIL; }
 
 /* ============================ State ============================ */
 const STORE_KEY = 'roadmapDashboardV2';
@@ -496,6 +499,12 @@ async function syncSave(){
       lastSyncedJSON = payload;
       baselineUpdatedAt = j.updatedAt || baselineUpdatedAt;
       setSync('Saved', 'ok');
+    } else if(r.status===403){
+      const j = await r.json().catch(()=>({}));
+      if(j.error==='squad_change_forbidden'){
+        setSync('Only Thanh can add/remove squads', 'bad');
+        await syncLoad();   // revert local squad change to the shared copy
+      } else setSync('Save failed', 'bad');
     } else {
       const j = await r.json().catch(()=>({}));
       setSync(j.error==='storage_not_configured' ? 'No DB configured' : 'Save failed', 'bad');
@@ -714,7 +723,7 @@ function renderTabs(){
   state.squads.forEach(s=>{
     const tab=document.createElement('div');
     tab.className='tab'+(s.id===state.activeSquad?' active':'');
-    tab.innerHTML=`<span class="tname" contenteditable="false">${esc(s.name)}</span><button class="x" title="Close">×</button>`;
+    tab.innerHTML=`<span class="tname" contenteditable="false">${esc(s.name)}</span>${isAdmin()?'<button class="x" title="Close">×</button>':''}`;
     tab.onclick=e=>{ if(e.target.classList.contains('x'))return; state.activeSquad=s.id; render(); };
     const nameEl=tab.querySelector('.tname');
     tab.querySelector('.tname').ondblclick=()=>{
@@ -723,7 +732,8 @@ function renderTabs(){
     };
     nameEl.onblur=()=>{nameEl.contentEditable='false'; tab.draggable=true; s.name=nameEl.textContent.trim()||'Squad'; render();};
     nameEl.onkeydown=ev=>{if(ev.key==='Enter'){ev.preventDefault();nameEl.blur();}};
-    tab.querySelector('.x').onclick=()=>{
+    const xb=tab.querySelector('.x');
+    if(xb) xb.onclick=()=>{
       if(state.squads.length===1){alert('At least one squad is required.');return;}
       if(!confirm('Close squad "'+s.name+'"?'))return;
       state.squads=state.squads.filter(x=>x.id!==s.id);
@@ -760,10 +770,12 @@ function renderTabs(){
     tab.onclick=()=>{ state.activeSquad=v.id; render(); };
     bar.appendChild(tab);
   });
-  const add=document.createElement('button');
-  add.className='tab-add'; add.textContent='+'; add.title='New squad';
-  add.onclick=()=>{const id=uid();state.squads.push({id,name:'Squad '+(state.squads.length+1),projects:[]});state.activeSquad=id;render();};
-  bar.appendChild(add);
+  if(isAdmin()){
+    const add=document.createElement('button');
+    add.className='tab-add'; add.textContent='+'; add.title='New squad';
+    add.onclick=()=>{const id=uid();state.squads.push({id,name:'Squad '+(state.squads.length+1),projects:[]});state.activeSquad=id;render();};
+    bar.appendChild(add);
+  }
 }
 
 function renderGantt(){
@@ -1420,6 +1432,7 @@ function showGate(){
 }
 function showApp(auth){
   idToken = auth.idToken;
+  currentEmail = (auth.email||'').toLowerCase();
   document.getElementById('loginGate').style.display='none';
   document.getElementById('acct').style.display='flex';
   document.getElementById('acctEmail').textContent=auth.email;
