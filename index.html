@@ -503,7 +503,7 @@ function migrate(s){
 }
 function isCollapsed(p){ return state.uiCollapsed[p.id] !== false; }   // default: collapsed
 function toggleCollapsed(p){ state.uiCollapsed[p.id] = isCollapsed(p) ? false : true; }
-function curView(){ return (state.viewBySquad && state.viewBySquad[state.activeSquad]) || state.view || 'quarter'; }
+function curView(){ return (state.viewBySquad && state.viewBySquad[state.activeSquad]) || 'week'; }   // default: Week
 function setView(v){ if(!state.viewBySquad) state.viewBySquad={}; state.viewBySquad[state.activeSquad]=v; }
 function curZoom(){ return (state.zoomByView && state.zoomByView[curView()]) || 1; }
 function setZoom(z){ if(!state.zoomByView) state.zoomByView={}; state.zoomByView[curView()]=z; }
@@ -674,7 +674,7 @@ function buildUnits(squad){
   const today=new Date(); if(today<min)min=today; if(today>max)max=today;
 
   const view=curView();
-  const base = view==='quarter'?170 : view==='month'?200 : 30;
+  const base = view==='quarter'?200 : view==='month'?200 : 46;   // wider defaults so it reads without zooming
   // pass 1: build the unit list (no widths yet)
   const units=[];
   if(view==='quarter'){
