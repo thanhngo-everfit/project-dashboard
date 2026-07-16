@@ -99,6 +99,8 @@
   .left .caret.hidden{visibility:hidden;}
   .left .dot{width:9px;height:9px;border-radius:50%;flex:none;}
   .left .label{flex:1;font-size:13px;line-height:1.2;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;word-break:break-word;}
+  .tagchip{flex:none;font-size:10px;font-weight:700;color:#5b21b6;background:#ede9fe;border:1px solid #ddd6fe;border-radius:999px;padding:1px 7px;white-space:nowrap;}
+  .tagfilter{border:1px solid var(--border);background:#fff;border-radius:8px;padding:6px 8px;font-size:13px;font-family:inherit;font-weight:600;cursor:pointer;}
   .left .acts{display:none;gap:2px;flex:none;}
   .left:hover .acts{display:flex;}
   .left .acts button{border:none;background:transparent;cursor:pointer;font-size:12px;color:#98a2b3;width:22px;height:22px;border-radius:5px;}
@@ -263,6 +265,10 @@
 
   <div class="subbar">
     <span class="squad-name" id="squadName"></span>
+    <div style="display:flex;align-items:center;gap:6px;margin-left:6px;">
+      <span style="font-size:12px;color:var(--muted);font-weight:600;">Tag</span>
+      <select id="tagFilter" class="tagfilter"></select>
+    </div>
     <div class="spacer"></div>
     <button class="btn" id="expandAll" title="Expand all projects and phases">⊞ Expand All</button>
     <button class="btn" id="collapseAll" title="Collapse all projects and phases">⊟ Collapse All</button>
@@ -305,6 +311,8 @@ const AUTH_KEY = 'roadmapAuth';
 const STORE_KEY = 'roadmapDashboardV2';
 const LEFTPAD = 20;   // left gutter (px) before the first date column, room for the connector thread
 const NOTE_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5h14M5 10h14M5 15h9"/></svg>';
+const PREDEFINED_TAGS = ["Jon's request","Long's request"];
+function shortTag(t){ return t.replace(/'s request$/i,''); }
 const PALETTE =['#cdb4f6','#fcd9a8','#bfe3c9','#bcd9ec','#f6bcbc','#bcd1f6','#cfe6b4','#f6c6e0','#b4e6e0','#d9d2c4'];
 const TASK_TYPES = [
   {key:'design', label:'Design',   color:'#9b6dff', progress:true},
@@ -362,6 +370,7 @@ function migrate(s){
       }
       if(typeof proj.start!=='string') proj.start='';
       if(typeof proj.end!=='string') proj.end='';
+      if(typeof proj.tag!=='string') proj.tag='';
       delete proj.color; delete proj.wip; delete proj.badge;   // color comes from the category now
       if(!Array.isArray(proj.tasks)) proj.tasks=[];
       delete proj.collapsed;   // collapse is now personal (state.uiCollapsed), not shared data
@@ -374,6 +383,7 @@ function migrate(s){
   ['quarter','month','week'].forEach(v=>{ if(!s.zoomByView[v]) s.zoomByView[v]=1; });
   if(!s.uiCollapsed || typeof s.uiCollapsed!=='object') s.uiCollapsed={};   // personal, projectId -> true(collapsed)/false
   if(!s.viewBySquad || typeof s.viewBySquad!=='object') s.viewBySquad={};   // personal, squadId -> 'quarter'|'month'|'week'
+  if(typeof s.tagFilter!=='string') s.tagFilter='';   // personal tag filter
   return s;
 }
 function isCollapsed(p){ return state.uiCollapsed[p.id] !== false; }   // default: collapsed
@@ -617,8 +627,17 @@ function render(){
   renderTabs();
   document.getElementById('squadName').textContent=activeSquad().name;
   document.querySelectorAll('#viewToggle button').forEach(b=>b.classList.toggle('active',b.dataset.view===curView()));
+  renderTagFilter();
   renderGantt();
   save();
+}
+function renderTagFilter(){
+  const sel=document.getElementById('tagFilter'); if(!sel)return;
+  const used=new Set();
+  activeSquad().projects.forEach(cat=>cat.phases.forEach(pr=>{ if(pr.tag) used.add(pr.tag); }));
+  const tags=[...new Set([...PREDEFINED_TAGS.filter(t=>used.has(t)), ...[...used].filter(t=>!PREDEFINED_TAGS.includes(t))])];
+  if(state.tagFilter && !used.has(state.tagFilter)) state.tagFilter='';   // filtered tag no longer exists
+  sel.innerHTML='<option value="">All tags</option>'+tags.map(t=>`<option value="${esc(t)}" ${t===state.tagFilter?'selected':''}>${esc(t)}</option>`).join('');
 }
 
 function clearTabMarks(keepDragging){
@@ -732,19 +751,20 @@ function renderGantt(){
     grid.appendChild(e); g.appendChild(grid); return;
   }
 
+  const tf=state.tagFilter||'';
   squad.projects.forEach(p=>{
+    const projs = tf ? p.phases.filter(x=>x.tag===tf) : p.phases;
+    if(tf && projs.length===0) return;   // hide categories with no matching projects under a filter
     grid.appendChild(projectRow(p,units,tw));
-    {
-      p.phases.forEach(ph=>{
-        grid.appendChild(phaseRow(p,ph,units,tw));
-        if(!isCollapsed(ph)){
-          // project start -> root of the timeline connector thread for its dev work
-          const projStartDate=effStart(ph,units);
-          const projStartX=dateToX(projStartDate,units);
-          ph.tasks.forEach((t,ti)=>grid.appendChild(taskRow(p,ph,t,units,tw, ti===ph.tasks.length-1, projStartX, projStartDate)));
-        }
-      });
-    }
+    projs.forEach(ph=>{
+      grid.appendChild(phaseRow(p,ph,units,tw));
+      if(!isCollapsed(ph)){
+        // project start -> root of the timeline connector thread for its dev work
+        const projStartDate=effStart(ph,units);
+        const projStartX=dateToX(projStartDate,units);
+        ph.tasks.forEach((t,ti)=>grid.appendChild(taskRow(p,ph,t,units,tw, ti===ph.tasks.length-1, projStartX, projStartDate)));
+      }
+    });
   });
   g.appendChild(grid);
 }
@@ -835,7 +855,8 @@ function leftCell(level,caretState,dot,labelText,actions,opts){
 
 function projectRow(p,units,tw){
   const row=document.createElement('div'); row.className='row project';
-  const count=(p.phases||[]).length;
+  const tf=state.tagFilter||'';
+  const count=(tf?(p.phases||[]).filter(x=>x.tag===tf):(p.phases||[])).length;
   const {left}=leftCell(0,false,p.color||null,p.name+' ('+count+')',[
     {icon:'＋',title:'Add project',fn:()=>openPhaseModal(p)},
     {icon:'✎',title:'Rename category',fn:()=>openProjectModal(p)},
@@ -868,6 +889,7 @@ function phaseRow(cat,proj,units,tw){
     {icon:'🗑',title:'Delete',fn:()=>{if(confirm('Delete project "'+proj.name+'"?')){cat.phases=cat.phases.filter(x=>x!==proj);render();}}},
   ]);
   caret.onclick=()=>{toggleCollapsed(proj);render();};
+  if(proj.tag){ const chip=document.createElement('span'); chip.className='tagchip'; chip.textContent=shortTag(proj.tag); chip.title='Tag: '+proj.tag; left.insertBefore(chip, left.querySelector('.acts')); }
   makePhaseDraggable(left, row, cat.id, proj.id);  // drag label to move/reorder between categories
   wireDropTarget(row, cat.id, proj.id);
   row.appendChild(left);
@@ -1128,7 +1150,10 @@ function openProjectModal(p){
 function openPhaseModal(category,proj){
   hideNoteDock();
   const editing=!!proj;
-  const def=proj||{name:'',start:'',end:''};
+  const def=proj||{name:'',start:'',end:'',tag:''};
+  const curTag=def.tag||'';
+  const isPre=PREDEFINED_TAGS.includes(curTag);
+  const tagSelVal = isPre?curTag : (curTag?'__custom':'');
   modal.innerHTML=`<h3>${editing?'Edit':'New'} Project</h3>
     <div class="field"><label>Project Name</label><input id="m_pname" value="${editing?esc(proj.name):''}" placeholder="e.g. Mobile App"></div>
     <div class="field row2">
@@ -1136,16 +1161,27 @@ function openPhaseModal(category,proj){
       <div><label>End (optional)</label>${dateField('m_end',def.end)}</div>
     </div>
     <div class="field" style="margin-top:-6px;"><span style="font-size:11px;color:var(--muted);">Leave a date blank to extend to the edge of the current view.</span></div>
+    <div class="field row2">
+      <div><label>Tag (optional)</label><select id="m_tag">
+        <option value="" ${tagSelVal===''?'selected':''}>— None —</option>
+        ${PREDEFINED_TAGS.map(t=>`<option value="${esc(t)}" ${tagSelVal===t?'selected':''}>${esc(t)}</option>`).join('')}
+        <option value="__custom" ${tagSelVal==='__custom'?'selected':''}>Custom…</option>
+      </select></div>
+      <div id="m_tagcustomcol" style="display:${tagSelVal==='__custom'?'block':'none'}"><label>Custom tag</label><input id="m_tagcustom" value="${isPre?'':esc(curTag)}" placeholder="Tag name"></div>
+    </div>
     <div class="modal-actions"><button class="btn" id="m_cancel">Cancel</button><button class="btn primary" id="m_save">Save</button></div>`;
   wireDateClears();
+  const tagSel=modal.querySelector('#m_tag'), tagCol=modal.querySelector('#m_tagcustomcol');
+  tagSel.onchange=()=>{ tagCol.style.display=tagSel.value==='__custom'?'block':'none'; };
   modalBg.classList.add('open'); modal.querySelector('#m_pname').focus();
   modal.querySelector('#m_cancel').onclick=closeModal;
   modal.querySelector('#m_save').onclick=()=>{
     const name=modal.querySelector('#m_pname').value.trim()||'New Project';
     const start=modal.querySelector('#m_start').value, end=modal.querySelector('#m_end').value;
     if(start&&end&&end<start){alert('End date must be on or after start date.');return;}
-    if(editing){ proj.name=name; proj.start=start; proj.end=end; }
-    else category.phases.push({id:uid(),name,start,end,tasks:[]});
+    const tag = tagSel.value==='__custom' ? modal.querySelector('#m_tagcustom').value.trim() : tagSel.value;
+    if(editing){ proj.name=name; proj.start=start; proj.end=end; proj.tag=tag; }
+    else category.phases.push({id:uid(),name,start,end,tag,tasks:[]});
     closeModal();render();
   };
 }
@@ -1247,6 +1283,7 @@ function setAllCollapsed(v){
 }
 document.getElementById('expandAll').onclick=()=>setAllCollapsed(false);
 document.getElementById('collapseAll').onclick=()=>setAllCollapsed(true);
+document.getElementById('tagFilter').onchange=e=>{ state.tagFilter=e.target.value; render(); };
 // re-fit the timeline width when the window resizes
 let _resizeTimer=null;
 window.addEventListener('resize',()=>{
