@@ -184,6 +184,17 @@
   .today-mark .lbl{font-size:11px;font-weight:800;color:#f04438;white-space:nowrap;background:#fff;padding:1px 5px;border-radius:5px;box-shadow:0 1px 3px rgba(16,24,40,.15);}
 
   .empty{padding:40px;text-align:center;color:var(--muted);}
+  /* Marketing list view */
+  .listview{padding:16px 20px 40px;max-width:900px;}
+  .lv-group{margin-bottom:22px;}
+  .lv-head{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:800;color:var(--text);padding:0 4px 8px;border-bottom:2px solid var(--border);margin-bottom:6px;}
+  .lv-head .lv-count{font-size:11px;font-weight:700;color:var(--muted);background:#f0f1f4;border-radius:999px;padding:1px 8px;}
+  .lv-item{display:flex;align-items:center;gap:12px;padding:10px 8px;border-bottom:1px solid #f0f1f4;cursor:pointer;border-radius:8px;}
+  .lv-item:hover{background:#f5f7fa;}
+  .lv-item .lv-dot{width:10px;height:10px;border-radius:50%;flex:none;}
+  .lv-item .lv-name{font-weight:700;font-size:14px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .lv-item .lv-meta{font-size:12px;color:var(--muted);flex:none;white-space:nowrap;}
+  .lv-item .lv-dates{font-size:12px;color:#475467;font-weight:600;flex:none;white-space:nowrap;min-width:120px;text-align:right;}
 
   /* ---------- Modal ---------- */
   .modal-bg{position:fixed;inset:0;background:rgba(16,24,40,.45);display:none;align-items:center;justify-content:center;z-index:100;}
@@ -353,27 +364,15 @@ function shortTag(t){ return t.replace(/'s request$/i,''); }
 const VIRTUAL_VIEWS = [
   {id:'view:jon',  name:"Jon's Requests",  tag:"Jon's request", icon:'🏷️'},
   {id:'view:long', name:"Long's Requests", tag:"Long's request", icon:'🏷️'},
-  {id:'view:marketing', name:'Marketing', squadName:'Marketing', groupByEnd:true, icon:'📅'},
+  {id:'view:marketing', name:'Marketing', listByEnd:true, icon:'📅'},
 ];
 function activeVirtual(){ return VIRTUAL_VIEWS.find(v=>v.id===state.activeSquad); }
 function inVirtual(){ return !!activeVirtual(); }
 function endLabel(iso){ const d=parse(iso); return MONTHS[d.getMonth()]+' '+d.getDate()+', '+d.getFullYear(); }
+function fmtShort(iso){ if(!iso)return '—'; const d=parse(iso); return MONTHS[d.getMonth()]+' '+d.getDate(); }
+// every project across all squads, with its category + squad
+function allProjects(){ const out=[]; (state.squads||[]).forEach(sq=>(sq.projects||[]).forEach(cat=>(cat.phases||[]).forEach(p=>out.push({p,cat,squad:sq})))); return out; }
 function buildVirtualSquad(v){
-  if(v.groupByEnd){
-    // based on a specific squad, but grouped by end date instead of category
-    const src=state.squads.find(sq=>(sq.name||'').toLowerCase()===v.squadName.toLowerCase());
-    const items=[]; if(src)(src.projects||[]).forEach(cat=>(cat.phases||[]).forEach(p=>items.push({p,cat})));
-    const map=new Map();
-    items.forEach(it=>{ const k=it.p.end||''; if(!map.has(k))map.set(k,[]); map.get(k).push(it); });
-    const keys=[...map.keys()].sort((a,b)=> a===''?1 : b===''? -1 : a.localeCompare(b));
-    const cats=keys.map(k=>{
-      const arr=map.get(k), colorByProj={}, srcCatByProj={};
-      arr.forEach(({p,cat})=>{ colorByProj[p.id]=cat.color; srcCatByProj[p.id]=cat; });
-      return {id:'end_'+(k||'none'), name:k?endLabel(k):'No end date', color:'#c4cad4',
-              phases:arr.map(x=>x.p), _virtual:true, _colorByProj:colorByProj, _srcCatByProj:srcCatByProj};
-    });
-    return {id:v.id, name:v.name, projects:cats, _virtual:true};
-  }
   // tag-based: aggregate matching projects across all squads, grouped by their category
   const cats=[];
   state.squads.forEach(sq=>(sq.projects||[]).forEach(cat=>{
@@ -607,7 +606,8 @@ function seed(){
 }
 
 function activeSquad(){
-  const v=activeVirtual(); if(v) return buildVirtualSquad(v);
+  const v=activeVirtual();
+  if(v){ if(v.listByEnd) return {id:v.id,name:v.name,projects:[],_virtual:true}; return buildVirtualSquad(v); }
   return state.squads.find(s=>s.id===state.activeSquad)||state.squads[0];
 }
 
@@ -714,7 +714,9 @@ function render(){
 function renderTagFilter(){
   const sel=document.getElementById('tagFilter'); if(!sel)return;
   const used=new Set();
-  activeSquad().projects.forEach(cat=>cat.phases.forEach(pr=>{ if(pr.tag) used.add(pr.tag); }));
+  const av=activeVirtual();
+  if(av&&av.listByEnd){ allProjects().forEach(x=>{ if(x.p.tag) used.add(x.p.tag); }); }
+  else activeSquad().projects.forEach(cat=>cat.phases.forEach(pr=>{ if(pr.tag) used.add(pr.tag); }));
   const tags=[...new Set([...PREDEFINED_TAGS.filter(t=>used.has(t)), ...[...used].filter(t=>!PREDEFINED_TAGS.includes(t))])];
   if(state.tagFilter && !used.has(state.tagFilter)) state.tagFilter='';   // filtered tag no longer exists
   sel.innerHTML='<option value="">All tags</option>'+tags.map(t=>`<option value="${esc(t)}" ${t===state.tagFilter?'selected':''}>${esc(t)}</option>`).join('');
@@ -784,7 +786,7 @@ function renderTabs(){
     const tab=document.createElement('div');
     tab.className='tab tab-virtual'+(v.id===state.activeSquad?' active':'');
     tab.innerHTML='<span class="vt-ico">'+(v.icon||'🏷️')+'</span><span class="tname">'+esc(v.name)+'</span>';
-    tab.title=v.groupByEnd ? (v.name+' — projects grouped by end date') : (v.name+' — all "'+v.tag+'" projects across squads');
+    tab.title=v.listByEnd ? (v.name+' — all projects across squads, grouped by end date') : (v.name+' — all "'+v.tag+'" projects across squads');
     tab.onclick=()=>{ state.activeSquad=v.id; render(); };
     bar.appendChild(tab);
   });
@@ -797,10 +799,12 @@ function renderTabs(){
 }
 
 function renderGantt(){
+  const g=document.getElementById('gantt');
+  const av=activeVirtual();
+  if(av && av.listByEnd){ g.innerHTML=''; renderListByEnd(g); return; }
   const squad=activeSquad();
   const units=buildUnits(squad);
   const tw=totalWidth(units);
-  const g=document.getElementById('gantt');
   g.innerHTML='';
   const grid=document.createElement('div'); grid.className='grid';
 
@@ -854,6 +858,40 @@ function renderGantt(){
     });
   });
   g.appendChild(grid);
+}
+
+// Marketing list view: all projects across squads, grouped by end date.
+function renderListByEnd(g){
+  const q=(state.search||'').trim().toLowerCase(), tf=state.tagFilter||'';
+  let items=allProjects();
+  if(tf) items=items.filter(x=>x.p.tag===tf);
+  if(q) items=items.filter(x=> x.p.name.toLowerCase().includes(q) || (x.cat.name||'').toLowerCase().includes(q) || (x.squad.name||'').toLowerCase().includes(q));
+  // group by end date
+  const map=new Map();
+  items.forEach(x=>{ const k=x.p.end||''; if(!map.has(k))map.set(k,[]); map.get(k).push(x); });
+  const keys=[...map.keys()].sort((a,b)=> a===''?1 : b===''? -1 : a.localeCompare(b));
+  const wrap=document.createElement('div'); wrap.className='listview';
+  if(!keys.length){ const e=document.createElement('div'); e.className='empty'; e.textContent='No projects yet.'; g.appendChild(e); return; }
+  keys.forEach(k=>{
+    const arr=map.get(k);
+    const grp=document.createElement('div'); grp.className='lv-group';
+    const head=document.createElement('div'); head.className='lv-head';
+    head.innerHTML=`<span>${k?endLabel(k):'No end date'}</span><span class="lv-count">${arr.length}</span>`;
+    grp.appendChild(head);
+    arr.forEach(({p,cat,squad})=>{
+      const row=document.createElement('div'); row.className='lv-item';
+      row.innerHTML=`
+        <span class="lv-dot" style="background:${cat.color||'#cdb4f6'}"></span>
+        <span class="lv-name">${esc(p.name)}</span>
+        <span class="lv-meta">${esc(cat.name)} · ${esc(squad.name)}</span>
+        <span class="lv-dates">${fmtShort(p.start)} → ${fmtShort(p.end)}</span>
+        ${p.tag?`<span class="tagchip">${esc(shortTag(p.tag))}</span>`:''}`;
+      row.onclick=()=>openPhaseModal(cat,p);
+      grp.appendChild(row);
+    });
+    wrap.appendChild(grp);
+  });
+  g.appendChild(wrap);
 }
 
 // x centered on today's day block (avg of the day's left and right edges)
