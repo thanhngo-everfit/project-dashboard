@@ -349,14 +349,32 @@ const LEFTPAD = 20;   // left gutter (px) before the first date column, room for
 const NOTE_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5h14M5 10h14M5 15h9"/></svg>';
 const PREDEFINED_TAGS = ["Jon's request","Long's request"];
 function shortTag(t){ return t.replace(/'s request$/i,''); }
-// Fixed virtual squads: aggregate projects by tag across all real squads (read-only structure)
+// Fixed virtual squads (read-only structure)
 const VIRTUAL_VIEWS = [
-  {id:'view:jon',  name:"Jon's Requests",  tag:"Jon's request"},
-  {id:'view:long', name:"Long's Requests", tag:"Long's request"},
+  {id:'view:jon',  name:"Jon's Requests",  tag:"Jon's request", icon:'🏷️'},
+  {id:'view:long', name:"Long's Requests", tag:"Long's request", icon:'🏷️'},
+  {id:'view:marketing', name:'Marketing', squadName:'Marketing', groupByEnd:true, icon:'📅'},
 ];
 function activeVirtual(){ return VIRTUAL_VIEWS.find(v=>v.id===state.activeSquad); }
 function inVirtual(){ return !!activeVirtual(); }
+function endLabel(iso){ const d=parse(iso); return MONTHS[d.getMonth()]+' '+d.getDate()+', '+d.getFullYear(); }
 function buildVirtualSquad(v){
+  if(v.groupByEnd){
+    // based on a specific squad, but grouped by end date instead of category
+    const src=state.squads.find(sq=>(sq.name||'').toLowerCase()===v.squadName.toLowerCase());
+    const items=[]; if(src)(src.projects||[]).forEach(cat=>(cat.phases||[]).forEach(p=>items.push({p,cat})));
+    const map=new Map();
+    items.forEach(it=>{ const k=it.p.end||''; if(!map.has(k))map.set(k,[]); map.get(k).push(it); });
+    const keys=[...map.keys()].sort((a,b)=> a===''?1 : b===''? -1 : a.localeCompare(b));
+    const cats=keys.map(k=>{
+      const arr=map.get(k), colorByProj={}, srcCatByProj={};
+      arr.forEach(({p,cat})=>{ colorByProj[p.id]=cat.color; srcCatByProj[p.id]=cat; });
+      return {id:'end_'+(k||'none'), name:k?endLabel(k):'No end date', color:'#c4cad4',
+              phases:arr.map(x=>x.p), _virtual:true, _colorByProj:colorByProj, _srcCatByProj:srcCatByProj};
+    });
+    return {id:v.id, name:v.name, projects:cats, _virtual:true};
+  }
+  // tag-based: aggregate matching projects across all squads, grouped by their category
   const cats=[];
   state.squads.forEach(sq=>(sq.projects||[]).forEach(cat=>{
     const projs=(cat.phases||[]).filter(p=>p.tag===v.tag);
@@ -765,8 +783,8 @@ function renderTabs(){
   VIRTUAL_VIEWS.forEach(v=>{
     const tab=document.createElement('div');
     tab.className='tab tab-virtual'+(v.id===state.activeSquad?' active':'');
-    tab.innerHTML='<span class="vt-ico">🏷️</span><span class="tname">'+esc(v.name)+'</span>';
-    tab.title=v.name+' — all "'+v.tag+'" projects across squads';
+    tab.innerHTML='<span class="vt-ico">'+(v.icon||'🏷️')+'</span><span class="tname">'+esc(v.name)+'</span>';
+    tab.title=v.groupByEnd ? (v.name+' — projects grouped by end date') : (v.name+' — all "'+v.tag+'" projects across squads');
     tab.onclick=()=>{ state.activeSquad=v.id; render(); };
     bar.appendChild(tab);
   });
@@ -976,7 +994,7 @@ function projectRow(p,units,tw){
 // A project renders as a single bar labelled with the project name.
 function phaseRow(cat,proj,units,tw){
   const row=document.createElement('div'); row.className='row phase';
-  const delHost=cat._srcCat||cat;   // in virtual view, delete from the real category
+  const delHost=(cat._srcCatByProj&&cat._srcCatByProj[proj.id])||cat._srcCat||cat;   // in virtual view, delete from the real category
   const {left,caret}=leftCell(1,isCollapsed(proj)?'closed':'open',null,proj.name,[
     {icon:'＋',title:'Add work',fn:()=>openTaskModal(proj)},
     {icon:'✎',title:'Edit project',fn:()=>openPhaseModal(cat,proj)},
@@ -994,7 +1012,8 @@ function phaseRow(cat,proj,units,tw){
   const track=document.createElement('div'); track.className='track'; track.style.width=tw+'px';
   track.appendChild(gridlinesEl(units,tw));
   if(proj.start||proj.end){
-    const bar=makeBar(cat.color, proj.name, null, ()=>openPhaseModal(cat,proj), {});
+    const barColor=(cat._colorByProj&&cat._colorByProj[proj.id])||cat.color;
+    const bar=makeBar(barColor, proj.name, null, ()=>openPhaseModal(cat,proj), {});
     placeBar(bar,proj,units);
     attachDrag(bar,proj,units,'phase',cat);
     track.appendChild(bar);
