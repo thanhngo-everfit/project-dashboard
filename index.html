@@ -237,7 +237,15 @@
   .dateclear{flex:none;width:30px;height:36px;border:1px solid var(--border);background:#fff;color:#98a2b3;border-radius:8px;cursor:pointer;font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;padding:0;}
   .dateclear:hover{background:#f5f7fa;color:#d92d20;border-color:#fecdca;}
   .field.row2{display:flex;gap:10px;}
+  .field.row2{align-items:flex-end;}
   .field.row2>div{flex:1;min-width:0;}
+  .doclist{display:flex;flex-direction:column;gap:6px;margin-bottom:8px;}
+  .doc-row{display:flex;gap:6px;}
+  .doc-row .doc-url{flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;}
+  .doc-row .doc-del{flex:none;border:none;background:transparent;color:#98a2b3;cursor:pointer;width:28px;border-radius:6px;}
+  .doc-row .doc-del:hover{background:#fee4e2;color:#d92d20;}
+  .lnk{flex:none;text-decoration:none;font-size:13px;opacity:.75;}
+  .lnk:hover{opacity:1;}
   .swatches{display:flex;gap:8px;flex-wrap:wrap;}
   .swatch{width:28px;height:28px;border-radius:7px;cursor:pointer;border:2px solid transparent;}
   .swatch.sel{border-color:#1d2433;box-shadow:0 0 0 2px #fff inset;}
@@ -448,6 +456,8 @@ function migrate(s){
       if(typeof proj.tag!=='string') proj.tag='';
       if(typeof proj.size!=='string') proj.size='';
       if(typeof proj.promo!=='string') proj.promo='';
+      if(typeof proj.jira!=='string') proj.jira='';
+      if(!Array.isArray(proj.docs)) proj.docs=[];
       delete proj.color; delete proj.wip; delete proj.badge;   // color comes from the category now
       if(!Array.isArray(proj.tasks)) proj.tasks=[];
       delete proj.collapsed;   // collapse is now personal (state.uiCollapsed), not shared data
@@ -893,6 +903,7 @@ function renderListByEnd(g){
         <span class="lv-dot" style="background:${cat.color||'#cdb4f6'}"></span>
         <span class="lv-name">${esc(p.name)}</span>
         <span class="lv-meta">${esc(cat.name)} · ${esc(squad.name)}</span>
+        ${linkIconsHTML(p)}
         ${p.promo==='Yes'?`<span class="promochip">Promotion</span>`:''}
         ${p.size?`<span class="sizechip s-${p.size}">${esc(p.size)}</span>`:''}
         <span class="lv-dates">${fmtShort(p.start)} → ${fmtShort(p.end)}</span>
@@ -1053,6 +1064,8 @@ function phaseRow(cat,proj,units,tw){
   const q=(state.search||'').trim().toLowerCase();
   if(q){ const lab=left.querySelector('.label'); if(lab) lab.innerHTML=highlight(proj.name,q); }
   if(proj.tag && state.showTags!==false){ const chip=document.createElement('span'); chip.className='tagchip'; chip.textContent=shortTag(proj.tag); chip.title='Tag: '+proj.tag; left.insertBefore(chip, left.querySelector('.acts')); }
+  const links=linkIconsHTML(proj);
+  if(links){ const span=document.createElement('span'); span.style.cssText='display:flex;gap:3px;flex:none;'; span.innerHTML=links; left.insertBefore(span, left.querySelector('.acts')); }
   if(!inVirtual()){
     makePhaseDraggable(left, row, cat.id, proj.id);  // drag label to move/reorder between categories
     wireDropTarget(row, cat.id, proj.id);
@@ -1316,7 +1329,7 @@ function openProjectModal(p){
 function openPhaseModal(category,proj){
   hideNoteDock();
   const editing=!!proj;
-  const def=proj||{name:'',start:'',end:'',tag:'',size:'',promo:''};
+  const def=proj||{name:'',start:'',end:'',tag:'',size:'',promo:'',jira:'',docs:[]};
   const curTag=def.tag||'';
   const isPre=PREDEFINED_TAGS.includes(curTag);
   const tagSelVal = isPre?curTag : (curTag?'__custom':'');
@@ -1340,16 +1353,36 @@ function openPhaseModal(category,proj){
         <option value="" ${!def.size?'selected':''}>— None —</option>
         ${FEATURE_SIZES.map(s=>`<option value="${s}" ${def.size===s?'selected':''}>${s}</option>`).join('')}
       </select></div>
-      <div><label>Marketing promotion (optional)</label><select id="m_promo">
+      <div><label>Promotion (optional)</label><select id="m_promo">
         <option value="" ${!def.promo?'selected':''}>— None —</option>
         <option value="Yes" ${def.promo==='Yes'?'selected':''}>Yes</option>
         <option value="No" ${def.promo==='No'?'selected':''}>No</option>
       </select></div>
     </div>
+    <div class="field"><label>Jira link (optional)</label><input id="m_jira" value="${esc(def.jira||'')}" placeholder="https://…"></div>
+    <div class="field"><label>Documentation (optional)</label>
+      <div id="m_docs" class="doclist"></div>
+      <button type="button" class="btn" id="m_adddoc" style="width:100%;">＋ Add document link</button>
+    </div>
     <div class="modal-actions"><button class="btn" id="m_cancel">Cancel</button><button class="btn primary" id="m_save">Save</button></div>`;
   wireDateClears();
   const tagSel=modal.querySelector('#m_tag'), tagCol=modal.querySelector('#m_tagcustomcol');
   tagSel.onchange=()=>{ tagCol.style.display=tagSel.value==='__custom'?'block':'none'; };
+  // documentation multi-link list
+  const docs=(def.docs||[]).slice();
+  const docWrap=modal.querySelector('#m_docs');
+  function renderDocs(){
+    docWrap.innerHTML='';
+    docs.forEach((d,i)=>{
+      const r=document.createElement('div'); r.className='doc-row';
+      r.innerHTML=`<input class="doc-url" value="${esc(d)}" placeholder="https://…"><button type="button" class="doc-del" title="Remove">✕</button>`;
+      r.querySelector('.doc-url').oninput=e=>docs[i]=e.target.value;
+      r.querySelector('.doc-del').onclick=()=>{docs.splice(i,1);renderDocs();};
+      docWrap.appendChild(r);
+    });
+  }
+  renderDocs();
+  modal.querySelector('#m_adddoc').onclick=()=>{docs.push('');renderDocs();};
   modalBg.classList.add('open'); modal.querySelector('#m_pname').focus();
   modal.querySelector('#m_cancel').onclick=closeModal;
   modal.querySelector('#m_save').onclick=()=>{
@@ -1359,10 +1392,19 @@ function openPhaseModal(category,proj){
     const tag = tagSel.value==='__custom' ? modal.querySelector('#m_tagcustom').value.trim() : tagSel.value;
     const size = modal.querySelector('#m_size').value;
     const promo = modal.querySelector('#m_promo').value;
-    if(editing){ proj.name=name; proj.start=start; proj.end=end; proj.tag=tag; proj.size=size; proj.promo=promo; }
-    else category.phases.push({id:uid(),name,start,end,tag,size,promo,tasks:[]});
+    const jira = normalizeUrl(modal.querySelector('#m_jira').value.trim());
+    const docList = docs.map(d=>normalizeUrl(d.trim())).filter(Boolean);
+    if(editing){ proj.name=name; proj.start=start; proj.end=end; proj.tag=tag; proj.size=size; proj.promo=promo; proj.jira=jira; proj.docs=docList; }
+    else category.phases.push({id:uid(),name,start,end,tag,size,promo,jira,docs:docList,tasks:[]});
     closeModal();render();
   };
+}
+function normalizeUrl(u){ if(!u)return ''; return /^https?:\/\//i.test(u)?u:'https://'+u; }
+function linkIconsHTML(proj){
+  let h='';
+  if(proj.jira) h+=`<a class="lnk" href="${esc(proj.jira)}" target="_blank" rel="noopener" title="Open Jira" onclick="event.stopPropagation()">🔗</a>`;
+  (proj.docs||[]).forEach(d=>{ if(d) h+=`<a class="lnk" href="${esc(d)}" target="_blank" rel="noopener" title="${esc(d)}" onclick="event.stopPropagation()">📄</a>`; });
+  return h;
 }
 
 function openTaskModal(phase,t){
