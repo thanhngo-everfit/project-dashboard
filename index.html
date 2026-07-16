@@ -200,6 +200,7 @@
   .sizechip.s-Medium{background:#dbeafe;color:#1e40af;}
   .sizechip.s-Big{background:#fed7aa;color:#9a3412;}
   .sizechip.s-Huge{background:#fecaca;color:#991b1b;}
+  .promochip{flex:none;font-size:10px;font-weight:800;border-radius:999px;padding:2px 8px;white-space:nowrap;background:#fce7f3;color:#9d174d;}
 
   /* ---------- Modal ---------- */
   .modal-bg{position:fixed;inset:0;background:rgba(16,24,40,.45);display:none;align-items:center;justify-content:center;z-index:100;}
@@ -446,6 +447,7 @@ function migrate(s){
       if(typeof proj.end!=='string') proj.end='';
       if(typeof proj.tag!=='string') proj.tag='';
       if(typeof proj.size!=='string') proj.size='';
+      if(typeof proj.promo!=='string') proj.promo='';
       delete proj.color; delete proj.wip; delete proj.badge;   // color comes from the category now
       if(!Array.isArray(proj.tasks)) proj.tasks=[];
       delete proj.collapsed;   // collapse is now personal (state.uiCollapsed), not shared data
@@ -891,6 +893,7 @@ function renderListByEnd(g){
         <span class="lv-dot" style="background:${cat.color||'#cdb4f6'}"></span>
         <span class="lv-name">${esc(p.name)}</span>
         <span class="lv-meta">${esc(cat.name)} · ${esc(squad.name)}</span>
+        ${p.promo==='Yes'?`<span class="promochip">Promotion</span>`:''}
         ${p.size?`<span class="sizechip s-${p.size}">${esc(p.size)}</span>`:''}
         <span class="lv-dates">${fmtShort(p.start)} → ${fmtShort(p.end)}</span>
         ${(p.tag && state.showTags!==false)?`<span class="tagchip">${esc(shortTag(p.tag))}</span>`:''}`;
@@ -1313,7 +1316,7 @@ function openProjectModal(p){
 function openPhaseModal(category,proj){
   hideNoteDock();
   const editing=!!proj;
-  const def=proj||{name:'',start:'',end:'',tag:'',size:''};
+  const def=proj||{name:'',start:'',end:'',tag:'',size:'',promo:''};
   const curTag=def.tag||'';
   const isPre=PREDEFINED_TAGS.includes(curTag);
   const tagSelVal = isPre?curTag : (curTag?'__custom':'');
@@ -1332,10 +1335,17 @@ function openPhaseModal(category,proj){
       </select></div>
       <div id="m_tagcustomcol" style="display:${tagSelVal==='__custom'?'block':'none'}"><label>Custom tag</label><input id="m_tagcustom" value="${isPre?'':esc(curTag)}" placeholder="Tag name"></div>
     </div>
-    <div class="field"><label>Feature size (optional)</label><select id="m_size">
-      <option value="" ${!def.size?'selected':''}>— None —</option>
-      ${FEATURE_SIZES.map(s=>`<option value="${s}" ${def.size===s?'selected':''}>${s}</option>`).join('')}
-    </select></div>
+    <div class="field row2">
+      <div><label>Feature size (optional)</label><select id="m_size">
+        <option value="" ${!def.size?'selected':''}>— None —</option>
+        ${FEATURE_SIZES.map(s=>`<option value="${s}" ${def.size===s?'selected':''}>${s}</option>`).join('')}
+      </select></div>
+      <div><label>Marketing promotion (optional)</label><select id="m_promo">
+        <option value="" ${!def.promo?'selected':''}>— None —</option>
+        <option value="Yes" ${def.promo==='Yes'?'selected':''}>Yes</option>
+        <option value="No" ${def.promo==='No'?'selected':''}>No</option>
+      </select></div>
+    </div>
     <div class="modal-actions"><button class="btn" id="m_cancel">Cancel</button><button class="btn primary" id="m_save">Save</button></div>`;
   wireDateClears();
   const tagSel=modal.querySelector('#m_tag'), tagCol=modal.querySelector('#m_tagcustomcol');
@@ -1348,8 +1358,9 @@ function openPhaseModal(category,proj){
     if(start&&end&&end<start){alert('End date must be on or after start date.');return;}
     const tag = tagSel.value==='__custom' ? modal.querySelector('#m_tagcustom').value.trim() : tagSel.value;
     const size = modal.querySelector('#m_size').value;
-    if(editing){ proj.name=name; proj.start=start; proj.end=end; proj.tag=tag; proj.size=size; }
-    else category.phases.push({id:uid(),name,start,end,tag,size,tasks:[]});
+    const promo = modal.querySelector('#m_promo').value;
+    if(editing){ proj.name=name; proj.start=start; proj.end=end; proj.tag=tag; proj.size=size; proj.promo=promo; }
+    else category.phases.push({id:uid(),name,start,end,tag,size,promo,tasks:[]});
     closeModal();render();
   };
 }
