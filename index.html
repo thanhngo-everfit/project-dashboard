@@ -140,9 +140,12 @@
             display:flex;align-items:center;gap:5px;padding-left:14px;font-size:15px;font-weight:800;color:#fff;letter-spacing:.3px;}
   .headcell small{font-weight:600;opacity:.7;font-size:12px;}
   /* week view two-tier header */
-  .head.week{height:58px;}
-  .monthband{position:absolute;top:0;height:26px;display:flex;align-items:center;padding-left:10px;font-size:13px;font-weight:800;color:#fff;letter-spacing:.3px;border-right:1px solid rgba(255,255,255,.15);}
-  .daycell{position:absolute;top:26px;height:32px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;border-left:1px solid #eef0f3;font-size:11px;color:#475467;}
+  .head.week{height:80px;}
+  .monthband{position:absolute;top:22px;height:26px;display:flex;align-items:center;padding-left:10px;font-size:13px;font-weight:800;color:#fff;letter-spacing:.3px;border-right:1px solid rgba(255,255,255,.15);}
+  .daycell{position:absolute;top:48px;height:32px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;border-left:1px solid #eef0f3;font-size:11px;color:#475467;}
+  /* quarter view: year band + quarter cells */
+  .head.quarter{height:60px;}
+  .q-cell{position:absolute;top:22px;height:38px;display:flex;align-items:center;gap:5px;padding-left:14px;font-size:15px;font-weight:800;color:#fff;letter-spacing:.3px;}
   .daycell .dnum{font-weight:700;line-height:1.1;}
   .daycell .ddow{font-size:9px;color:#98a2b3;line-height:1.1;}
   .daycell.weekend{background:#f4f5f7;}
@@ -773,7 +776,7 @@ function renderGantt(){
 
   // header
   const hdView=curView();
-  const head=document.createElement('div'); head.className='head'+(hdView==='week'?' week':hdView==='month'?' month':'');
+  const head=document.createElement('div'); head.className='head'+(hdView==='week'?' week':hdView==='month'?' month':' quarter');
   const hl=document.createElement('div'); hl.className='left';
   hl.innerHTML='<span>PROJECT / PHASE / WORK</span>';
   if(!inVirtual()){
@@ -787,18 +790,7 @@ function renderGantt(){
   }else if(hdView==='month'){
     buildMonthHeader(units,ht);
   }else{
-    const baseYear=units.length?units[0].start.getFullYear():new Date().getFullYear();
-    units.forEach((u,i)=>{
-      const c=document.createElement('div'); c.className='headcell';
-      c.style.left=u.x+'px'; c.style.width=u.width+'px';
-      const shade=headShade(i,units.length);
-      c.style.background=shade.bg; c.style.color=shade.fg;
-      const yr=u.start.getFullYear();
-      let txt=u.label;
-      if(yr!==baseYear) txt=u.label+'/'+yr;
-      c.innerHTML=txt;
-      ht.appendChild(c);
-    });
+    buildQuarterHeader(units,ht);
   }
   // "Today" dot + label pinned at the bottom of the header, above the dashed line
   const tmx=todayCenterX(units);
@@ -853,13 +845,30 @@ function gridlinesEl(units,tw){
   gl.appendChild(tl);
   return gl;
 }
-// Two-tier header for Week view: month band on top, day-number + weekday letter below.
+// Year-band helper (top tier) shared by Week/Quarter/Month headers
+function buildYearBand(units,ht){
+  const years=[]; let g=null;
+  units.forEach(u=>{ const y=u.start.getFullYear(); if(!g||g.y!==y){ g={y,x:u.x,width:u.width}; years.push(g);} else g.width+=u.width; });
+  years.forEach(gr=>{ const c=document.createElement('div'); c.className='m-year'; c.style.left=gr.x+'px'; c.style.width=gr.width+'px'; c.textContent=gr.y; ht.appendChild(c); });
+}
+// Two-tier header for Quarter view: year band on top, quarter cells (Q2, Q3…) below.
+function buildQuarterHeader(units,ht){
+  buildYearBand(units,ht);
+  units.forEach((u,i)=>{
+    const c=document.createElement('div'); c.className='q-cell';
+    c.style.left=u.x+'px'; c.style.width=u.width+'px';
+    const shade=headShade(i,units.length); c.style.background=shade.bg; c.style.color=shade.fg;
+    c.textContent=u.label;   // just "Q2"
+    ht.appendChild(c);
+  });
+}
+// Three-tier header for Week view: year band, month band (just "Jun"), day cells.
 function buildWeekHeader(units,ht){
-  // month groups (top band)
+  buildYearBand(units,ht);
   const groups=[]; let g=null;
   units.forEach(u=>{
     const key=u.start.getFullYear()+'-'+u.start.getMonth();
-    if(!g||g.key!==key){ g={key,label:MONTHS[u.start.getMonth()]+" '"+String(u.start.getFullYear()).slice(2),x:u.x,width:u.width}; groups.push(g); }
+    if(!g||g.key!==key){ g={key,label:MONTHS[u.start.getMonth()],x:u.x,width:u.width}; groups.push(g); }
     else g.width+=u.width;
   });
   groups.forEach((gr,i)=>{
