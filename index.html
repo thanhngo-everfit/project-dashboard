@@ -472,6 +472,7 @@ function migrate(s){
       if(typeof proj.promo!=='string') proj.promo='';
       if(typeof proj.jira!=='string') proj.jira='';
       if(!Array.isArray(proj.docs)) proj.docs=[];
+      if(typeof proj.note!=='string') proj.note='';
       delete proj.color; delete proj.wip; delete proj.badge;   // color comes from the category now
       if(!Array.isArray(proj.tasks)) proj.tasks=[];
       delete proj.collapsed;   // collapse is now personal (state.uiCollapsed), not shared data
@@ -919,7 +920,7 @@ function renderListByEnd(g){
         <span class="lv-dot" style="background:${cat.color||'#cdb4f6'}"></span>
         <span class="lv-name">${esc(p.name)}</span>
         <span class="lv-meta">${esc(cat.name)} · ${esc(squad.name)}</span>
-        ${linkIconsHTML(p)}
+        ${indicatorsHTML(p)}
         ${p.promo==='Yes'?`<span class="promochip">Promotion</span>`:''}
         ${p.size?`<span class="sizechip s-${p.size}">${esc(p.size)}</span>`:''}
         <span class="lv-dates">${fmtShort(p.start)} → ${fmtShort(p.end)}</span>
@@ -1080,7 +1081,7 @@ function phaseRow(cat,proj,units,tw){
   const q=(state.search||'').trim().toLowerCase();
   if(q){ const lab=left.querySelector('.label'); if(lab) lab.innerHTML=highlight(proj.name,q); }
   if(proj.tag && state.showTags!==false){ const chip=document.createElement('span'); chip.className='tagchip'; chip.textContent=shortTag(proj.tag); chip.title='Tag: '+proj.tag; left.insertBefore(chip, left.querySelector('.acts')); }
-  const links=linkIconsHTML(proj);
+  const links=indicatorsHTML(proj);
   if(links){ const span=document.createElement('span'); span.style.cssText='display:flex;gap:3px;flex:none;'; span.innerHTML=links; left.insertBefore(span, left.querySelector('.acts')); }
   if(!inVirtual()){
     makePhaseDraggable(left, row, cat.id, proj.id);  // drag label to move/reorder between categories
@@ -1305,6 +1306,17 @@ function hideNoteDock(){
   const d=document.getElementById('noteDock'), p=document.getElementById('notePanel');
   if(d)d.style.display='none'; if(p)p.style.display='none';
 }
+// Floating note button + side popup; auto-expanded if a note exists. Read value from #m_note on save.
+function wireNoteDock(initialNote){
+  const noteDock=document.getElementById('noteDock'), noteBtn=document.getElementById('noteFab'), notePanel=document.getElementById('notePanel'), noteTa=document.getElementById('m_note');
+  noteBtn.innerHTML=NOTE_ICON; noteDock.style.display='flex';
+  noteTa.value=initialNote||'';
+  let open = !!(initialNote && initialNote.trim());
+  function sync(){ notePanel.style.display=open?'flex':'none'; noteBtn.classList.toggle('open',open); noteBtn.classList.toggle('has',noteTa.value.trim()!==''); }
+  sync();
+  noteBtn.onclick=()=>{ open=!open; sync(); if(open) noteTa.focus(); };
+  noteTa.oninput=()=>noteBtn.classList.toggle('has',noteTa.value.trim()!=='');
+}
 function closeModal(){modalBg.classList.remove('open');modal.innerHTML='';hideNoteDock();}
 // Date input with a clear (×) button. Wire with wireDateClears() after innerHTML is set.
 function dateField(id,val){
@@ -1343,9 +1355,8 @@ function openProjectModal(p){
 
 // Project modal: name + start + optional end (a single bar on the timeline).
 function openPhaseModal(category,proj){
-  hideNoteDock();
   const editing=!!proj;
-  const def=proj||{name:'',start:'',end:'',tag:'',size:'',promo:'',jira:'',docs:[]};
+  const def=proj||{name:'',start:'',end:'',tag:'',size:'',promo:'',jira:'',docs:[],note:''};
   const curTag=def.tag||'';
   const isPre=PREDEFINED_TAGS.includes(curTag);
   const tagSelVal = isPre?curTag : (curTag?'__custom':'');
@@ -1399,6 +1410,7 @@ function openPhaseModal(category,proj){
   }
   renderDocs();
   modal.querySelector('#m_adddoc').onclick=()=>{docs.push('');renderDocs();};
+  wireNoteDock(def.note);   // floating Note button + side popup
   modalBg.classList.add('open'); modal.querySelector('#m_pname').focus();
   modal.querySelector('#m_cancel').onclick=closeModal;
   modal.querySelector('#m_save').onclick=()=>{
@@ -1410,8 +1422,9 @@ function openPhaseModal(category,proj){
     const promo = modal.querySelector('#m_promo').value;
     const jira = normalizeUrl(modal.querySelector('#m_jira').value.trim());
     const docList = docs.map(d=>normalizeUrl(d.trim())).filter(Boolean);
-    if(editing){ proj.name=name; proj.start=start; proj.end=end; proj.tag=tag; proj.size=size; proj.promo=promo; proj.jira=jira; proj.docs=docList; }
-    else category.phases.push({id:uid(),name,start,end,tag,size,promo,jira,docs:docList,tasks:[]});
+    const note = document.getElementById('m_note').value.trim();
+    if(editing){ proj.name=name; proj.start=start; proj.end=end; proj.tag=tag; proj.size=size; proj.promo=promo; proj.jira=jira; proj.docs=docList; proj.note=note; }
+    else category.phases.push({id:uid(),name,start,end,tag,size,promo,jira,docs:docList,note,tasks:[]});
     closeModal();render();
   };
 }
@@ -1421,6 +1434,11 @@ function linkIconsHTML(proj){
   if(proj.jira) h+=`<a class="lnk" href="${esc(proj.jira)}" target="_blank" rel="noopener" title="Open Jira" onclick="event.stopPropagation()">🔗</a>`;
   (proj.docs||[]).forEach(d=>{ if(d) h+=`<a class="lnk" href="${esc(d)}" target="_blank" rel="noopener" title="${esc(d)}" onclick="event.stopPropagation()">📄</a>`; });
   return h;
+}
+function indicatorsHTML(proj){
+  let h='';
+  if(proj.note && proj.note.trim()) h+=`<span class="lnk" title="${esc(proj.note)}" style="cursor:default">📝</span>`;
+  return h + linkIconsHTML(proj);
 }
 
 function openTaskModal(phase,t){
@@ -1449,20 +1467,7 @@ function openTaskModal(phase,t){
   }
   syncType(); typeSel.onchange=syncType;
   prog.oninput=()=>pval.textContent=prog.value;
-  // floating Note button + side popup (outside the modal, to the right).
-  // Auto-expanded if a note exists, collapsed otherwise.
-  const noteDock=document.getElementById('noteDock'), noteBtn=document.getElementById('noteFab'), notePanel=document.getElementById('notePanel'), noteTa=document.getElementById('m_note');
-  noteBtn.innerHTML=NOTE_ICON; noteDock.style.display='flex';
-  noteTa.value=def.note||'';
-  let noteOpen = !!(def.note && def.note.trim());
-  function syncNote(){
-    notePanel.style.display=noteOpen?'flex':'none';
-    noteBtn.classList.toggle('open',noteOpen);
-    noteBtn.classList.toggle('has',noteTa.value.trim()!=='');
-  }
-  syncNote();
-  noteBtn.onclick=()=>{ noteOpen=!noteOpen; syncNote(); if(noteOpen) noteTa.focus(); };
-  noteTa.oninput=()=>noteBtn.classList.toggle('has',noteTa.value.trim()!=='');
+  wireNoteDock(def.note);   // floating Note button + side popup
   // Blockers checklist (Jira-style): add items, check done, remove
   const blockers=(def.blockers||[]).map(b=>({id:b.id||uid(),text:b.text||'',done:!!b.done}));
   const blkWrap=modal.querySelector('#m_blockers');
