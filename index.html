@@ -383,6 +383,20 @@ const VIRTUAL_VIEWS = [
 ];
 function activeVirtual(){ return VIRTUAL_VIEWS.find(v=>v.id===state.activeSquad); }
 function inVirtual(){ return !!activeVirtual(); }
+// URL <-> active tab mapping (shareable ?view= param)
+const VIEW_SLUGS = {'view:jon':'jon-request','view:long':'long-request','view:marketing':'marketing'};
+let pendingViewSlug = null;
+function viewSlug(id){ return VIEW_SLUGS[id] || id; }   // real squads use their id
+function idFromSlug(slug){
+  if(!slug) return null;
+  const v = Object.keys(VIEW_SLUGS).find(k=>VIEW_SLUGS[k]===slug);
+  if(v) return v;
+  if((state.squads||[]).some(s=>s.id===slug)) return slug;
+  return null;
+}
+function syncUrl(){
+  try{ const u=new URL(location.href); u.searchParams.set('view', viewSlug(state.activeSquad)); history.replaceState(null,'',u); }catch(e){}
+}
 function endLabel(iso){ const d=parse(iso); return MONTHS[d.getMonth()]+' '+d.getDate()+', '+d.getFullYear(); }
 function fmtShort(iso){ if(!iso)return '—'; const d=parse(iso); return MONTHS[d.getMonth()]+' '+d.getDate(); }
 // every project across all squads, with its category + squad
@@ -723,11 +737,13 @@ function headShade(i,n){
 
 /* ============================ Render ============================ */
 function render(){
+  if(pendingViewSlug){ const id=idFromSlug(pendingViewSlug); if(id){ state.activeSquad=id; pendingViewSlug=null; } }
   renderTabs();
   document.getElementById('squadName').textContent=activeSquad().name;
   document.querySelectorAll('#viewToggle button').forEach(b=>b.classList.toggle('active',b.dataset.view===curView()));
   renderTagFilter();
   renderGantt();
+  syncUrl();
   save();
 }
 function renderTagFilter(){
@@ -1589,6 +1605,7 @@ document.getElementById('signOut').onclick=()=>{
 };
 
 (function bootstrap(){
+  try{ pendingViewSlug = new URL(location.href).searchParams.get('view'); }catch(e){}
   const saved=loadAuth();
   if(saved) showApp(saved); else showGate();
 })();
