@@ -885,7 +885,7 @@ function renderListByEnd(g){
         <span class="lv-name">${esc(p.name)}</span>
         <span class="lv-meta">${esc(cat.name)} · ${esc(squad.name)}</span>
         <span class="lv-dates">${fmtShort(p.start)} → ${fmtShort(p.end)}</span>
-        ${p.tag?`<span class="tagchip">${esc(shortTag(p.tag))}</span>`:''}`;
+        ${(p.tag && state.showTags!==false)?`<span class="tagchip">${esc(shortTag(p.tag))}</span>`:''}`;
       row.onclick=()=>openPhaseModal(cat,p);
       grp.appendChild(row);
     });
