@@ -354,7 +354,7 @@ function buildVirtualSquad(v){
   const cats=[];
   state.squads.forEach(sq=>(sq.projects||[]).forEach(cat=>{
     const projs=(cat.phases||[]).filter(p=>p.tag===v.tag);
-    if(projs.length) cats.push({id:'v_'+sq.id+'_'+cat.id, name:cat.name+'  ·  '+sq.name, color:cat.color, phases:projs, _virtual:true, _srcCat:cat});
+    if(projs.length) cats.push({id:'v_'+sq.id+'_'+cat.id, name:cat.name, color:cat.color, phases:projs, _virtual:true, _srcCat:cat});
   }));
   return {id:v.id, name:v.name, projects:cats, _virtual:true};
 }
