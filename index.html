@@ -883,7 +883,7 @@ function projectRow(p,units,tw){
 // A project renders as a single bar labelled with the project name.
 function phaseRow(cat,proj,units,tw){
   const row=document.createElement('div'); row.className='row phase';
-  const {left,caret}=leftCell(1,isCollapsed(proj)?'closed':'open',cat.color||'#cdb4f6',proj.name,[
+  const {left,caret}=leftCell(1,isCollapsed(proj)?'closed':'open',null,proj.name,[
     {icon:'＋',title:'Add work',fn:()=>openTaskModal(proj)},
     {icon:'✎',title:'Edit project',fn:()=>openPhaseModal(cat,proj)},
     {icon:'🗑',title:'Delete',fn:()=>{if(confirm('Delete project "'+proj.name+'"?')){cat.phases=cat.phases.filter(x=>x!==proj);render();}}},
