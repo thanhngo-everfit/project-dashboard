@@ -101,6 +101,17 @@
   .left .label{flex:1;font-size:13px;line-height:1.2;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;word-break:break-word;}
   .tagchip{flex:none;font-size:10px;font-weight:700;color:#5b21b6;background:#ede9fe;border:1px solid #ddd6fe;border-radius:999px;padding:1px 7px;white-space:nowrap;}
   .tagfilter{border:1px solid var(--border);background:#fff;border-radius:8px;padding:6px 8px;font-size:13px;font-family:inherit;font-weight:600;cursor:pointer;}
+  /* settings menu */
+  .settings-wrap{position:relative;}
+  .settings-btn{display:flex;align-items:center;gap:7px;border:1px solid var(--border);background:#fff;border-radius:8px;padding:7px 12px;cursor:pointer;font-size:13px;font-weight:600;color:var(--text);}
+  .settings-btn:hover{background:#f5f7fa;}
+  .settings-menu{position:absolute;right:0;top:calc(100% + 6px);background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 14px 34px rgba(16,24,40,.18);padding:14px;z-index:50;width:250px;display:flex;flex-direction:column;gap:14px;}
+  .settings-menu .sm-label{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;}
+  .settings-menu .sm-row{display:flex;align-items:center;gap:8px;}
+  .settings-menu .sm-row .btn{flex:1;}
+  .settings-menu .sm-row .btn.sq{flex:0 0 auto;width:40px;text-align:center;font-size:16px;}
+  .settings-menu .sm-toggle{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;cursor:pointer;}
+  .settings-menu .sm-toggle input{width:16px;height:16px;cursor:pointer;}
   .left .acts{display:none;gap:2px;flex:none;}
   .left:hover .acts{display:flex;}
   .left .acts button{border:none;background:transparent;cursor:pointer;font-size:12px;color:#98a2b3;width:22px;height:22px;border-radius:5px;}
@@ -270,12 +281,22 @@
       <select id="tagFilter" class="tagfilter"></select>
     </div>
     <div class="spacer"></div>
-    <button class="btn" id="expandAll" title="Expand all projects and phases">⊞ Expand All</button>
-    <button class="btn" id="collapseAll" title="Collapse all projects and phases">⊟ Collapse All</button>
-    <div class="zoom">
-      <span style="font-size:12px;color:var(--muted);font-weight:600;margin-right:4px;">Zoom</span>
-      <button id="zoomOut">−</button>
-      <button id="zoomIn">＋</button>
+    <div class="settings-wrap">
+      <button class="settings-btn" id="settingsBtn" title="Settings">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Settings
+      </button>
+      <div class="settings-menu" id="settingsMenu" style="display:none">
+        <div><div class="sm-label">Rows</div>
+          <div class="sm-row"><button class="btn" id="expandAll">⊞ Expand All</button><button class="btn" id="collapseAll">⊟ Collapse All</button></div>
+        </div>
+        <div><div class="sm-label">Zoom</div>
+          <div class="sm-row"><button class="btn sq" id="zoomOut">−</button><button class="btn sq" id="zoomIn">＋</button></div>
+        </div>
+        <div><div class="sm-label">Display</div>
+          <label class="sm-toggle"><input type="checkbox" id="showTags"> Show tags next to project name</label>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -384,6 +405,7 @@ function migrate(s){
   if(!s.uiCollapsed || typeof s.uiCollapsed!=='object') s.uiCollapsed={};   // personal, projectId -> true(collapsed)/false
   if(!s.viewBySquad || typeof s.viewBySquad!=='object') s.viewBySquad={};   // personal, squadId -> 'quarter'|'month'|'week'
   if(typeof s.tagFilter!=='string') s.tagFilter='';   // personal tag filter
+  if(typeof s.showTags!=='boolean') s.showTags=true;   // personal: show tag chip next to project name
   return s;
 }
 function isCollapsed(p){ return state.uiCollapsed[p.id] !== false; }   // default: collapsed
@@ -889,7 +911,7 @@ function phaseRow(cat,proj,units,tw){
     {icon:'🗑',title:'Delete',fn:()=>{if(confirm('Delete project "'+proj.name+'"?')){cat.phases=cat.phases.filter(x=>x!==proj);render();}}},
   ]);
   caret.onclick=()=>{toggleCollapsed(proj);render();};
-  if(proj.tag){ const chip=document.createElement('span'); chip.className='tagchip'; chip.textContent=shortTag(proj.tag); chip.title='Tag: '+proj.tag; left.insertBefore(chip, left.querySelector('.acts')); }
+  if(proj.tag && state.showTags!==false){ const chip=document.createElement('span'); chip.className='tagchip'; chip.textContent=shortTag(proj.tag); chip.title='Tag: '+proj.tag; left.insertBefore(chip, left.querySelector('.acts')); }
   makePhaseDraggable(left, row, cat.id, proj.id);  // drag label to move/reorder between categories
   wireDropTarget(row, cat.id, proj.id);
   row.appendChild(left);
@@ -1284,6 +1306,12 @@ function setAllCollapsed(v){
 document.getElementById('expandAll').onclick=()=>setAllCollapsed(false);
 document.getElementById('collapseAll').onclick=()=>setAllCollapsed(true);
 document.getElementById('tagFilter').onchange=e=>{ state.tagFilter=e.target.value; render(); };
+(function(){
+  const btn=document.getElementById('settingsBtn'), menu=document.getElementById('settingsMenu'), tog=document.getElementById('showTags');
+  btn.onclick=e=>{ e.stopPropagation(); const open=menu.style.display==='none'; menu.style.display=open?'flex':'none'; if(open) tog.checked=state.showTags!==false; };
+  document.addEventListener('click',e=>{ if(!e.target.closest('.settings-wrap')) menu.style.display='none'; });
+  tog.onchange=e=>{ state.showTags=e.target.checked; render(); };
+})();
 // re-fit the timeline width when the window resizes
 let _resizeTimer=null;
 window.addEventListener('resize',()=>{
