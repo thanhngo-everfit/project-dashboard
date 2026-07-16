@@ -377,6 +377,7 @@ function shortTag(t){ return t.replace(/'s request$/i,''); }
 const FEATURE_SIZES = ['Small','Medium','Big','Huge'];
 // Fixed virtual squads (read-only structure)
 const VIRTUAL_VIEWS = [
+  {id:'view:all',  name:'All Squads', allSquads:true, icon:'🌐'},
   {id:'view:jon',  name:"Jon's Requests",  tag:"Jon's request", icon:'🏷️'},
   {id:'view:long', name:"Long's Requests", tag:"Long's request", icon:'🏷️'},
   {id:'view:marketing', name:'Marketing', listByEnd:true, icon:'📅'},
@@ -384,7 +385,7 @@ const VIRTUAL_VIEWS = [
 function activeVirtual(){ return VIRTUAL_VIEWS.find(v=>v.id===state.activeSquad); }
 function inVirtual(){ return !!activeVirtual(); }
 // URL <-> active tab mapping (shareable ?view= param)
-const VIEW_SLUGS = {'view:jon':'jon-request','view:long':'long-request','view:marketing':'marketing'};
+const VIEW_SLUGS = {'view:all':'all-squads','view:jon':'jon-request','view:long':'long-request','view:marketing':'marketing'};
 let pendingViewSlug = null;
 function viewSlug(id){ return VIEW_SLUGS[id] || id; }   // real squads use their id
 function idFromSlug(slug){
@@ -402,6 +403,16 @@ function fmtShort(iso){ if(!iso)return '—'; const d=parse(iso); return MONTHS[
 // every project across all squads, with its category + squad
 function allProjects(){ const out=[]; (state.squads||[]).forEach(sq=>(sq.projects||[]).forEach(cat=>(cat.phases||[]).forEach(p=>out.push({p,cat,squad:sq})))); return out; }
 function buildVirtualSquad(v){
+  if(v.allSquads){
+    // every project across all squads, grouped by squad (projects keep their category color)
+    const cats=[];
+    state.squads.forEach(sq=>{
+      const projs=[], colorByProj={}, srcCatByProj={};
+      (sq.projects||[]).forEach(cat=>(cat.phases||[]).forEach(p=>{ projs.push(p); colorByProj[p.id]=cat.color; srcCatByProj[p.id]=cat; }));
+      if(projs.length) cats.push({id:'all_'+sq.id, name:sq.name, color:'#c4cad4', phases:projs, _virtual:true, _colorByProj:colorByProj, _srcCatByProj:srcCatByProj});
+    });
+    return {id:v.id, name:v.name, projects:cats, _virtual:true};
+  }
   // tag-based: aggregate matching projects across all squads, grouped by their category
   const cats=[];
   state.squads.forEach(sq=>(sq.projects||[]).forEach(cat=>{
@@ -822,7 +833,7 @@ function renderTabs(){
     const tab=document.createElement('div');
     tab.className='tab tab-virtual'+(v.id===state.activeSquad?' active':'');
     tab.innerHTML='<span class="vt-ico">'+(v.icon||'🏷️')+'</span><span class="tname">'+esc(v.name)+'</span>';
-    tab.title=v.listByEnd ? (v.name+' — all projects across squads, grouped by end date') : (v.name+' — all "'+v.tag+'" projects across squads');
+    tab.title=v.allSquads ? (v.name+' — every project from all squads') : v.listByEnd ? (v.name+' — all projects across squads, grouped by end date') : (v.name+' — all "'+v.tag+'" projects across squads');
     tab.onclick=()=>{ state.activeSquad=v.id; render(); };
     bar.appendChild(tab);
   });
