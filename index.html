@@ -107,17 +107,28 @@
   .searchbox{border:1px solid var(--border);background:#fff;border-radius:8px;padding:7px 12px;font-size:13px;font-family:inherit;width:220px;margin-left:10px;}
   .searchbox:focus{outline:none;border-color:#4c6fff;box-shadow:0 0 0 2px rgba(76,111,255,.15);}
   mark{background:#fde68a;color:inherit;border-radius:2px;padding:0 1px;}
-  /* settings menu */
+  /* view settings menu */
   .settings-wrap{position:relative;}
   .settings-btn{display:flex;align-items:center;gap:7px;border:1px solid var(--border);background:#fff;border-radius:8px;padding:7px 12px;cursor:pointer;font-size:13px;font-weight:600;color:var(--text);}
   .settings-btn:hover{background:#f5f7fa;}
-  .settings-menu{position:absolute;right:0;top:calc(100% + 6px);background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 14px 34px rgba(16,24,40,.18);padding:14px;z-index:50;width:250px;display:flex;flex-direction:column;gap:14px;}
-  .settings-menu .sm-label{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;}
-  .settings-menu .sm-row{display:flex;align-items:center;gap:8px;}
-  .settings-menu .sm-row .btn{flex:1;}
-  .settings-menu .sm-row .btn.sq{flex:0 0 auto;width:40px;text-align:center;font-size:16px;}
-  .settings-menu .sm-toggle{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;cursor:pointer;}
-  .settings-menu .sm-toggle input{width:16px;height:16px;cursor:pointer;}
+  .settings-menu{position:absolute;right:0;top:calc(100% + 8px);background:#fff;border:1px solid var(--border);border-radius:14px;box-shadow:0 18px 44px rgba(16,24,40,.2);padding:6px 16px 16px;z-index:50;width:288px;}
+  .settings-menu .sm-title{font-size:15px;font-weight:800;color:var(--text);padding:12px 0 4px;}
+  .settings-menu .sm-sec{padding:14px 0;border-top:1px solid #eef0f3;}
+  .settings-menu .sm-label{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px;}
+  .settings-menu .sm-btns{display:flex;gap:8px;}
+  .settings-menu .sm-act{flex:1;border:1px solid var(--border);background:#fff;border-radius:9px;padding:9px 8px;font-size:13px;font-weight:600;cursor:pointer;color:var(--text);}
+  .settings-menu .sm-act:hover{background:#f5f7fa;border-color:#d0d5dd;}
+  .settings-menu .sm-zoom{display:flex;align-items:center;gap:8px;}
+  .settings-menu .sm-zoom button{width:36px;height:36px;border:1px solid var(--border);background:#fff;border-radius:9px;font-size:17px;cursor:pointer;color:var(--text);}
+  .settings-menu .sm-zoom button:hover{background:#f5f7fa;}
+  .settings-menu .sm-zoom #zoomVal{min-width:56px;text-align:center;font-weight:800;font-size:15px;}
+  .settings-menu .sm-zoom .sm-reset{width:auto;padding:0 12px;height:36px;font-size:12px;font-weight:700;color:var(--muted);margin-left:auto;}
+  .settings-menu .sm-switch{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;}
+  .settings-menu .sm-switch input{position:absolute;opacity:0;pointer-events:none;}
+  .settings-menu .sm-switch .track{flex:none;width:40px;height:23px;border-radius:999px;background:#d0d5dd;position:relative;transition:background .15s;}
+  .settings-menu .sm-switch .track::after{content:'';position:absolute;top:2px;left:2px;width:19px;height:19px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(16,24,40,.25);transition:transform .15s;}
+  .settings-menu .sm-switch input:checked + .track{background:#4c6fff;}
+  .settings-menu .sm-switch input:checked + .track::after{transform:translateX(17px);}
   .left .acts{display:none;gap:2px;flex:none;}
   .left:hover .acts{display:flex;}
   .left .acts button{border:none;background:transparent;cursor:pointer;font-size:12px;color:#98a2b3;width:22px;height:22px;border-radius:5px;}
@@ -319,19 +330,28 @@
     </div>
     <div class="spacer"></div>
     <div class="settings-wrap">
-      <button class="settings-btn" id="settingsBtn" title="Settings">
+      <button class="settings-btn" id="settingsBtn" title="View settings">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        Settings
+        View Settings
       </button>
       <div class="settings-menu" id="settingsMenu" style="display:none">
-        <div><div class="sm-label">Rows</div>
-          <div class="sm-row"><button class="btn" id="expandAll">⊞ Expand All</button><button class="btn" id="collapseAll">⊟ Collapse All</button></div>
+        <div class="sm-title">View Settings</div>
+        <div class="sm-sec">
+          <div class="sm-label">Rows</div>
+          <div class="sm-btns"><button class="sm-act" id="expandAll">⊞ Expand all</button><button class="sm-act" id="collapseAll">⊟ Collapse all</button></div>
         </div>
-        <div><div class="sm-label">Zoom</div>
-          <div class="sm-row"><button class="btn sq" id="zoomOut">−</button><button class="btn sq" id="zoomIn">＋</button></div>
+        <div class="sm-sec">
+          <div class="sm-label">Zoom</div>
+          <div class="sm-zoom">
+            <button id="zoomOut" title="Zoom out">−</button>
+            <span id="zoomVal">100%</span>
+            <button id="zoomIn" title="Zoom in">+</button>
+            <button class="sm-reset" id="zoomReset">Reset</button>
+          </div>
         </div>
-        <div><div class="sm-label">Display</div>
-          <label class="sm-toggle"><input type="checkbox" id="showTags"> Show tags next to project name</label>
+        <div class="sm-sec">
+          <div class="sm-label">Display</div>
+          <label class="sm-switch"><span>Show tags next to project name</span><input type="checkbox" id="showTags"><span class="track"></span></label>
         </div>
       </div>
     </div>
@@ -1541,8 +1561,10 @@ function highlight(text,q){
   el.onblur=()=>{el.contentEditable='false';if(inVirtual())return;const v=el.textContent.trim()||'Squad';activeSquad().name=v;render();};
 })();
 document.querySelectorAll('#viewToggle button').forEach(b=>b.onclick=()=>{setView(b.dataset.view);render();});
-document.getElementById('zoomIn').onclick=()=>{setZoom(Math.min(3,curZoom()*1.25));render();};
-document.getElementById('zoomOut').onclick=()=>{setZoom(Math.max(.4,curZoom()/1.25));render();};
+function updateZoomLabel(){ const el=document.getElementById('zoomVal'); if(el) el.textContent=Math.round(curZoom()*100)+'%'; }
+document.getElementById('zoomIn').onclick=()=>{setZoom(Math.min(3,curZoom()*1.25));render();updateZoomLabel();};
+document.getElementById('zoomOut').onclick=()=>{setZoom(Math.max(.4,curZoom()/1.25));render();updateZoomLabel();};
+document.getElementById('zoomReset').onclick=()=>{setZoom(1);render();updateZoomLabel();};
 function setAllCollapsed(v){
   activeSquad().projects.forEach(cat=>cat.phases.forEach(proj=>{ state.uiCollapsed[proj.id]=v; }));
   render();
@@ -1553,7 +1575,7 @@ document.getElementById('tagFilter').onchange=e=>{ state.tagFilter=e.target.valu
 (function(){ const sb=document.getElementById('searchBox'); sb.value=state.search||''; sb.oninput=e=>{ state.search=e.target.value; render(); }; })();
 (function(){
   const btn=document.getElementById('settingsBtn'), menu=document.getElementById('settingsMenu'), tog=document.getElementById('showTags');
-  btn.onclick=e=>{ e.stopPropagation(); const open=menu.style.display==='none'; menu.style.display=open?'flex':'none'; if(open) tog.checked=state.showTags!==false; };
+  btn.onclick=e=>{ e.stopPropagation(); const open=menu.style.display==='none'; menu.style.display=open?'block':'none'; if(open){ tog.checked=state.showTags!==false; updateZoomLabel(); } };
   document.addEventListener('click',e=>{ if(!e.target.closest('.settings-wrap')) menu.style.display='none'; });
   tog.onchange=e=>{ state.showTags=e.target.checked; render(); };
 })();
