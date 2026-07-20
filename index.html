@@ -125,7 +125,17 @@
   .tagpick.add{background:#fff;color:var(--muted);border-style:dashed;}
   .tagpick.add:hover{color:var(--text);border-color:#98a2b3;}
   .tagpick.sel b{font-weight:800;opacity:.7;}
-  .tagfilter{border:1px solid var(--border);background:#fff;border-radius:8px;padding:6px 8px;font-size:13px;font-family:inherit;font-weight:600;cursor:pointer;}
+  .tagfilter-wrap{position:relative;display:flex;align-items:center;gap:6px;}
+  .tagfilter{border:1px solid var(--border);background:#fff;border-radius:8px;padding:7px 10px;font-size:13px;font-family:inherit;font-weight:600;cursor:pointer;color:var(--text);}
+  .tagfilter:hover{background:#f5f7fa;}
+  .tagfilter.active-filter{border-color:#4c6fff;color:#4c6fff;}
+  .tagfilter-menu{position:absolute;top:calc(100% + 6px);left:34px;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 14px 34px rgba(16,24,40,.18);padding:8px;z-index:55;min-width:180px;max-height:320px;overflow-y:auto;}
+  .tagfilter-menu .tf-row{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:7px;cursor:pointer;font-size:13px;}
+  .tagfilter-menu .tf-row:hover{background:#f5f7fa;}
+  .tagfilter-menu .tf-row input{width:16px;height:16px;cursor:pointer;}
+  .tagfilter-menu .tf-clear{width:100%;margin-top:6px;border:none;background:#f0f1f4;border-radius:7px;padding:7px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;}
+  .tagfilter-menu .tf-clear:hover{color:var(--text);}
+  .tagfilter-menu .tf-empty{font-size:12px;color:var(--muted);padding:6px;}
   .searchbox{border:1px solid var(--border);background:#fff;border-radius:8px;padding:7px 12px;font-size:13px;font-family:inherit;width:220px;margin-left:10px;}
   .searchbox:focus{outline:none;border-color:#4c6fff;box-shadow:0 0 0 2px rgba(76,111,255,.15);}
   mark{background:#fde68a;color:inherit;border-radius:2px;padding:0 1px;}
@@ -376,9 +386,10 @@
   <div class="subbar">
     <span class="squad-name" id="squadName"></span>
     <input id="searchBox" class="searchbox" type="search" placeholder="Search projects…" autocomplete="off">
-    <div style="display:flex;align-items:center;gap:6px;margin-left:6px;">
+    <div class="tagfilter-wrap" style="margin-left:6px;">
       <span style="font-size:12px;color:var(--muted);font-weight:600;">Tag</span>
-      <select id="tagFilter" class="tagfilter"></select>
+      <button id="tagFilterBtn" class="tagfilter">All tags ▾</button>
+      <div id="tagFilterMenu" class="tagfilter-menu" style="display:none"></div>
     </div>
     <button class="btn" id="jumpToday" title="Scroll the timeline to today"><span style="color:#f04438;">●</span> Jump to Today</button>
     <div class="spacer"></div>
@@ -498,6 +509,8 @@ function fmtShort(iso){ if(!iso)return '—'; const d=parse(iso); return MONTHS[
 function allProjects(){ const out=[]; curSquads().forEach(sq=>(sq.projects||[]).forEach(cat=>(cat.phases||[]).forEach(p=>out.push({p,cat,squad:sq})))); return out; }
 // every distinct tag used anywhere (all tribes) — so custom tags can be reused
 function allUsedTags(){ const set=new Set(); (state.tribes||[]).forEach(tr=>(tr.squads||[]).forEach(sq=>(sq.projects||[]).forEach(cat=>(cat.phases||[]).forEach(p=>(p.tags||[]).forEach(t=>set.add(t)))))); return [...set]; }
+// project passes the (multi) tag filter if it has ANY selected tag (empty filter = all pass)
+function tagFilterMatch(tags){ const tfs=state.tagFilters||[]; if(!tfs.length) return true; return (tags||[]).some(t=>tfs.includes(t)); }
 function buildVirtualSquad(v){
   if(v.allSquads){
     // every project across all squads, grouped by squad (projects keep their category color)
@@ -603,7 +616,8 @@ function migrate(s){
   ['quarter','month','week'].forEach(v=>{ if(!s.zoomByView[v]) s.zoomByView[v]=1; });
   if(!s.uiCollapsed || typeof s.uiCollapsed!=='object') s.uiCollapsed={};   // personal, projectId -> true(collapsed)/false
   if(!s.viewBySquad || typeof s.viewBySquad!=='object') s.viewBySquad={};   // personal, squadId -> 'quarter'|'month'|'week'
-  if(typeof s.tagFilter!=='string') s.tagFilter='';   // personal tag filter
+  if(!Array.isArray(s.tagFilters)) s.tagFilters = (typeof s.tagFilter==='string' && s.tagFilter)?[s.tagFilter]:[];   // personal, multi
+  delete s.tagFilter;
   if(!s.showTagsByTribe || typeof s.showTagsByTribe!=='object'){   // personal, per-tribe: show tag chip next to project name
     s.showTagsByTribe={};
     if(typeof s.showTags==='boolean' && Array.isArray(s.tribes)) s.tribes.forEach(t=>{ s.showTagsByTribe[t.id]=s.showTags; });
@@ -881,14 +895,27 @@ function render(){
   save();
 }
 function renderTagFilter(){
-  const sel=document.getElementById('tagFilter'); if(!sel)return;
+  const btn=document.getElementById('tagFilterBtn'), menu=document.getElementById('tagFilterMenu'); if(!btn)return;
   const used=new Set();
   const av=activeVirtual();
   if(av&&av.listByEnd){ allProjects().forEach(x=>(x.p.tags||[]).forEach(t=>used.add(t))); }
   else activeSquad().projects.forEach(cat=>cat.phases.forEach(pr=>(pr.tags||[]).forEach(t=>used.add(t))));
   const tags=[...new Set([...PREDEFINED_TAGS.filter(t=>used.has(t)), ...[...used].filter(t=>!PREDEFINED_TAGS.includes(t))])];
-  if(state.tagFilter && !used.has(state.tagFilter)) state.tagFilter='';   // filtered tag no longer exists
-  sel.innerHTML='<option value="">All tags</option>'+tags.map(t=>`<option value="${esc(t)}" ${t===state.tagFilter?'selected':''}>${esc(t)}</option>`).join('');
+  if(!Array.isArray(state.tagFilters)) state.tagFilters=[];
+  state.tagFilters=state.tagFilters.filter(t=>used.has(t));   // drop filters for tags no longer present
+  const n=state.tagFilters.length;
+  btn.textContent=(n===0?'All tags':(n===1?state.tagFilters[0]:n+' tags'))+' ▾';
+  btn.classList.toggle('active-filter', n>0);
+  menu.innerHTML='';
+  if(!tags.length){ const e=document.createElement('div'); e.className='tf-empty'; e.textContent='No tags yet'; menu.appendChild(e); return; }
+  tags.forEach(t=>{
+    const row=document.createElement('label'); row.className='tf-row';
+    const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=state.tagFilters.includes(t);
+    cb.onchange=()=>{ if(cb.checked){ if(!state.tagFilters.includes(t))state.tagFilters.push(t);} else state.tagFilters=state.tagFilters.filter(x=>x!==t); render(); };
+    const sp=document.createElement('span'); sp.innerHTML=tagChip(t);
+    row.appendChild(cb); row.appendChild(sp); menu.appendChild(row);
+  });
+  const clr=document.createElement('button'); clr.className='tf-clear'; clr.textContent='Clear all'; clr.onclick=()=>{ state.tagFilters=[]; render(); }; menu.appendChild(clr);
 }
 
 function clearTabMarks(keepDragging){
@@ -1021,11 +1048,11 @@ function renderGantt(){
   const hdView=curView();
   const head=document.createElement('div'); head.className='head'+(hdView==='week'?' week':hdView==='month'?' month':' quarter');
   const hl=document.createElement('div'); hl.className='left';
-  const tf0=state.tagFilter||'', q0=(state.search||'').trim().toLowerCase();
+  const q0=(state.search||'').trim().toLowerCase();
   let projCount=0;
   squad.projects.forEach(p=>{
     const catMatch=q0 && p.name.toLowerCase().includes(q0);
-    let ps = tf0 ? (p.phases||[]).filter(x=>(x.tags||[]).includes(tf0)) : (p.phases||[]);
+    let ps = (p.phases||[]).filter(x=>tagFilterMatch(x.tags));
     if(q0 && !catMatch) ps=ps.filter(x=>x.name.toLowerCase().includes(q0));
     projCount+=ps.length;
   });
@@ -1058,13 +1085,13 @@ function renderGantt(){
     grid.appendChild(e); g.appendChild(grid); return;
   }
 
-  const tf=state.tagFilter||'';
   const q=(state.search||'').trim().toLowerCase();
+  const anyTag=(state.tagFilters||[]).length>0;
   squad.projects.forEach(p=>{
     const catMatch = q && p.name.toLowerCase().includes(q);
-    let projs = tf ? p.phases.filter(x=>(x.tags||[]).includes(tf)) : p.phases;
+    let projs = p.phases.filter(x=>tagFilterMatch(x.tags));
     if(q && !catMatch) projs = projs.filter(x=>x.name.toLowerCase().includes(q));
-    if((tf||q) && projs.length===0) return;   // hide categories with no matching projects
+    if((anyTag||q) && projs.length===0) return;   // hide categories with no matching projects
     grid.appendChild(projectRow(p,units,tw));
     projs.forEach(ph=>{
       grid.appendChild(phaseRow(p,ph,units,tw));
@@ -1092,9 +1119,8 @@ function updateTodayMarkVis(){
 
 // Marketing list view: all projects across squads, grouped by end date.
 function renderListByEnd(g){
-  const q=(state.search||'').trim().toLowerCase(), tf=state.tagFilter||'';
-  let items=allProjects();
-  if(tf) items=items.filter(x=>(x.p.tags||[]).includes(tf));
+  const q=(state.search||'').trim().toLowerCase();
+  let items=allProjects().filter(x=>tagFilterMatch(x.p.tags));
   if(q) items=items.filter(x=> x.p.name.toLowerCase().includes(q) || (x.cat.name||'').toLowerCase().includes(q) || (x.squad.name||'').toLowerCase().includes(q));
   // group by end date
   const map=new Map();
@@ -1230,10 +1256,9 @@ function leftCell(level,caretState,dot,labelText,actions,opts){
 
 function projectRow(p,units,tw){
   const row=document.createElement('div'); row.className='row project';
-  const tf=state.tagFilter||'';
   const q=(state.search||'').trim().toLowerCase();
   const catMatch=q && p.name.toLowerCase().includes(q);
-  let vis = tf ? (p.phases||[]).filter(x=>(x.tags||[]).includes(tf)) : (p.phases||[]);
+  let vis = (p.phases||[]).filter(x=>tagFilterMatch(x.tags));
   if(q && !catMatch) vis = vis.filter(x=>x.name.toLowerCase().includes(q));
   const count=vis.length;
   const acts = inVirtual() ? [] : [
@@ -1738,7 +1763,11 @@ function setAllCollapsed(v){
 }
 document.getElementById('expandAll').onclick=()=>setAllCollapsed(false);
 document.getElementById('collapseAll').onclick=()=>setAllCollapsed(true);
-document.getElementById('tagFilter').onchange=e=>{ state.tagFilter=e.target.value; render(); };
+(function(){
+  const btn=document.getElementById('tagFilterBtn'), menu=document.getElementById('tagFilterMenu');
+  btn.onclick=e=>{ e.stopPropagation(); menu.style.display = menu.style.display==='none' ? 'block' : 'none'; };
+  document.addEventListener('click',e=>{ if(!e.target.closest('.tagfilter-wrap')) menu.style.display='none'; });
+})();
 function jumpToday(){
   const g=document.getElementById('gantt'); if(!g) return;
   const tm=g.querySelector('.today-mark'); const tx=tm?(parseFloat(tm.style.left)||0):0;
