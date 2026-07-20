@@ -1335,9 +1335,9 @@ function phaseRow(cat,proj,units,tw){
     if(links){ const l=document.createElement('div'); l.innerHTML=links; col.appendChild(l.firstChild); }
     if(showTagChips){ const wrap=document.createElement('span'); wrap.innerHTML=tagsLineHTML(proj.tags); col.appendChild(wrap.firstChild); }
   }
-  // priority chip: pinned to the top-right of the row
+  // priority chip: top-right when there are extra lines (links/tags), centered when it's just the name
   const prio=priorityChipHTML(proj);
-  if(prio){ const span=document.createElement('span'); span.style.cssText='flex:none;align-self:flex-start;'; span.innerHTML=prio; left.insertBefore(span, left.querySelector('.acts')); }
+  if(prio){ const span=document.createElement('span'); span.style.cssText='flex:none;align-self:'+((links||showTagChips)?'flex-start':'center')+';'; span.innerHTML=prio; left.insertBefore(span, left.querySelector('.acts')); }
   if(!inVirtual()){
     makePhaseDraggable(left, row, cat.id, proj.id);  // drag label to move/reorder between categories
     wireDropTarget(row, cat.id, proj.id);
