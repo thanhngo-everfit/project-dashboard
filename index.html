@@ -105,7 +105,9 @@
   .tagchip{flex:none;font-size:10px;font-weight:700;color:#5b21b6;background:#ede9fe;border:1px solid #ddd6fe;border-radius:999px;padding:1px 7px;white-space:nowrap;}
   .namecol{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;align-items:flex-start;}
   .namecol .label{flex:0 0 auto;}
-  .namecol .tagchip{align-self:flex-start;}
+  .namecol .tag-line{align-self:flex-start;}
+  .tag-line{display:inline-flex;align-items:center;gap:5px;}
+  .tag-title{font-size:10px;font-weight:700;color:var(--muted);}
   .tagfilter{border:1px solid var(--border);background:#fff;border-radius:8px;padding:6px 8px;font-size:13px;font-family:inherit;font-weight:600;cursor:pointer;}
   .searchbox{border:1px solid var(--border);background:#fff;border-radius:8px;padding:7px 12px;font-size:13px;font-family:inherit;width:220px;margin-left:10px;}
   .searchbox:focus{outline:none;border-color:#4c6fff;box-shadow:0 0 0 2px rgba(76,111,255,.15);}
@@ -427,7 +429,7 @@ function tagColor(tag){
   if(tag==="Long's request") return {bg:'#fef3c7',fg:'#92400e',bd:'#fcd34d'};   // amber
   return {bg:'#e5e7eb',fg:'#374151',bd:'#d1d5db'};                              // other tags: shared gray
 }
-function tagChipHTML(tag){ const c=tagColor(tag); return `<span class="tagchip" style="background:${c.bg};color:${c.fg};border-color:${c.bd}">Tags: ${esc(tag)}</span>`; }
+function tagLineHTML(tag){ const c=tagColor(tag); return `<span class="tag-line"><span class="tag-title">Tags:</span><span class="tagchip" style="background:${c.bg};color:${c.fg};border-color:${c.bd}">${esc(tag)}</span></span>`; }
 const FEATURE_SIZES = ['Small','Medium','Big','Huge'];
 // Fixed virtual squads (read-only structure)
 const VIRTUAL_VIEWS = [
@@ -999,7 +1001,7 @@ function renderListByEnd(g){
         ${p.promo==='Yes'?`<span class="promochip">Promotion</span>`:''}
         ${p.size?`<span class="sizechip s-${p.size}">${esc(p.size)}</span>`:''}
         <span class="lv-dates">${fmtShort(p.start)} → ${fmtShort(p.end)}</span>
-        ${(p.tag && state.showTags!==false)?tagChipHTML(p.tag):''}`;
+        ${(p.tag && state.showTags!==false)?tagLineHTML(p.tag):''}`;
       row.onclick=()=>openPhaseModal(cat,p);
       grp.appendChild(row);
     });
@@ -1160,7 +1162,7 @@ function phaseRow(cat,proj,units,tw){
   if(proj.tag && state.showTags!==false && lab){
     const col=document.createElement('div'); col.className='namecol';
     left.insertBefore(col, lab); col.appendChild(lab);
-    const wrap=document.createElement('span'); wrap.innerHTML=tagChipHTML(proj.tag);
+    const wrap=document.createElement('span'); wrap.innerHTML=tagLineHTML(proj.tag);
     col.appendChild(wrap.firstChild);
   }
   const links=indicatorsHTML(proj);
