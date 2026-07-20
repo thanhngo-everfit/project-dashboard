@@ -77,7 +77,8 @@ export default async function handler(req, res) {
           const A = new Set(a), B = new Set(b);
           return a.length !== b.length || a.some(x => !B.has(x)) || b.some(x => !A.has(x));
         };
-        if (setChanged(tribeIds(oldSt), tribeIds(body.state)) || setChanged(squadIds(oldSt), squadIds(body.state))) {
+        const hiddenArr = st => Array.isArray(st && st.hidden) ? st.hidden : [];
+        if (setChanged(tribeIds(oldSt), tribeIds(body.state)) || setChanged(squadIds(oldSt), squadIds(body.state)) || setChanged(hiddenArr(oldSt), hiddenArr(body.state))) {
           res.status(403).json({ error: 'structure_change_forbidden' });
           return;
         }

@@ -41,6 +41,10 @@
        white-space:nowrap;position:relative;top:1px;max-width:240px;}
   .tab:hover{background:#f5f7fa;}
   .tab.active{background:var(--panel);color:var(--text);box-shadow:0 -2px 6px rgba(0,0,0,.04);}
+  .tab .hide-toggle{border:none;background:transparent;cursor:pointer;font-size:12px;line-height:1;padding:0 2px;border-radius:4px;opacity:.7;}
+  .tab .hide-toggle:hover{opacity:1;background:#e4e7ec;}
+  .tab.hidden-tab{opacity:.5;}
+  .tab.hidden-tab .tname{text-decoration:line-through;}
   .tab.tab-virtual{background:#f3f0ff;color:#5b21b6;font-weight:700;}
   .tab.tab-virtual.active{background:var(--panel);color:#5b21b6;}
   .tab.tab-virtual .vt-ico{font-size:12px;}
@@ -429,6 +433,9 @@ function isAdmin(){ return currentEmail === ADMIN_EMAIL; }
 // Tribe (top level) > Squad > Category > Project
 function activeTribe(){ return (state.tribes||[]).find(t=>t.id===state.activeTribe) || (state.tribes||[])[0]; }
 function curSquads(){ const t=activeTribe(); return t?(t.squads||[]):[]; }
+// admin can hide specific tabs (squad or virtual-view ids) for everyone (shared)
+function isHidden(id){ return Array.isArray(state.hidden) && state.hidden.includes(id); }
+function toggleHidden(id){ if(!Array.isArray(state.hidden)) state.hidden=[]; const i=state.hidden.indexOf(id); if(i>=0) state.hidden.splice(i,1); else state.hidden.push(id); render(); }
 
 /* ============================ State ============================ */
 const STORE_KEY = 'roadmapDashboardV2';
@@ -574,6 +581,7 @@ function migrate(s){
   if(typeof s.showTags!=='boolean') s.showTags=true;   // personal: show tag chip next to project name
   if(typeof s.search!=='string') s.search='';   // personal search query
   if(!s.activeTribe && Array.isArray(s.tribes) && s.tribes[0]) s.activeTribe=s.tribes[0].id;   // personal
+  if(!Array.isArray(s.hidden)) s.hidden=[];   // shared: hidden tab ids
   return s;
 }
 function isCollapsed(p){ return state.uiCollapsed[p.id] !== false; }   // default: collapsed
@@ -600,7 +608,7 @@ let dragTabId = null;          // squad id while dragging a tab to reorder
 // Only the roadmap DATA (squads) is shared. View mode, active tab, zoom and collapse
 // state live in `state` too but are NEVER sent to the backend and never overwritten by
 // a teammate's copy — they persist per-browser via localStorage only.
-function dataJSON(){ return JSON.stringify(state.tribes); }
+function dataJSON(){ return JSON.stringify({tribes:state.tribes, hidden:state.hidden||[]}); }
 function save(){
   localStorage.setItem(STORE_KEY, JSON.stringify(state));   // full local cache incl. personal view
   if(!idToken) return;
@@ -628,7 +636,7 @@ async function syncSave(){
   setSync('Saving…');
   try{
     const r = await apiFetch('/api/state', {
-      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({state:{tribes:state.tribes}})
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({state:{tribes:state.tribes, hidden:state.hidden||[]}})
     });
     if(r.status===401){ handleAuthExpired(); return; }
     if(r.ok){
@@ -658,7 +666,7 @@ async function syncLoad(){
       const j = await r.json();
       const rec = j.record;
       if(rec && rec.state && (rec.state.tribes || rec.state.squads)){
-        adoptRemoteData(migrate(rec.state).tribes, rec.updatedAt);
+        adoptRemoteData(migrate(rec.state), rec.updatedAt);
         setSync('Saved', 'ok');
       } else {
         // first ever run: seed the shared copy with whatever we have locally
@@ -671,8 +679,9 @@ async function syncLoad(){
   render();
 }
 // Replace only the shared data; keep this browser's personal view/tab/zoom/collapse.
-function adoptRemoteData(tribes, updatedAt){
-  state.tribes = tribes;
+function adoptRemoteData(data, updatedAt){
+  state.tribes = data.tribes;
+  state.hidden = Array.isArray(data.hidden) ? data.hidden : [];
   if(!state.tribes.find(t=>t.id===state.activeTribe) && state.tribes[0]) state.activeTribe=state.tribes[0].id;
   if(!activeVirtual()){
     const sqs=curSquads();
@@ -694,7 +703,7 @@ async function pollRemote(){
     const j = await r.json();
     const rec = j.record;
     if(rec && rec.state && (rec.state.tribes || rec.state.squads) && rec.updatedAt > baselineUpdatedAt){
-      adoptRemoteData(migrate(rec.state).tribes, rec.updatedAt);
+      adoptRemoteData(migrate(rec.state), rec.updatedAt);
       setSync('Updated by ' + (rec.updatedBy||'teammate'), 'ok');
     }
   }catch(e){ /* offline: keep working locally */ }
@@ -829,6 +838,11 @@ function headShade(i,n){
 /* ============================ Render ============================ */
 function render(){
   if(pendingViewSlug){ const id=idFromSlug(pendingViewSlug); if(id){ state.activeSquad=id; pendingViewSlug=null; } }
+  if(!isAdmin() && isHidden(state.activeSquad)){   // members can't stay on a hidden tab
+    const s=curSquads().find(x=>!isHidden(x.id));
+    const v=VIRTUAL_VIEWS.find(x=>!isHidden(x.id));
+    state.activeSquad = s?s.id : (v?v.id:state.activeSquad);
+  }
   renderTribes();
   renderTabs();
   document.getElementById('squadName').textContent=activeSquad().name;
@@ -893,14 +907,23 @@ function renderTribes(){
     bar.appendChild(add);
   }
 }
+function hideToggleBtn(id){
+  const b=document.createElement('button'); b.className='hide-toggle';
+  b.textContent = isHidden(id)?'🙈':'👁';
+  b.title = isHidden(id)?'Hidden from members — click to show':'Visible — click to hide from members';
+  b.onclick=e=>{ e.stopPropagation(); toggleHidden(id); };
+  return b;
+}
 function renderTabs(){
   const bar=document.getElementById('tabbar');
   bar.innerHTML='';
   curSquads().forEach(s=>{
+    if(isHidden(s.id) && !isAdmin()) return;   // hidden from members
     const tab=document.createElement('div');
-    tab.className='tab'+(s.id===state.activeSquad?' active':'');
+    tab.className='tab'+(s.id===state.activeSquad?' active':'')+(isHidden(s.id)?' hidden-tab':'');
     tab.innerHTML=`<span class="tname" contenteditable="false">${esc(s.name)}</span>${isAdmin()?'<button class="x" title="Close">×</button>':''}`;
-    tab.onclick=e=>{ if(e.target.classList.contains('x'))return; state.activeSquad=s.id; render(); };
+    if(isAdmin()) tab.insertBefore(hideToggleBtn(s.id), tab.querySelector('.x'));
+    tab.onclick=e=>{ if(e.target.classList.contains('x')||e.target.classList.contains('hide-toggle'))return; state.activeSquad=s.id; render(); };
     const nameEl=tab.querySelector('.tname');
     tab.querySelector('.tname').ondblclick=()=>{
       nameEl.contentEditable='true'; nameEl.focus();
@@ -939,11 +962,13 @@ function renderTabs(){
   });
   // fixed virtual views (cross-squad, by tag) — cannot be removed/renamed/reordered
   VIRTUAL_VIEWS.forEach(v=>{
+    if(isHidden(v.id) && !isAdmin()) return;   // hidden from members
     const tab=document.createElement('div');
-    tab.className='tab tab-virtual'+(v.id===state.activeSquad?' active':'');
+    tab.className='tab tab-virtual'+(v.id===state.activeSquad?' active':'')+(isHidden(v.id)?' hidden-tab':'');
     tab.innerHTML='<span class="vt-ico">'+(v.icon||'🏷️')+'</span><span class="tname">'+esc(v.name)+'</span>';
     tab.title=v.allSquads ? (v.name+' — every project from all squads') : v.listByEnd ? (v.name+' — all projects across squads, grouped by end date') : (v.name+' — all "'+v.tag+'" projects across squads');
-    tab.onclick=()=>{ state.activeSquad=v.id; render(); };
+    if(isAdmin()) tab.appendChild(hideToggleBtn(v.id));
+    tab.onclick=e=>{ if(e.target.classList.contains('hide-toggle'))return; state.activeSquad=v.id; render(); };
     bar.appendChild(tab);
   });
   if(isAdmin()){
