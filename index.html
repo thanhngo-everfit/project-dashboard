@@ -433,9 +433,9 @@ function isAdmin(){ return currentEmail === ADMIN_EMAIL; }
 // Tribe (top level) > Squad > Category > Project
 function activeTribe(){ return (state.tribes||[]).find(t=>t.id===state.activeTribe) || (state.tribes||[])[0]; }
 function curSquads(){ const t=activeTribe(); return t?(t.squads||[]):[]; }
-// admin can hide specific tabs (squad or virtual-view ids) for everyone (shared)
-function isHidden(id){ return Array.isArray(state.hidden) && state.hidden.includes(id); }
-function toggleHidden(id){ if(!Array.isArray(state.hidden)) state.hidden=[]; const i=state.hidden.indexOf(id); if(i>=0) state.hidden.splice(i,1); else state.hidden.push(id); render(); }
+// admin can hide specific tabs (squad or virtual-view ids) for everyone — per tribe (shared)
+function isHidden(id){ const t=activeTribe(); return !!(t && Array.isArray(t.hidden) && t.hidden.includes(id)); }
+function toggleHidden(id){ const t=activeTribe(); if(!t)return; if(!Array.isArray(t.hidden))t.hidden=[]; const i=t.hidden.indexOf(id); if(i>=0)t.hidden.splice(i,1); else t.hidden.push(id); render(); }
 
 /* ============================ State ============================ */
 const STORE_KEY = 'roadmapDashboardV2';
@@ -545,7 +545,11 @@ function migrate(s){
     s.tribes = [{ id:'tribe_core', name:'Core Product', squads: Array.isArray(s.squads)?s.squads:[] }];
   }
   delete s.squads;
-  s.tribes.forEach(tr=>{ if(!Array.isArray(tr.squads)) tr.squads=[]; });
+  s.tribes.forEach(tr=>{
+    if(!Array.isArray(tr.squads)) tr.squads=[];
+    if(!Array.isArray(tr.hidden)) tr.hidden = Array.isArray(s.hidden) ? s.hidden.slice() : [];   // hidden is now per-tribe
+  });
+  delete s.hidden;   // legacy global hidden -> moved onto each tribe above
   s.tribes.forEach(tr=>tr.squads.forEach(sq=>(sq.projects||[]).forEach((cat,ci)=>{
     if(!cat.color) cat.color = (cat.phases && cat.phases[0] && cat.phases[0].color) || PALETTE[ci%PALETTE.length];  // color is now per-category
     (cat.phases||[]).forEach(proj=>{
@@ -581,7 +585,6 @@ function migrate(s){
   if(typeof s.showTags!=='boolean') s.showTags=true;   // personal: show tag chip next to project name
   if(typeof s.search!=='string') s.search='';   // personal search query
   if(!s.activeTribe && Array.isArray(s.tribes) && s.tribes[0]) s.activeTribe=s.tribes[0].id;   // personal
-  if(!Array.isArray(s.hidden)) s.hidden=[];   // shared: hidden tab ids
   return s;
 }
 function isCollapsed(p){ return state.uiCollapsed[p.id] !== false; }   // default: collapsed
@@ -608,7 +611,7 @@ let dragTabId = null;          // squad id while dragging a tab to reorder
 // Only the roadmap DATA (squads) is shared. View mode, active tab, zoom and collapse
 // state live in `state` too but are NEVER sent to the backend and never overwritten by
 // a teammate's copy — they persist per-browser via localStorage only.
-function dataJSON(){ return JSON.stringify({tribes:state.tribes, hidden:state.hidden||[]}); }
+function dataJSON(){ return JSON.stringify(state.tribes); }
 function save(){
   localStorage.setItem(STORE_KEY, JSON.stringify(state));   // full local cache incl. personal view
   if(!idToken) return;
@@ -636,7 +639,7 @@ async function syncSave(){
   setSync('Saving…');
   try{
     const r = await apiFetch('/api/state', {
-      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({state:{tribes:state.tribes, hidden:state.hidden||[]}})
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({state:{tribes:state.tribes}})
     });
     if(r.status===401){ handleAuthExpired(); return; }
     if(r.ok){
@@ -681,7 +684,6 @@ async function syncLoad(){
 // Replace only the shared data; keep this browser's personal view/tab/zoom/collapse.
 function adoptRemoteData(data, updatedAt){
   state.tribes = data.tribes;
-  state.hidden = Array.isArray(data.hidden) ? data.hidden : [];
   if(!state.tribes.find(t=>t.id===state.activeTribe) && state.tribes[0]) state.activeTribe=state.tribes[0].id;
   if(!activeVirtual()){
     const sqs=curSquads();

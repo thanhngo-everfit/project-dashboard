@@ -77,8 +77,14 @@ export default async function handler(req, res) {
           const A = new Set(a), B = new Set(b);
           return a.length !== b.length || a.some(x => !B.has(x)) || b.some(x => !A.has(x));
         };
-        const hiddenArr = st => Array.isArray(st && st.hidden) ? st.hidden : [];
-        if (setChanged(tribeIds(oldSt), tribeIds(body.state)) || setChanged(squadIds(oldSt), squadIds(body.state)) || setChanged(hiddenArr(oldSt), hiddenArr(body.state))) {
+        // hidden lists live per-tribe now; token = "<tribeId>::<hiddenId>".
+        // Returns null for legacy data (no per-tribe hidden) so the migration save isn't blocked.
+        const hiddenTokens = st => {
+          if (!st || !Array.isArray(st.tribes)) return null;
+          if (!st.tribes.some(t => Array.isArray(t.hidden))) return null;
+          return st.tribes.flatMap(t => (Array.isArray(t.hidden) ? t.hidden : []).map(h => t.id + '::' + h));
+        };
+        if (setChanged(tribeIds(oldSt), tribeIds(body.state)) || setChanged(squadIds(oldSt), squadIds(body.state)) || setChanged(hiddenTokens(oldSt), hiddenTokens(body.state))) {
           res.status(403).json({ error: 'structure_change_forbidden' });
           return;
         }
