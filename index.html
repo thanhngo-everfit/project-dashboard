@@ -1319,8 +1319,9 @@ function phaseRow(cat,proj,units,tw){
   if(!inVirtual()) acts.push({icon:'＋',title:'Add work',fn:()=>openTaskModal(proj)});   // no add-work in Jon/Long views
   acts.push({icon:'✎',title:'Edit project',fn:()=>openPhaseModal(cat,proj)});
   acts.push({icon:'🗑',title:'Delete',fn:()=>{if(confirm('Delete project "'+proj.name+'"?')){delHost.phases=delHost.phases.filter(x=>x!==proj);render();}}});
-  const {left,caret}=leftCell(1,isCollapsed(proj)?'closed':'open',null,proj.name,acts);
-  caret.onclick=()=>{toggleCollapsed(proj);render();};
+  const hasWork=(proj.tasks||[]).length>0;   // no dev work -> hide the collapse/expand caret
+  const {left,caret}=leftCell(1, hasWork?(isCollapsed(proj)?'closed':'open'):null, null,proj.name,acts);
+  if(caret) caret.onclick=()=>{toggleCollapsed(proj);render();};
   const q=(state.search||'').trim().toLowerCase();
   const lab=left.querySelector('.label');
   if(q && lab) lab.innerHTML=highlight(proj.name,q);
