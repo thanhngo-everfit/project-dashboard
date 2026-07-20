@@ -575,8 +575,11 @@ function addDays(d,n){return new Date(d.getFullYear(),d.getMonth(),d.getDate()+n
 function addMonths(d,n){return new Date(d.getFullYear(),d.getMonth()+n,1);}
 
 function load(){
-  try{const s=JSON.parse(localStorage.getItem(STORE_KEY)); if(s&&s.squads&&s.squads.length) return migrate(s);}catch(e){}
-  return migrate(seed());
+  let s=null;
+  try{const raw=JSON.parse(localStorage.getItem(STORE_KEY)); if(raw&&raw.squads&&raw.squads.length) s=migrate(raw);}catch(e){}
+  if(!s) s=migrate(seed());
+  s.viewBySquad={};   // Quarter/Month/Week is per-session only — reset to default on each page load (F5)
+  return s;
 }
 /* Model: squad.projects[] = Categories; category.phases[] = Projects (each = one bar with
  * name + start/end + color); project.tasks[] = dev work.
