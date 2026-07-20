@@ -244,6 +244,12 @@
   .sizechip.s-Big{background:#fed7aa;color:#9a3412;}
   .sizechip.s-Huge{background:#fecaca;color:#991b1b;}
   .promochip{flex:none;font-size:10px;font-weight:800;border-radius:999px;padding:2px 8px;white-space:nowrap;background:#fce7f3;color:#9d174d;}
+  .priochip{flex:none;font-size:10px;font-weight:800;border-radius:999px;padding:2px 8px;white-space:nowrap;display:inline-flex;align-items:center;gap:3px;}
+  .priochip::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;}
+  .priochip.p-Highest{background:#fee2e2;color:#b91c1c;}
+  .priochip.p-High{background:#ffedd5;color:#c2410c;}
+  .priochip.p-Medium{background:#fef9c3;color:#a16207;}
+  .priochip.p-Low{background:#e0f2fe;color:#0369a1;}
 
   /* ---------- Modal ---------- */
   .modal-bg{position:fixed;inset:0;background:rgba(16,24,40,.45);display:none;align-items:center;justify-content:center;z-index:100;}
@@ -481,6 +487,7 @@ function tagsLineHTML(tags){
   return `<span class="tag-line"><span class="tag-title">Tags:</span>${tags.map(tagChip).join('')}</span>`;
 }
 const FEATURE_SIZES = ['Small','Medium','Big','Huge'];
+const PRIORITIES = ['Highest','High','Medium','Low'];
 // Fixed virtual squads (read-only structure)
 const VIRTUAL_VIEWS = [
   {id:'view:all',  name:'All Squads', allSquads:true, icon:'🌐'},
@@ -602,6 +609,7 @@ function migrate(s){
       delete proj.tag;
       if(typeof proj.size!=='string') proj.size='';
       if(typeof proj.promo!=='string') proj.promo='';
+      if(typeof proj.priority!=='string') proj.priority='';
       if(typeof proj.jira!=='string') proj.jira='';
       if(!Array.isArray(proj.docs)) proj.docs=[];
       if(typeof proj.note!=='string') proj.note='';
@@ -1584,7 +1592,7 @@ function openProjectModal(p){
 // Project modal: name + start + optional end (a single bar on the timeline).
 function openPhaseModal(category,proj){
   const editing=!!proj;
-  const def=proj||{name:'',start:'',end:'',tags:[],size:'',promo:'',jira:'',docs:[],note:''};
+  const def=proj||{name:'',start:'',end:'',tags:[],size:'',promo:'',priority:'',jira:'',docs:[],note:''};
   const tags=(def.tags||[]).slice();
   modal.innerHTML=`<h3>${editing?'Edit':'New'} Project</h3>
     <div class="field"><label>Project Name</label><input id="m_pname" value="${editing?esc(proj.name):''}" placeholder="e.g. Mobile App"></div>
@@ -1597,6 +1605,10 @@ function openPhaseModal(category,proj){
       <div id="m_tags" class="tag-picker"></div>
       <div class="addrow" style="margin-top:6px;"><input id="m_tagnew" placeholder="Add custom tag…"><button type="button" class="btn" id="m_tagadd">Add</button></div>
     </div>
+    <div class="field"><label>Priority (optional)</label><select id="m_priority">
+      <option value="" ${!def.priority?'selected':''}>— None —</option>
+      ${PRIORITIES.map(p=>`<option value="${p}" ${def.priority===p?'selected':''}>${p}</option>`).join('')}
+    </select></div>
     <div class="field row2">
       <div><label>Feature size (optional)</label><select id="m_size">
         <option value="" ${!def.size?'selected':''}>— None —</option>
@@ -1653,11 +1665,12 @@ function openPhaseModal(category,proj){
     const tagList = tags.map(t=>t.trim()).filter(Boolean);
     const size = modal.querySelector('#m_size').value;
     const promo = modal.querySelector('#m_promo').value;
+    const priority = modal.querySelector('#m_priority').value;
     const jira = normalizeUrl(modal.querySelector('#m_jira').value.trim());
     const docList = docs.map(d=>normalizeUrl(d.trim())).filter(Boolean);
     const note = document.getElementById('m_note').value.trim();
-    if(editing){ proj.name=name; proj.start=start; proj.end=end; proj.tags=tagList; proj.size=size; proj.promo=promo; proj.jira=jira; proj.docs=docList; proj.note=note; }
-    else category.phases.push({id:uid(),name,start,end,tags:tagList,size,promo,jira,docs:docList,note,tasks:[]});
+    if(editing){ proj.name=name; proj.start=start; proj.end=end; proj.tags=tagList; proj.size=size; proj.promo=promo; proj.priority=priority; proj.jira=jira; proj.docs=docList; proj.note=note; }
+    else category.phases.push({id:uid(),name,start,end,tags:tagList,size,promo,priority,jira,docs:docList,note,tasks:[]});
     closeModal();render();
   };
 }
@@ -1668,8 +1681,11 @@ function linkIconsHTML(proj){
   (proj.docs||[]).forEach(d=>{ if(d) h+=`<a class="lnk" href="${esc(d)}" target="_blank" rel="noopener" title="${esc(d)}" onclick="event.stopPropagation()">📄</a>`; });
   return h;
 }
+function priorityChipHTML(proj){
+  return proj.priority?`<span class="priochip p-${proj.priority}" title="Priority: ${esc(proj.priority)}">${esc(proj.priority)}</span>`:'';
+}
 function indicatorsHTML(proj){
-  let h='';
+  let h=priorityChipHTML(proj);
   if(proj.note && proj.note.trim()) h+=`<span class="lnk" title="${esc(proj.note)}" style="cursor:default">📝</span>`;
   return h + linkIconsHTML(proj);
 }
