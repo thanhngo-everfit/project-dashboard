@@ -422,6 +422,12 @@ const LEFTPAD = 20;   // left gutter (px) before the first date column, room for
 const NOTE_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5h14M5 10h14M5 15h9"/></svg>';
 const PREDEFINED_TAGS = ["Jon's request","Long's request"];
 function shortTag(t){ return t.replace(/'s request$/i,''); }
+function tagColor(tag){
+  if(tag==="Jon's request")  return {bg:'#ede9fe',fg:'#5b21b6',bd:'#ddd6fe'};   // purple
+  if(tag==="Long's request") return {bg:'#fef3c7',fg:'#92400e',bd:'#fcd34d'};   // amber
+  return {bg:'#e5e7eb',fg:'#374151',bd:'#d1d5db'};                              // other tags: shared gray
+}
+function tagChipHTML(tag){ const c=tagColor(tag); return `<span class="tagchip" style="background:${c.bg};color:${c.fg};border-color:${c.bd}">Tags: ${esc(tag)}</span>`; }
 const FEATURE_SIZES = ['Small','Medium','Big','Huge'];
 // Fixed virtual squads (read-only structure)
 const VIRTUAL_VIEWS = [
@@ -993,7 +999,7 @@ function renderListByEnd(g){
         ${p.promo==='Yes'?`<span class="promochip">Promotion</span>`:''}
         ${p.size?`<span class="sizechip s-${p.size}">${esc(p.size)}</span>`:''}
         <span class="lv-dates">${fmtShort(p.start)} → ${fmtShort(p.end)}</span>
-        ${(p.tag && state.showTags!==false)?`<span class="tagchip">${esc(shortTag(p.tag))}</span>`:''}`;
+        ${(p.tag && state.showTags!==false)?tagChipHTML(p.tag):''}`;
       row.onclick=()=>openPhaseModal(cat,p);
       grp.appendChild(row);
     });
@@ -1154,8 +1160,8 @@ function phaseRow(cat,proj,units,tw){
   if(proj.tag && state.showTags!==false && lab){
     const col=document.createElement('div'); col.className='namecol';
     left.insertBefore(col, lab); col.appendChild(lab);
-    const chip=document.createElement('span'); chip.className='tagchip'; chip.textContent=shortTag(proj.tag); chip.title='Tag: '+proj.tag;
-    col.appendChild(chip);
+    const wrap=document.createElement('span'); wrap.innerHTML=tagChipHTML(proj.tag);
+    col.appendChild(wrap.firstChild);
   }
   const links=indicatorsHTML(proj);
   if(links){ const span=document.createElement('span'); span.style.cssText='display:flex;gap:3px;flex:none;'; span.innerHTML=links; left.insertBefore(span, left.querySelector('.acts')); }
