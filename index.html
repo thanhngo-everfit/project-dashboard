@@ -7,7 +7,7 @@
 <style>
   :root{
     --bg:#ffffff; --panel:#ffffff; --border:#e8eaef; --text:#101828;
-    --muted:#8a93a3; --left-w:328px; --row-h:54px; --head-h:48px;
+    --muted:#8a93a3; --left-w:328px; --row-h:60px; --head-h:48px;
     --tab-h:40px;
   }
   *{box-sizing:border-box;}
@@ -174,7 +174,7 @@
   .m-week{position:absolute;top:50px;height:24px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#98a2b3;border-left:1px solid #eef0f3;}
 
   /* bars */
-  .bar{position:absolute;top:6px;height:calc(var(--row-h) - 12px);border-radius:9px;cursor:grab;
+  .bar{position:absolute;top:calc(50% - 16px);height:32px;border-radius:9px;cursor:grab;
        display:flex;align-items:center;justify-content:flex-start;gap:6px;padding:0 10px;font-size:10.5px;font-weight:600;overflow:hidden;
        user-select:none;transition:transform .12s ease, box-shadow .12s ease, filter .12s ease;transform-origin:center;}
   /* hover pop — makes the focused project stand out on a shared screen */
