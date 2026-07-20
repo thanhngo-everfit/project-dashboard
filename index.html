@@ -246,8 +246,7 @@
   .sizechip.s-Big{background:#fed7aa;color:#9a3412;}
   .sizechip.s-Huge{background:#fecaca;color:#991b1b;}
   .promochip{flex:none;font-size:10px;font-weight:800;border-radius:999px;padding:2px 8px;white-space:nowrap;background:#fce7f3;color:#9d174d;}
-  .priochip{flex:none;font-size:10px;font-weight:800;border-radius:999px;padding:2px 8px;white-space:nowrap;display:inline-flex;align-items:center;gap:3px;}
-  .priochip::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;}
+  .priochip{flex:none;font-size:10px;font-weight:800;border-radius:999px;padding:2px 8px;white-space:nowrap;display:inline-flex;align-items:center;}
   .priochip.p-Highest{background:#fee2e2;color:#b91c1c;}
   .priochip.p-High{background:#ffedd5;color:#c2410c;}
   .priochip.p-Medium{background:#fef9c3;color:#a16207;}
@@ -1162,6 +1161,7 @@ function renderListByEnd(g){
         <span class="lv-dot" style="background:${cat.color||'#cdb4f6'}"></span>
         <span class="lv-name">${esc(p.name)}</span>
         <span class="lv-meta">${esc(cat.name)} · ${esc(squad.name)}</span>
+        ${priorityChipHTML(p)}
         ${indicatorsHTML(p)}
         ${p.promo==='Yes'?`<span class="promochip">Promotion</span>`:''}
         ${p.size?`<span class="sizechip s-${p.size}">${esc(p.size)}</span>`:''}
@@ -1333,6 +1333,9 @@ function phaseRow(cat,proj,units,tw){
     if(showTagChips){ const wrap=document.createElement('span'); wrap.innerHTML=tagsLineHTML(proj.tags); sub.appendChild(wrap.firstChild); }
     col.appendChild(sub);
   }
+  // priority chip stays inline, next to the project name
+  const prio=priorityChipHTML(proj);
+  if(prio){ const span=document.createElement('span'); span.style.cssText='flex:none;'; span.innerHTML=prio; left.insertBefore(span, left.querySelector('.acts')); }
   if(!inVirtual()){
     makePhaseDraggable(left, row, cat.id, proj.id);  // drag label to move/reorder between categories
     wireDropTarget(row, cat.id, proj.id);
@@ -1700,7 +1703,7 @@ function priorityChipHTML(proj){
   return proj.priority?`<span class="priochip p-${proj.priority}" title="Priority: ${esc(proj.priority)}">${esc(proj.priority)}</span>`:'';
 }
 function indicatorsHTML(proj){
-  let h=priorityChipHTML(proj);
+  let h='';
   if(proj.note && proj.note.trim()) h+=`<span class="lnk" title="${esc(proj.note)}" style="cursor:default">📝</span>`;
   return h + linkIconsHTML(proj);
 }
