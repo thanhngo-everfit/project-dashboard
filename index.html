@@ -151,11 +151,11 @@
             display:flex;align-items:center;gap:5px;padding-left:14px;font-size:15px;font-weight:800;color:#fff;letter-spacing:.3px;}
   .headcell small{font-weight:600;opacity:.7;font-size:12px;}
   /* week view two-tier header */
-  .head.week{height:98px;}
+  .head.week{height:80px;}
   .monthband{position:absolute;top:22px;height:26px;display:flex;align-items:center;padding-left:10px;font-size:13px;font-weight:800;color:#fff;letter-spacing:.3px;border-right:1px solid rgba(255,255,255,.15);}
   .daycell{position:absolute;top:48px;height:32px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;border-left:1px solid #eef0f3;font-size:11px;color:#475467;}
   /* quarter view: year band + quarter cells */
-  .head.quarter{height:78px;}
+  .head.quarter{height:60px;}
   .q-cell{position:absolute;top:22px;height:38px;display:flex;align-items:center;gap:5px;padding-left:14px;font-size:15px;font-weight:800;color:#fff;letter-spacing:.3px;}
   .daycell .dnum{font-weight:700;line-height:1.1;}
   .daycell .ddow{font-size:9px;color:#98a2b3;line-height:1.1;}
@@ -163,7 +163,7 @@
   .daycell.istoday{background:#fee4e2;}
   .daycell.istoday .dnum{color:#d92d20;}
   /* month view three-tier header */
-  .head.month{height:92px;}
+  .head.month{height:74px;}
   .m-year{position:absolute;top:0;height:22px;display:flex;align-items:center;padding-left:12px;font-size:12px;font-weight:800;color:#344054;background:#f0f1f4;border-right:1px solid #fff;letter-spacing:.3px;}
   .m-month{position:absolute;top:22px;height:28px;display:flex;align-items:center;padding-left:12px;font-size:14px;font-weight:800;color:#fff;letter-spacing:.3px;border-right:1px solid rgba(255,255,255,.15);}
   .m-week{position:absolute;top:50px;height:24px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#98a2b3;border-left:1px solid #eef0f3;}
@@ -191,8 +191,8 @@
   .today{position:absolute;top:0;bottom:0;width:0;border-left:2px dashed #f04438;z-index:7;pointer-events:none;transform:translateX(-1px);}
   /* Today marker (dot + label) pinned at the top of the timeline */
   .today-mark{position:absolute;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:2px;z-index:11;pointer-events:none;}
-  .today-mark .dot{width:9px;height:9px;border-radius:50%;background:#f04438;box-shadow:0 0 0 2px #fff;}
-  .today-mark .lbl{font-size:11px;font-weight:800;color:#f04438;white-space:nowrap;background:#fff;padding:1px 5px;border-radius:5px;box-shadow:0 1px 3px rgba(16,24,40,.15);}
+  .today-mark .dot{width:9px;height:9px;border-radius:50%;background:#f04438;}
+  .today-mark .lbl{font-size:11px;font-weight:800;color:#fff;white-space:nowrap;background:#f04438;padding:1px 7px;border-radius:6px;}
 
   .empty{padding:40px;text-align:center;color:var(--muted);}
   /* Marketing list view */
