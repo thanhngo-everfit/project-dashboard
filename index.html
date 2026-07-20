@@ -1114,7 +1114,13 @@ function renderGantt(){
   });
   g.appendChild(grid);
   updateTodayMarkVis();
+  // On first load / refresh, center the timeline on today once.
+  if(!_initialJumpDone && g.querySelector('.today-mark')){
+    _initialJumpDone=true;
+    requestAnimationFrame(()=>jumpToday(true));
+  }
 }
+let _initialJumpDone=false;
 // Hide the "Today" marker when it scrolls behind the sticky left panel (it lives in the header,
 // which stacks above the left column, so it can't be covered by z-index alone).
 function updateTodayMarkVis(){
@@ -1786,14 +1792,14 @@ document.getElementById('collapseAll').onclick=()=>setAllCollapsed(true);
   btn.onclick=e=>{ e.stopPropagation(); menu.style.display = menu.style.display==='none' ? 'block' : 'none'; };
   document.addEventListener('click',e=>{ if(!e.target.closest('.tagfilter-wrap')) menu.style.display='none'; });
 })();
-function jumpToday(){
+function jumpToday(instant){
   const g=document.getElementById('gantt'); if(!g) return;
-  const tm=g.querySelector('.today-mark'); const tx=tm?(parseFloat(tm.style.left)||0):0;
+  const tm=g.querySelector('.today-mark'); if(!tm) return; const tx=parseFloat(tm.style.left)||0;
   const leftW=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--left-w'))||328;
   const target=tx-(g.clientWidth-leftW)/2;   // center today in the visible track
-  g.scrollTo({left:Math.max(0,target), behavior:'smooth'});
+  g.scrollTo({left:Math.max(0,target), behavior:instant?'auto':'smooth'});
 }
-document.getElementById('jumpToday').onclick=jumpToday;
+document.getElementById('jumpToday').onclick=()=>jumpToday();
 (function(){ const sb=document.getElementById('searchBox'); sb.value=state.search||''; sb.oninput=e=>{ state.search=e.target.value; render(); }; })();
 (function(){
   const btn=document.getElementById('settingsBtn'), menu=document.getElementById('settingsMenu'), tog=document.getElementById('showTags');
