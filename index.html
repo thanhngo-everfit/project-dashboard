@@ -118,6 +118,8 @@
   .namecol{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;align-items:flex-start;}
   .namecol .label{flex:0 0 auto;}
   .namecol .tag-line{align-self:flex-start;}
+  .namesub{display:flex;align-items:center;gap:5px;flex-wrap:wrap;}
+  .namesub .lnk{font-size:12px;}
   .tag-line{display:inline-flex;align-items:center;gap:5px;flex-wrap:wrap;}
   .tag-title{font-size:10px;font-weight:700;color:var(--muted);}
   .tag-picker{display:flex;flex-wrap:wrap;gap:6px;}
@@ -1320,15 +1322,17 @@ function phaseRow(cat,proj,units,tw){
   const q=(state.search||'').trim().toLowerCase();
   const lab=left.querySelector('.label');
   if(q && lab) lab.innerHTML=highlight(proj.name,q);
-  // stack the tag chips below the project name
-  if(proj.tags && proj.tags.length && showTagsOn() && lab){
+  // stack the indicators (priority / note / links) and tag chips below the project name
+  const links=indicatorsHTML(proj);
+  const showTagChips = proj.tags && proj.tags.length && showTagsOn();
+  if((links || showTagChips) && lab){
     const col=document.createElement('div'); col.className='namecol';
     left.insertBefore(col, lab); col.appendChild(lab);
-    const wrap=document.createElement('span'); wrap.innerHTML=tagsLineHTML(proj.tags);
-    col.appendChild(wrap.firstChild);
+    const sub=document.createElement('div'); sub.className='namesub';
+    if(links) sub.innerHTML=links;
+    if(showTagChips){ const wrap=document.createElement('span'); wrap.innerHTML=tagsLineHTML(proj.tags); sub.appendChild(wrap.firstChild); }
+    col.appendChild(sub);
   }
-  const links=indicatorsHTML(proj);
-  if(links){ const span=document.createElement('span'); span.style.cssText='display:flex;gap:3px;flex:none;'; span.innerHTML=links; left.insertBefore(span, left.querySelector('.acts')); }
   if(!inVirtual()){
     makePhaseDraggable(left, row, cat.id, proj.id);  // drag label to move/reorder between categories
     wireDropTarget(row, cat.id, proj.id);
