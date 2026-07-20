@@ -118,8 +118,13 @@
   .namecol{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;align-items:flex-start;}
   .namecol .label{flex:0 0 auto;}
   .namecol .tag-line{align-self:flex-start;}
-  .tag-line{display:inline-flex;align-items:center;gap:5px;}
+  .tag-line{display:inline-flex;align-items:center;gap:5px;flex-wrap:wrap;}
   .tag-title{font-size:10px;font-weight:700;color:var(--muted);}
+  .tag-picker{display:flex;flex-wrap:wrap;gap:6px;}
+  .tagpick{font-size:12px;font-weight:600;border-radius:999px;padding:4px 10px;cursor:pointer;border:1px solid var(--border);white-space:nowrap;}
+  .tagpick.add{background:#fff;color:var(--muted);border-style:dashed;}
+  .tagpick.add:hover{color:var(--text);border-color:#98a2b3;}
+  .tagpick.sel b{font-weight:800;opacity:.7;}
   .tagfilter{border:1px solid var(--border);background:#fff;border-radius:8px;padding:6px 8px;font-size:13px;font-family:inherit;font-weight:600;cursor:pointer;}
   .searchbox{border:1px solid var(--border);background:#fff;border-radius:8px;padding:7px 12px;font-size:13px;font-family:inherit;width:220px;margin-left:10px;}
   .searchbox:focus{outline:none;border-color:#4c6fff;box-shadow:0 0 0 2px rgba(76,111,255,.15);}
@@ -441,14 +446,20 @@ function toggleHidden(id){ const t=activeTribe(); if(!t)return; if(!Array.isArra
 const STORE_KEY = 'roadmapDashboardV2';
 const LEFTPAD = 20;   // left gutter (px) before the first date column, room for the connector thread
 const NOTE_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5h14M5 10h14M5 15h9"/></svg>';
-const PREDEFINED_TAGS = ["Jon's request","Long's request"];
+const PREDEFINED_TAGS = ["Jon's request","Long's request","Coach","Client"];
 function shortTag(t){ return t.replace(/'s request$/i,''); }
 function tagColor(tag){
   if(tag==="Jon's request")  return {bg:'#ede9fe',fg:'#5b21b6',bd:'#ddd6fe'};   // purple
   if(tag==="Long's request") return {bg:'#fef3c7',fg:'#92400e',bd:'#fcd34d'};   // amber
+  if(tag==="Coach")          return {bg:'#d1fae5',fg:'#065f46',bd:'#a7f3d0'};   // green
+  if(tag==="Client")         return {bg:'#dbeafe',fg:'#1e40af',bd:'#bfdbfe'};   // blue
   return {bg:'#e5e7eb',fg:'#374151',bd:'#d1d5db'};                              // other tags: shared gray
 }
-function tagLineHTML(tag){ const c=tagColor(tag); return `<span class="tag-line"><span class="tag-title">Tags:</span><span class="tagchip" style="background:${c.bg};color:${c.fg};border-color:${c.bd}">${esc(tag)}</span></span>`; }
+function tagChip(tag){ const c=tagColor(tag); return `<span class="tagchip" style="background:${c.bg};color:${c.fg};border-color:${c.bd}">${esc(tag)}</span>`; }
+function tagsLineHTML(tags){
+  if(!tags || !tags.length) return '';
+  return `<span class="tag-line"><span class="tag-title">Tags:</span>${tags.map(tagChip).join('')}</span>`;
+}
 const FEATURE_SIZES = ['Small','Medium','Big','Huge'];
 // Fixed virtual squads (read-only structure)
 const VIRTUAL_VIEWS = [
@@ -491,7 +502,7 @@ function buildVirtualSquad(v){
   // tag-based: aggregate matching projects across the tribe, grouped by their category
   const cats=[];
   curSquads().forEach(sq=>(sq.projects||[]).forEach(cat=>{
-    const projs=(cat.phases||[]).filter(p=>p.tag===v.tag);
+    const projs=(cat.phases||[]).filter(p=>(p.tags||[]).includes(v.tag));
     if(projs.length) cats.push({id:'v_'+sq.id+'_'+cat.id, name:cat.name, color:cat.color, phases:projs, _virtual:true, _srcCat:cat});
   }));
   return {id:v.id, name:v.name, projects:cats, _virtual:true};
@@ -563,7 +574,8 @@ function migrate(s){
       }
       if(typeof proj.start!=='string') proj.start='';
       if(typeof proj.end!=='string') proj.end='';
-      if(typeof proj.tag!=='string') proj.tag='';
+      if(!Array.isArray(proj.tags)) proj.tags = (typeof proj.tag==='string' && proj.tag) ? [proj.tag] : [];
+      delete proj.tag;
       if(typeof proj.size!=='string') proj.size='';
       if(typeof proj.promo!=='string') proj.promo='';
       if(typeof proj.jira!=='string') proj.jira='';
@@ -858,8 +870,8 @@ function renderTagFilter(){
   const sel=document.getElementById('tagFilter'); if(!sel)return;
   const used=new Set();
   const av=activeVirtual();
-  if(av&&av.listByEnd){ allProjects().forEach(x=>{ if(x.p.tag) used.add(x.p.tag); }); }
-  else activeSquad().projects.forEach(cat=>cat.phases.forEach(pr=>{ if(pr.tag) used.add(pr.tag); }));
+  if(av&&av.listByEnd){ allProjects().forEach(x=>(x.p.tags||[]).forEach(t=>used.add(t))); }
+  else activeSquad().projects.forEach(cat=>cat.phases.forEach(pr=>(pr.tags||[]).forEach(t=>used.add(t))));
   const tags=[...new Set([...PREDEFINED_TAGS.filter(t=>used.has(t)), ...[...used].filter(t=>!PREDEFINED_TAGS.includes(t))])];
   if(state.tagFilter && !used.has(state.tagFilter)) state.tagFilter='';   // filtered tag no longer exists
   sel.innerHTML='<option value="">All tags</option>'+tags.map(t=>`<option value="${esc(t)}" ${t===state.tagFilter?'selected':''}>${esc(t)}</option>`).join('');
@@ -999,7 +1011,7 @@ function renderGantt(){
   let projCount=0;
   squad.projects.forEach(p=>{
     const catMatch=q0 && p.name.toLowerCase().includes(q0);
-    let ps = tf0 ? (p.phases||[]).filter(x=>x.tag===tf0) : (p.phases||[]);
+    let ps = tf0 ? (p.phases||[]).filter(x=>(x.tags||[]).includes(tf0)) : (p.phases||[]);
     if(q0 && !catMatch) ps=ps.filter(x=>x.name.toLowerCase().includes(q0));
     projCount+=ps.length;
   });
@@ -1036,7 +1048,7 @@ function renderGantt(){
   const q=(state.search||'').trim().toLowerCase();
   squad.projects.forEach(p=>{
     const catMatch = q && p.name.toLowerCase().includes(q);
-    let projs = tf ? p.phases.filter(x=>x.tag===tf) : p.phases;
+    let projs = tf ? p.phases.filter(x=>(x.tags||[]).includes(tf)) : p.phases;
     if(q && !catMatch) projs = projs.filter(x=>x.name.toLowerCase().includes(q));
     if((tf||q) && projs.length===0) return;   // hide categories with no matching projects
     grid.appendChild(projectRow(p,units,tw));
@@ -1057,7 +1069,7 @@ function renderGantt(){
 function renderListByEnd(g){
   const q=(state.search||'').trim().toLowerCase(), tf=state.tagFilter||'';
   let items=allProjects();
-  if(tf) items=items.filter(x=>x.p.tag===tf);
+  if(tf) items=items.filter(x=>(x.p.tags||[]).includes(tf));
   if(q) items=items.filter(x=> x.p.name.toLowerCase().includes(q) || (x.cat.name||'').toLowerCase().includes(q) || (x.squad.name||'').toLowerCase().includes(q));
   // group by end date
   const map=new Map();
@@ -1081,7 +1093,7 @@ function renderListByEnd(g){
         ${p.promo==='Yes'?`<span class="promochip">Promotion</span>`:''}
         ${p.size?`<span class="sizechip s-${p.size}">${esc(p.size)}</span>`:''}
         <span class="lv-dates">${fmtShort(p.start)} → ${fmtShort(p.end)}</span>
-        ${(p.tag && state.showTags!==false)?tagLineHTML(p.tag):''}`;
+        ${(p.tags && p.tags.length && state.showTags!==false)?tagsLineHTML(p.tags):''}`;
       row.onclick=()=>openPhaseModal(cat,p);
       grp.appendChild(row);
     });
@@ -1196,7 +1208,7 @@ function projectRow(p,units,tw){
   const tf=state.tagFilter||'';
   const q=(state.search||'').trim().toLowerCase();
   const catMatch=q && p.name.toLowerCase().includes(q);
-  let vis = tf ? (p.phases||[]).filter(x=>x.tag===tf) : (p.phases||[]);
+  let vis = tf ? (p.phases||[]).filter(x=>(x.tags||[]).includes(tf)) : (p.phases||[]);
   if(q && !catMatch) vis = vis.filter(x=>x.name.toLowerCase().includes(q));
   const count=vis.length;
   const acts = inVirtual() ? [] : [
@@ -1238,11 +1250,11 @@ function phaseRow(cat,proj,units,tw){
   const q=(state.search||'').trim().toLowerCase();
   const lab=left.querySelector('.label');
   if(q && lab) lab.innerHTML=highlight(proj.name,q);
-  // stack the tag chip below the project name
-  if(proj.tag && state.showTags!==false && lab){
+  // stack the tag chips below the project name
+  if(proj.tags && proj.tags.length && state.showTags!==false && lab){
     const col=document.createElement('div'); col.className='namecol';
     left.insertBefore(col, lab); col.appendChild(lab);
-    const wrap=document.createElement('span'); wrap.innerHTML=tagLineHTML(proj.tag);
+    const wrap=document.createElement('span'); wrap.innerHTML=tagsLineHTML(proj.tags);
     col.appendChild(wrap.firstChild);
   }
   const links=indicatorsHTML(proj);
@@ -1520,10 +1532,8 @@ function openProjectModal(p){
 // Project modal: name + start + optional end (a single bar on the timeline).
 function openPhaseModal(category,proj){
   const editing=!!proj;
-  const def=proj||{name:'',start:'',end:'',tag:'',size:'',promo:'',jira:'',docs:[],note:''};
-  const curTag=def.tag||'';
-  const isPre=PREDEFINED_TAGS.includes(curTag);
-  const tagSelVal = isPre?curTag : (curTag?'__custom':'');
+  const def=proj||{name:'',start:'',end:'',tags:[],size:'',promo:'',jira:'',docs:[],note:''};
+  const tags=(def.tags||[]).slice();
   modal.innerHTML=`<h3>${editing?'Edit':'New'} Project</h3>
     <div class="field"><label>Project Name</label><input id="m_pname" value="${editing?esc(proj.name):''}" placeholder="e.g. Mobile App"></div>
     <div class="field row2">
@@ -1531,13 +1541,9 @@ function openPhaseModal(category,proj){
       <div><label>End (optional)</label>${dateField('m_end',def.end)}</div>
     </div>
     <div class="field" style="margin-top:-6px;"><span style="font-size:11px;color:var(--muted);">Leave a date blank to extend to the edge of the current view.</span></div>
-    <div class="field row2">
-      <div><label>Tag (optional)</label><select id="m_tag">
-        <option value="" ${tagSelVal===''?'selected':''}>— None —</option>
-        ${PREDEFINED_TAGS.map(t=>`<option value="${esc(t)}" ${tagSelVal===t?'selected':''}>${esc(t)}</option>`).join('')}
-        <option value="__custom" ${tagSelVal==='__custom'?'selected':''}>Custom…</option>
-      </select></div>
-      <div id="m_tagcustomcol" style="display:${tagSelVal==='__custom'?'block':'none'}"><label>Custom tag</label><input id="m_tagcustom" value="${isPre?'':esc(curTag)}" placeholder="Tag name"></div>
+    <div class="field"><label>Tags (optional — select multiple)</label>
+      <div id="m_tags" class="tag-picker"></div>
+      <div class="addrow" style="margin-top:6px;"><input id="m_tagnew" placeholder="Add custom tag…"><button type="button" class="btn" id="m_tagadd">Add</button></div>
     </div>
     <div class="field row2">
       <div><label>Feature size (optional)</label><select id="m_size">
@@ -1557,8 +1563,18 @@ function openPhaseModal(category,proj){
     </div>
     <div class="modal-actions"><button class="btn" id="m_cancel">Cancel</button><button class="btn primary" id="m_save">Save</button></div>`;
   wireDateClears();
-  const tagSel=modal.querySelector('#m_tag'), tagCol=modal.querySelector('#m_tagcustomcol');
-  tagSel.onchange=()=>{ tagCol.style.display=tagSel.value==='__custom'?'block':'none'; };
+  // multi-select tags
+  const tagWrap=modal.querySelector('#m_tags');
+  function renderTagPicker(){
+    tagWrap.innerHTML='';
+    tags.forEach((t,i)=>{ const c=tagColor(t); const chip=document.createElement('span'); chip.className='tagpick sel'; chip.style.cssText=`background:${c.bg};color:${c.fg};border-color:${c.bd}`; chip.innerHTML=esc(t)+' <b>×</b>'; chip.onclick=()=>{tags.splice(i,1);renderTagPicker();}; tagWrap.appendChild(chip); });
+    PREDEFINED_TAGS.filter(p=>!tags.includes(p)).forEach(p=>{ const chip=document.createElement('span'); chip.className='tagpick add'; chip.textContent='+ '+p; chip.onclick=()=>{tags.push(p);renderTagPicker();}; tagWrap.appendChild(chip); });
+  }
+  renderTagPicker();
+  const tagNew=modal.querySelector('#m_tagnew');
+  function addCustomTag(){ const v=tagNew.value.trim(); if(v && !tags.includes(v)) tags.push(v); tagNew.value=''; renderTagPicker(); tagNew.focus(); }
+  modal.querySelector('#m_tagadd').onclick=addCustomTag;
+  tagNew.onkeydown=e=>{ if(e.key==='Enter'){e.preventDefault();addCustomTag();} };
   // documentation multi-link list
   const docs=(def.docs||[]).slice();
   const docWrap=modal.querySelector('#m_docs');
@@ -1581,14 +1597,14 @@ function openPhaseModal(category,proj){
     const name=modal.querySelector('#m_pname').value.trim()||'New Project';
     const start=modal.querySelector('#m_start').value, end=modal.querySelector('#m_end').value;
     if(start&&end&&end<start){alert('End date must be on or after start date.');return;}
-    const tag = tagSel.value==='__custom' ? modal.querySelector('#m_tagcustom').value.trim() : tagSel.value;
+    const tagList = tags.map(t=>t.trim()).filter(Boolean);
     const size = modal.querySelector('#m_size').value;
     const promo = modal.querySelector('#m_promo').value;
     const jira = normalizeUrl(modal.querySelector('#m_jira').value.trim());
     const docList = docs.map(d=>normalizeUrl(d.trim())).filter(Boolean);
     const note = document.getElementById('m_note').value.trim();
-    if(editing){ proj.name=name; proj.start=start; proj.end=end; proj.tag=tag; proj.size=size; proj.promo=promo; proj.jira=jira; proj.docs=docList; proj.note=note; }
-    else category.phases.push({id:uid(),name,start,end,tag,size,promo,jira,docs:docList,note,tasks:[]});
+    if(editing){ proj.name=name; proj.start=start; proj.end=end; proj.tags=tagList; proj.size=size; proj.promo=promo; proj.jira=jira; proj.docs=docList; proj.note=note; }
+    else category.phases.push({id:uid(),name,start,end,tags:tagList,size,promo,jira,docs:docList,note,tasks:[]});
     closeModal();render();
   };
 }
