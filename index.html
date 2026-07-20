@@ -118,8 +118,8 @@
   .namecol{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;align-items:flex-start;}
   .namecol .label{flex:0 0 auto;}
   .namecol .tag-line{align-self:flex-start;}
-  .namesub{display:flex;align-items:center;gap:5px;flex-wrap:wrap;}
-  .namesub .lnk{font-size:12px;}
+  .links-line{display:flex;align-items:center;gap:5px;flex-wrap:wrap;}
+  .ll-title{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
   .tag-line{display:inline-flex;align-items:center;gap:5px;flex-wrap:wrap;}
   .tag-title{font-size:10px;font-weight:700;color:var(--muted);}
   .tag-picker{display:flex;flex-wrap:wrap;gap:6px;}
@@ -296,7 +296,6 @@
   .doc-row .doc-del:hover{background:#fee4e2;color:#d92d20;}
   .lnk{flex:none;display:inline-flex;align-items:center;text-decoration:none;font-size:13px;opacity:.8;}
   .lnk:hover{opacity:1;}
-  .notedot{flex:none;width:8px;height:8px;border-radius:50%;background:#f59e0b;box-shadow:0 0 0 2px #fef3c7;cursor:default;display:inline-block;}
   .swatches{display:flex;gap:8px;flex-wrap:wrap;}
   .swatch{width:28px;height:28px;border-radius:7px;cursor:pointer;border:2px solid transparent;}
   .swatch.sel{border-color:#1d2433;box-shadow:0 0 0 2px #fff inset;}
@@ -1324,16 +1323,14 @@ function phaseRow(cat,proj,units,tw){
   const q=(state.search||'').trim().toLowerCase();
   const lab=left.querySelector('.label');
   if(q && lab) lab.innerHTML=highlight(proj.name,q);
-  // stack the indicators (priority / note / links) and tag chips below the project name
-  const links=indicatorsHTML(proj);
+  // below the project name: a "Links:" line (if any) and the tag chips on their own line
+  const links=linksLineHTML(proj);
   const showTagChips = proj.tags && proj.tags.length && showTagsOn();
   if((links || showTagChips) && lab){
     const col=document.createElement('div'); col.className='namecol';
     left.insertBefore(col, lab); col.appendChild(lab);
-    const sub=document.createElement('div'); sub.className='namesub';
-    if(links) sub.innerHTML=links;
-    if(showTagChips){ const wrap=document.createElement('span'); wrap.innerHTML=tagsLineHTML(proj.tags); sub.appendChild(wrap.firstChild); }
-    col.appendChild(sub);
+    if(links){ const l=document.createElement('div'); l.innerHTML=links; col.appendChild(l.firstChild); }
+    if(showTagChips){ const wrap=document.createElement('span'); wrap.innerHTML=tagsLineHTML(proj.tags); col.appendChild(wrap.firstChild); }
   }
   // priority chip stays inline, next to the project name
   const prio=priorityChipHTML(proj);
@@ -1705,9 +1702,12 @@ function priorityChipHTML(proj){
   return proj.priority?`<span class="priochip p-${proj.priority}" title="Priority: ${esc(proj.priority)}">${esc(proj.priority)}</span>`:'';
 }
 function indicatorsHTML(proj){
-  let h='';
-  if(proj.note && proj.note.trim()) h+=`<span class="notedot" title="${esc(proj.note)}"></span>`;
-  return h + linkIconsHTML(proj);
+  return linkIconsHTML(proj);
+}
+// "Links:" label followed by any Jira / document icons (empty if none).
+function linksLineHTML(proj){
+  const icons=linkIconsHTML(proj);
+  return icons?`<span class="links-line"><span class="ll-title">Links:</span>${icons}</span>`:'';
 }
 
 function openTaskModal(phase,t){
