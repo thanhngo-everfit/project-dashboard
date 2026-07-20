@@ -376,6 +376,7 @@
       <span style="font-size:12px;color:var(--muted);font-weight:600;">Tag</span>
       <select id="tagFilter" class="tagfilter"></select>
     </div>
+    <button class="btn" id="jumpToday" title="Scroll the timeline to today"><span style="color:#f04438;">●</span> Jump to Today</button>
     <div class="spacer"></div>
     <div class="settings-wrap">
       <button class="settings-btn" id="settingsBtn" title="View settings">
@@ -1731,6 +1732,14 @@ function setAllCollapsed(v){
 document.getElementById('expandAll').onclick=()=>setAllCollapsed(false);
 document.getElementById('collapseAll').onclick=()=>setAllCollapsed(true);
 document.getElementById('tagFilter').onchange=e=>{ state.tagFilter=e.target.value; render(); };
+function jumpToday(){
+  const g=document.getElementById('gantt'); if(!g) return;
+  const tm=g.querySelector('.today-mark'); const tx=tm?(parseFloat(tm.style.left)||0):0;
+  const leftW=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--left-w'))||328;
+  const target=tx-(g.clientWidth-leftW)/2;   // center today in the visible track
+  g.scrollTo({left:Math.max(0,target), behavior:'smooth'});
+}
+document.getElementById('jumpToday').onclick=jumpToday;
 (function(){ const sb=document.getElementById('searchBox'); sb.value=state.search||''; sb.oninput=e=>{ state.search=e.target.value; render(); }; })();
 (function(){
   const btn=document.getElementById('settingsBtn'), menu=document.getElementById('settingsMenu'), tog=document.getElementById('showTags');
