@@ -496,6 +496,8 @@ function endLabel(iso){ const d=parse(iso); return MONTHS[d.getMonth()]+' '+d.ge
 function fmtShort(iso){ if(!iso)return '—'; const d=parse(iso); return MONTHS[d.getMonth()]+' '+d.getDate(); }
 // every project across all squads, with its category + squad
 function allProjects(){ const out=[]; curSquads().forEach(sq=>(sq.projects||[]).forEach(cat=>(cat.phases||[]).forEach(p=>out.push({p,cat,squad:sq})))); return out; }
+// every distinct tag used anywhere (all tribes) — so custom tags can be reused
+function allUsedTags(){ const set=new Set(); (state.tribes||[]).forEach(tr=>(tr.squads||[]).forEach(sq=>(sq.projects||[]).forEach(cat=>(cat.phases||[]).forEach(p=>(p.tags||[]).forEach(t=>set.add(t)))))); return [...set]; }
 function buildVirtualSquad(v){
   if(v.allSquads){
     // every project across all squads, grouped by squad (projects keep their category color)
@@ -1591,7 +1593,8 @@ function openPhaseModal(category,proj){
   function renderTagPicker(){
     tagWrap.innerHTML='';
     tags.forEach((t,i)=>{ const c=tagColor(t); const chip=document.createElement('span'); chip.className='tagpick sel'; chip.style.cssText=`background:${c.bg};color:${c.fg};border-color:${c.bd}`; chip.innerHTML=esc(t)+' <b>×</b>'; chip.onclick=()=>{tags.splice(i,1);renderTagPicker();}; tagWrap.appendChild(chip); });
-    PREDEFINED_TAGS.filter(p=>!tags.includes(p)).forEach(p=>{ const chip=document.createElement('span'); chip.className='tagpick add'; chip.textContent='+ '+p; chip.onclick=()=>{tags.push(p);renderTagPicker();}; tagWrap.appendChild(chip); });
+    const avail=[...new Set([...PREDEFINED_TAGS, ...allUsedTags()])].filter(p=>!tags.includes(p));
+    avail.forEach(p=>{ const chip=document.createElement('span'); chip.className='tagpick add'; chip.textContent='+ '+p; chip.onclick=()=>{tags.push(p);renderTagPicker();}; tagWrap.appendChild(chip); });
   }
   renderTagPicker();
   const tagNew=modal.querySelector('#m_tagnew');
