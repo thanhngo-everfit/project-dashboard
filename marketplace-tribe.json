@@ -3,22 +3,25 @@
     {
       "id": "tribe_marketplace",
       "name": "Marketplace",
+      "hidden": [],
       "squads": [
         {
-          "id": "mp00c",
-          "name": "In-app messages",
+          "id": "mp00u",
+          "name": "Marketplace",
           "projects": [
             {
-              "id": "mp006",
-              "name": "Coach",
-              "color": "#bcd9ec",
+              "id": "mp00a",
+              "name": "In-app messages",
+              "color": "#cdb4f6",
               "phases": [
                 {
                   "id": "mp000",
                   "name": "Spam - detect & intercept",
                   "start": "2026-07-15",
                   "end": "2026-07-31",
-                  "tag": "",
+                  "tags": [
+                    "Coach"
+                  ],
                   "size": "",
                   "promo": "",
                   "jira": "",
@@ -31,7 +34,9 @@
                   "name": "Off-platform - message moderation",
                   "start": "2026-07-15",
                   "end": "2026-07-31",
-                  "tag": "",
+                  "tags": [
+                    "Coach"
+                  ],
                   "size": "",
                   "promo": "",
                   "jira": "",
@@ -44,7 +49,9 @@
                   "name": "Core notifications - push & inbox to MP",
                   "start": "2026-07-15",
                   "end": "2026-07-31",
-                  "tag": "",
+                  "tags": [
+                    "Coach"
+                  ],
                   "size": "",
                   "promo": "",
                   "jira": "",
@@ -57,7 +64,9 @@
                   "name": "Notify via email",
                   "start": "2026-07-15",
                   "end": "2026-07-31",
-                  "tag": "",
+                  "tags": [
+                    "Coach"
+                  ],
                   "size": "",
                   "promo": "",
                   "jira": "",
@@ -70,7 +79,9 @@
                   "name": "SMS - opt-in & trigger text",
                   "start": "2026-07-25",
                   "end": "2026-07-31",
-                  "tag": "",
+                  "tags": [
+                    "Coach"
+                  ],
                   "size": "",
                   "promo": "",
                   "jira": "",
@@ -83,27 +94,39 @@
                   "name": "Inbox prominence",
                   "start": "2026-07-25",
                   "end": "2026-07-31",
-                  "tag": "",
+                  "tags": [
+                    "Coach"
+                  ],
                   "size": "",
                   "promo": "",
                   "jira": "",
                   "docs": [],
                   "note": "",
                   "tasks": []
-                }
-              ]
-            },
-            {
-              "id": "mp00b",
-              "name": "Client",
-              "color": "#cdb4f6",
-              "phases": [
+                },
                 {
-                  "id": "mp007",
+                  "id": "mp006",
                   "name": "Spam - manual ban process",
                   "start": "2026-07-25",
                   "end": "2026-07-31",
-                  "tag": "",
+                  "tags": [
+                    "Client"
+                  ],
+                  "size": "",
+                  "promo": "",
+                  "jira": "",
+                  "docs": [],
+                  "note": "",
+                  "tasks": []
+                },
+                {
+                  "id": "mp007",
+                  "name": "Prefill / prompt message composer",
+                  "start": "2026-08-01",
+                  "end": "2026-08-14",
+                  "tags": [
+                    "Client"
+                  ],
                   "size": "",
                   "promo": "",
                   "jira": "",
@@ -113,10 +136,12 @@
                 },
                 {
                   "id": "mp008",
-                  "name": "Prefill / prompt message composer",
-                  "start": "2026-08-01",
+                  "name": "Expand to instant match",
+                  "start": "2026-08-08",
                   "end": "2026-08-14",
-                  "tag": "",
+                  "tags": [
+                    "Client"
+                  ],
                   "size": "",
                   "promo": "",
                   "jira": "",
@@ -126,179 +151,12 @@
                 },
                 {
                   "id": "mp009",
-                  "name": "Expand to instant match",
-                  "start": "2026-08-08",
-                  "end": "2026-08-14",
-                  "tag": "",
-                  "size": "",
-                  "promo": "",
-                  "jira": "",
-                  "docs": [],
-                  "note": "",
-                  "tasks": []
-                },
-                {
-                  "id": "mp00a",
                   "name": "Spam - automated ban process",
                   "start": "2026-08-18",
                   "end": "2026-08-31",
-                  "tag": "",
-                  "size": "",
-                  "promo": "",
-                  "jira": "",
-                  "docs": [],
-                  "note": "",
-                  "tasks": []
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "id": "mp00i",
-          "name": "AI instant matches",
-          "projects": [
-            {
-              "id": "mp00h",
-              "name": "Models & cards",
-              "color": "#bfe3c9",
-              "phases": [
-                {
-                  "id": "mp00d",
-                  "name": "Human-centered match cards - A/B test",
-                  "start": "2026-07-12",
-                  "end": "2026-07-28",
-                  "tag": "",
-                  "size": "",
-                  "promo": "",
-                  "jira": "",
-                  "docs": [],
-                  "note": "",
-                  "tasks": []
-                },
-                {
-                  "id": "mp00e",
-                  "name": "In-person model improvements",
-                  "start": "2026-07-07",
-                  "end": "2026-07-31",
-                  "tag": "",
-                  "size": "",
-                  "promo": "",
-                  "jira": "",
-                  "docs": [],
-                  "note": "",
-                  "tasks": []
-                },
-                {
-                  "id": "mp00f",
-                  "name": "Budget model improvements",
-                  "start": "2026-07-07",
-                  "end": "2026-07-31",
-                  "tag": "",
-                  "size": "",
-                  "promo": "",
-                  "jira": "",
-                  "docs": [],
-                  "note": "",
-                  "tasks": []
-                },
-                {
-                  "id": "mp00g",
-                  "name": "Online fallback model improvement",
-                  "start": "2026-07-07",
-                  "end": "2026-07-31",
-                  "tag": "",
-                  "size": "",
-                  "promo": "",
-                  "jira": "",
-                  "docs": [],
-                  "note": "",
-                  "tasks": []
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "id": "mp00w",
-          "name": "Lifecycle comms",
-          "projects": [
-            {
-              "id": "mp00p",
-              "name": "SMS",
-              "color": "#fcd9a8",
-              "phases": [
-                {
-                  "id": "mp00j",
-                  "name": "Collect phone & opt-in",
-                  "start": "2026-06-21",
-                  "end": "2026-07-15",
-                  "tag": "",
-                  "size": "",
-                  "promo": "",
-                  "jira": "",
-                  "docs": [],
-                  "note": "",
-                  "tasks": []
-                },
-                {
-                  "id": "mp00k",
-                  "name": "Checkout abandon (2-4 hrs)",
-                  "start": "2026-07-25",
-                  "end": "2026-07-31",
-                  "tag": "",
-                  "size": "",
-                  "promo": "",
-                  "jira": "",
-                  "docs": [],
-                  "note": "",
-                  "tasks": []
-                },
-                {
-                  "id": "mp00l",
-                  "name": "Cooldown (max 1 / 48 hrs)",
-                  "start": "2026-07-25",
-                  "end": "2026-07-31",
-                  "tag": "",
-                  "size": "",
-                  "promo": "",
-                  "jira": "",
-                  "docs": [],
-                  "note": "",
-                  "tasks": []
-                },
-                {
-                  "id": "mp00m",
-                  "name": "21-day check-in",
-                  "start": "2026-08-15",
-                  "end": "2026-08-21",
-                  "tag": "",
-                  "size": "",
-                  "promo": "",
-                  "jira": "",
-                  "docs": [],
-                  "note": "",
-                  "tasks": []
-                },
-                {
-                  "id": "mp00n",
-                  "name": "Survey not started",
-                  "start": "2026-09-01",
-                  "end": "2026-09-14",
-                  "tag": "",
-                  "size": "",
-                  "promo": "",
-                  "jira": "",
-                  "docs": [],
-                  "note": "",
-                  "tasks": []
-                },
-                {
-                  "id": "mp00o",
-                  "name": "Survey abandon",
-                  "start": "2026-08-25",
-                  "end": "2026-08-31",
-                  "tag": "",
+                  "tags": [
+                    "Client"
+                  ],
                   "size": "",
                   "promo": "",
                   "jira": "",
@@ -309,16 +167,16 @@
               ]
             },
             {
-              "id": "mp00v",
-              "name": "Email",
-              "color": "#bcd1f6",
+              "id": "mp00f",
+              "name": "AI instant matches",
+              "color": "#bfe3c9",
               "phases": [
                 {
-                  "id": "mp00q",
-                  "name": "Checkout abandon (2-4 hrs)",
-                  "start": "2026-08-01",
-                  "end": "2026-08-07",
-                  "tag": "",
+                  "id": "mp00b",
+                  "name": "Human-centered match cards - A/B test",
+                  "start": "2026-07-12",
+                  "end": "2026-07-28",
+                  "tags": [],
                   "size": "",
                   "promo": "",
                   "jira": "",
@@ -327,11 +185,11 @@
                   "tasks": []
                 },
                 {
-                  "id": "mp00r",
-                  "name": "Cooldown (max 1 / 48 hrs)",
-                  "start": "2026-08-01",
-                  "end": "2026-08-07",
-                  "tag": "",
+                  "id": "mp00c",
+                  "name": "In-person model improvements",
+                  "start": "2026-07-07",
+                  "end": "2026-07-31",
+                  "tags": [],
                   "size": "",
                   "promo": "",
                   "jira": "",
@@ -340,11 +198,11 @@
                   "tasks": []
                 },
                 {
-                  "id": "mp00s",
-                  "name": "21-day check-in",
-                  "start": "2026-08-15",
-                  "end": "2026-08-21",
-                  "tag": "",
+                  "id": "mp00d",
+                  "name": "Budget model improvements",
+                  "start": "2026-07-07",
+                  "end": "2026-07-31",
+                  "tags": [],
                   "size": "",
                   "promo": "",
                   "jira": "",
@@ -353,24 +211,11 @@
                   "tasks": []
                 },
                 {
-                  "id": "mp00t",
-                  "name": "Survey not started",
-                  "start": "2026-09-01",
-                  "end": "2026-09-14",
-                  "tag": "",
-                  "size": "",
-                  "promo": "",
-                  "jira": "",
-                  "docs": [],
-                  "note": "",
-                  "tasks": []
-                },
-                {
-                  "id": "mp00u",
-                  "name": "Survey abandon",
-                  "start": "2026-08-25",
-                  "end": "2026-08-31",
-                  "tag": "",
+                  "id": "mp00e",
+                  "name": "Online fallback model improvement",
+                  "start": "2026-07-07",
+                  "end": "2026-07-31",
+                  "tags": [],
                   "size": "",
                   "promo": "",
                   "jira": "",
@@ -379,24 +224,190 @@
                   "tasks": []
                 }
               ]
-            }
-          ]
-        },
-        {
-          "id": "mp00z",
-          "name": "General usability",
-          "projects": [
+            },
             {
-              "id": "mp00y",
-              "name": "General",
+              "id": "mp00r",
+              "name": "Lifecycle comms",
+              "color": "#fcd9a8",
+              "phases": [
+                {
+                  "id": "mp00g",
+                  "name": "Collect phone & opt-in",
+                  "start": "2026-06-21",
+                  "end": "2026-07-15",
+                  "tags": [
+                    "SMS"
+                  ],
+                  "size": "",
+                  "promo": "",
+                  "jira": "",
+                  "docs": [],
+                  "note": "",
+                  "tasks": []
+                },
+                {
+                  "id": "mp00h",
+                  "name": "Checkout abandon (2-4 hrs)",
+                  "start": "2026-07-25",
+                  "end": "2026-07-31",
+                  "tags": [
+                    "SMS"
+                  ],
+                  "size": "",
+                  "promo": "",
+                  "jira": "",
+                  "docs": [],
+                  "note": "",
+                  "tasks": []
+                },
+                {
+                  "id": "mp00i",
+                  "name": "Cooldown (max 1 / 48 hrs)",
+                  "start": "2026-07-25",
+                  "end": "2026-07-31",
+                  "tags": [
+                    "SMS"
+                  ],
+                  "size": "",
+                  "promo": "",
+                  "jira": "",
+                  "docs": [],
+                  "note": "",
+                  "tasks": []
+                },
+                {
+                  "id": "mp00j",
+                  "name": "21-day check-in",
+                  "start": "2026-08-15",
+                  "end": "2026-08-21",
+                  "tags": [
+                    "SMS"
+                  ],
+                  "size": "",
+                  "promo": "",
+                  "jira": "",
+                  "docs": [],
+                  "note": "",
+                  "tasks": []
+                },
+                {
+                  "id": "mp00k",
+                  "name": "Survey not started",
+                  "start": "2026-09-01",
+                  "end": "2026-09-14",
+                  "tags": [
+                    "SMS"
+                  ],
+                  "size": "",
+                  "promo": "",
+                  "jira": "",
+                  "docs": [],
+                  "note": "",
+                  "tasks": []
+                },
+                {
+                  "id": "mp00l",
+                  "name": "Survey abandon",
+                  "start": "2026-08-25",
+                  "end": "2026-08-31",
+                  "tags": [
+                    "SMS"
+                  ],
+                  "size": "",
+                  "promo": "",
+                  "jira": "",
+                  "docs": [],
+                  "note": "",
+                  "tasks": []
+                },
+                {
+                  "id": "mp00m",
+                  "name": "Checkout abandon (2-4 hrs)",
+                  "start": "2026-08-01",
+                  "end": "2026-08-07",
+                  "tags": [
+                    "Email"
+                  ],
+                  "size": "",
+                  "promo": "",
+                  "jira": "",
+                  "docs": [],
+                  "note": "",
+                  "tasks": []
+                },
+                {
+                  "id": "mp00n",
+                  "name": "Cooldown (max 1 / 48 hrs)",
+                  "start": "2026-08-01",
+                  "end": "2026-08-07",
+                  "tags": [
+                    "Email"
+                  ],
+                  "size": "",
+                  "promo": "",
+                  "jira": "",
+                  "docs": [],
+                  "note": "",
+                  "tasks": []
+                },
+                {
+                  "id": "mp00o",
+                  "name": "21-day check-in",
+                  "start": "2026-08-15",
+                  "end": "2026-08-21",
+                  "tags": [
+                    "Email"
+                  ],
+                  "size": "",
+                  "promo": "",
+                  "jira": "",
+                  "docs": [],
+                  "note": "",
+                  "tasks": []
+                },
+                {
+                  "id": "mp00p",
+                  "name": "Survey not started",
+                  "start": "2026-09-01",
+                  "end": "2026-09-14",
+                  "tags": [
+                    "Email"
+                  ],
+                  "size": "",
+                  "promo": "",
+                  "jira": "",
+                  "docs": [],
+                  "note": "",
+                  "tasks": []
+                },
+                {
+                  "id": "mp00q",
+                  "name": "Survey abandon",
+                  "start": "2026-08-25",
+                  "end": "2026-08-31",
+                  "tags": [
+                    "Email"
+                  ],
+                  "size": "",
+                  "promo": "",
+                  "jira": "",
+                  "docs": [],
+                  "note": "",
+                  "tasks": []
+                }
+              ]
+            },
+            {
+              "id": "mp00t",
+              "name": "General usability",
               "color": "#d9d2c4",
               "phases": [
                 {
-                  "id": "mp00x",
+                  "id": "mp00s",
                   "name": "Solutions (features & dates TBD)",
                   "start": "",
                   "end": "",
-                  "tag": "",
+                  "tags": [],
                   "size": "",
                   "promo": "",
                   "jira": "",

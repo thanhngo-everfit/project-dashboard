@@ -1740,7 +1740,11 @@ document.getElementById('importFile').onchange=e=>{
     if(!incoming||!incoming.length){alert('Not a valid tribe export.');return;}
     if(!Array.isArray(state.tribes)) state.tribes=[];
     let firstNew=null;
-    incoming.forEach(tr=>{ let tid=(tr.id && !state.tribes.some(t=>t.id===tr.id))?tr.id:('tribe_'+uid()); state.tribes.push(Object.assign({},tr,{id:tid})); if(!firstNew)firstNew=tid; });
+    incoming.forEach(tr=>{
+      const idx = tr.id ? state.tribes.findIndex(t=>t.id===tr.id) : -1;
+      if(idx>=0){ const old=state.tribes[idx]; state.tribes[idx]=Object.assign({},tr,{hidden:old.hidden||[]}); firstNew=tr.id; }   // replace same-id tribe in place (keep its hidden)
+      else { const tid=tr.id||('tribe_'+uid()); state.tribes.push(Object.assign({},tr,{id:tid})); if(!firstNew)firstNew=tid; }
+    });
     state=migrate(state);
     if(firstNew) state.activeTribe=firstNew;
     const sqs=curSquads(); if(sqs[0]) state.activeSquad=sqs[0].id;
