@@ -62,16 +62,24 @@ export default async function handler(req, res) {
         res.status(400).json({ error: 'missing_state' });
         return;
       }
-      // Only the admin may add or remove squads (renames/reorders/edits are fine for everyone).
-      const newSquads = (body.state && Array.isArray(body.state.squads)) ? body.state.squads : null;
-      if (newSquads && (user.email || '').toLowerCase() !== ADMIN_EMAIL) {
+      // Only the admin may add or remove tribes or squads (renames/reorders/edits are fine for everyone).
+      const tribeIds = st => Array.isArray(st && st.tribes) ? st.tribes.map(t => t.id) : null;   // legacy (no tribes) -> skip tribe check
+      const squadIds = st => {
+        if (Array.isArray(st && st.tribes)) return st.tribes.flatMap(t => (t.squads || []).map(s => s.id));
+        if (Array.isArray(st && st.squads)) return st.squads.map(s => s.id);
+        return null;
+      };
+      if ((user.email || '').toLowerCase() !== ADMIN_EMAIL) {
         const existing = await redis.get(KEY);
-        const oldSquads = (existing && existing.state && Array.isArray(existing.state.squads)) ? existing.state.squads : null;
-        if (oldSquads) {
-          const oldIds = oldSquads.map(s => s.id), newIds = newSquads.map(s => s.id);
-          const oldSet = new Set(oldIds), newSet = new Set(newIds);
-          const changed = oldIds.length !== newIds.length || newIds.some(id => !oldSet.has(id)) || oldIds.some(id => !newSet.has(id));
-          if (changed) { res.status(403).json({ error: 'squad_change_forbidden' }); return; }
+        const oldSt = existing && existing.state;
+        const setChanged = (a, b) => {
+          if (!a || !b) return false;
+          const A = new Set(a), B = new Set(b);
+          return a.length !== b.length || a.some(x => !B.has(x)) || b.some(x => !A.has(x));
+        };
+        if (setChanged(tribeIds(oldSt), tribeIds(body.state)) || setChanged(squadIds(oldSt), squadIds(body.state))) {
+          res.status(403).json({ error: 'structure_change_forbidden' });
+          return;
         }
       }
       const record = { state: body.state, updatedAt: Date.now(), updatedBy: user.email };
