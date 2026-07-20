@@ -1114,14 +1114,15 @@ function renderGantt(){
   });
   g.appendChild(grid);
   updateTodayMarkVis();
-  // Center the timeline on today the first time each tab (squad) is viewed this session.
+  // Center the timeline on today whenever the active tab (squad) changes — including
+  // reselecting a previous tab. Re-renders of the same tab (edits, polling) keep scroll.
   const jk=state.activeSquad||'';
-  if(!_jumpedTabs.has(jk) && g.querySelector('.today-mark')){
-    _jumpedTabs.add(jk);
+  if(jk!==_lastJumpSquad && g.querySelector('.today-mark')){
+    _lastJumpSquad=jk;
     requestAnimationFrame(()=>jumpToday(true));
   }
 }
-const _jumpedTabs=new Set();
+let _lastJumpSquad=null;
 // Hide the "Today" marker when it scrolls behind the sticky left panel (it lives in the header,
 // which stacks above the left column, so it can't be covered by z-index alone).
 function updateTodayMarkVis(){
