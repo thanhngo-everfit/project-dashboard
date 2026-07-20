@@ -384,7 +384,7 @@
       </button>
       <div class="settings-menu" id="settingsMenu" style="display:none">
         <div class="sm-title">View Settings</div>
-        <div class="sm-sec">
+        <div class="sm-sec" id="smRows">
           <div class="sm-label">Rows</div>
           <div class="sm-btns"><button class="sm-act" id="expandAll">⊞ Expand all</button><button class="sm-act" id="collapseAll">⊟ Collapse all</button></div>
         </div>
@@ -1723,7 +1723,7 @@ document.getElementById('tagFilter').onchange=e=>{ state.tagFilter=e.target.valu
 (function(){ const sb=document.getElementById('searchBox'); sb.value=state.search||''; sb.oninput=e=>{ state.search=e.target.value; render(); }; })();
 (function(){
   const btn=document.getElementById('settingsBtn'), menu=document.getElementById('settingsMenu'), tog=document.getElementById('showTags');
-  btn.onclick=e=>{ e.stopPropagation(); const open=menu.style.display==='none'; menu.style.display=open?'block':'none'; if(open){ tog.checked=showTagsOn(); updateZoomLabel(); } };
+  btn.onclick=e=>{ e.stopPropagation(); const open=menu.style.display==='none'; menu.style.display=open?'block':'none'; if(open){ tog.checked=showTagsOn(); updateZoomLabel(); document.getElementById('smRows').style.display=isAdmin()?'':'none'; } };
   document.addEventListener('click',e=>{ if(!e.target.closest('.settings-wrap')) menu.style.display='none'; });
   tog.onchange=e=>{ setShowTags(e.target.checked); render(); };
 })();
