@@ -1070,6 +1070,17 @@ function renderGantt(){
     });
   });
   g.appendChild(grid);
+  updateTodayMarkVis();
+}
+// Hide the "Today" marker when it scrolls behind the sticky left panel (it lives in the header,
+// which stacks above the left column, so it can't be covered by z-index alone).
+function updateTodayMarkVis(){
+  const g=document.getElementById('gantt'); if(!g) return;
+  const tm=g.querySelector('.today-mark'); if(!tm) return;
+  const leftW=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--left-w'))||328;
+  const boundary=g.getBoundingClientRect().left + leftW;
+  const r=tm.getBoundingClientRect();
+  tm.style.visibility = (r.left + r.width/2 < boundary) ? 'hidden' : 'visible';
 }
 
 // Marketing list view: all projects across squads, grouped by end date.
@@ -1728,6 +1739,7 @@ document.getElementById('tagFilter').onchange=e=>{ state.tagFilter=e.target.valu
   tog.onchange=e=>{ setShowTags(e.target.checked); render(); };
 })();
 // re-fit the timeline width when the window resizes
+document.getElementById('gantt').addEventListener('scroll', updateTodayMarkVis);
 let _resizeTimer=null;
 window.addEventListener('resize',()=>{
   clearTimeout(_resizeTimer);
