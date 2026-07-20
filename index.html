@@ -23,7 +23,7 @@
   .ctrl-group button{background:transparent;border:none;color:#667085;padding:7px 14px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:700;}
   .ctrl-group button.active{background:#101828;color:#fff;}
   .ctrl-group button:hover:not(.active){color:#101828;}
-  .topbar .iconbtn{background:#f0f1f4;border:none;color:#667085;width:36px;height:36px;border-radius:9px;cursor:pointer;font-size:16px;}
+  .topbar .iconbtn{background:#f0f1f4;border:none;color:#667085;width:36px;height:36px;border-radius:9px;cursor:pointer;font-size:16px;display:inline-flex;align-items:center;justify-content:center;}
   .topbar .iconbtn:hover{color:#101828;background:#e6e8ec;}
 
   /* ---------- Tabs (Chrome-like) ---------- */
@@ -342,8 +342,12 @@
       <button data-view="month">Month</button>
       <button data-view="week">Week</button>
     </div>
-    <button class="iconbtn" id="exportBtn" title="Export JSON">⤓</button>
-    <button class="iconbtn" id="importBtn" title="Import JSON">⤒</button>
+    <button class="iconbtn" id="exportBtn" title="Export (download JSON backup)">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    </button>
+    <button class="iconbtn" id="importBtn" title="Import (upload JSON / tribe)">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+    </button>
     <input type="file" id="importFile" accept="application/json" style="display:none">
     <span id="syncStatus" style="font-size:12px;font-weight:600;color:var(--muted);min-width:80px;text-align:right;"></span>
     <div class="acct" id="acct">
