@@ -1332,8 +1332,8 @@ function phaseRow(cat,proj,units,tw){
   if((links || showTagChips) && lab){
     const col=document.createElement('div'); col.className='namecol';
     left.insertBefore(col, lab); col.appendChild(lab);
-    if(links){ const l=document.createElement('div'); l.innerHTML=links; col.appendChild(l.firstChild); }
     if(showTagChips){ const wrap=document.createElement('span'); wrap.innerHTML=tagsLineHTML(proj.tags); col.appendChild(wrap.firstChild); }
+    if(links){ const l=document.createElement('div'); l.innerHTML=links; col.appendChild(l.firstChild); }
   }
   // priority chip: pinned to the top-right of the row
   const prio=priorityChipHTML(proj);
