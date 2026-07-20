@@ -441,6 +441,9 @@ function curSquads(){ const t=activeTribe(); return t?(t.squads||[]):[]; }
 // admin can hide specific tabs (squad or virtual-view ids) for everyone — per tribe (shared)
 function isHidden(id){ const t=activeTribe(); return !!(t && Array.isArray(t.hidden) && t.hidden.includes(id)); }
 function toggleHidden(id){ const t=activeTribe(); if(!t)return; if(!Array.isArray(t.hidden))t.hidden=[]; const i=t.hidden.indexOf(id); if(i>=0)t.hidden.splice(i,1); else t.hidden.push(id); render(); }
+// personal, per-tribe: show tag chips next to project names
+function showTagsOn(){ const m=state.showTagsByTribe; const k=state.activeTribe; return !(m && m[k]===false); }
+function setShowTags(v){ if(!state.showTagsByTribe) state.showTagsByTribe={}; state.showTagsByTribe[state.activeTribe]=v; }
 
 /* ============================ State ============================ */
 const STORE_KEY = 'roadmapDashboardV2';
@@ -594,7 +597,11 @@ function migrate(s){
   if(!s.uiCollapsed || typeof s.uiCollapsed!=='object') s.uiCollapsed={};   // personal, projectId -> true(collapsed)/false
   if(!s.viewBySquad || typeof s.viewBySquad!=='object') s.viewBySquad={};   // personal, squadId -> 'quarter'|'month'|'week'
   if(typeof s.tagFilter!=='string') s.tagFilter='';   // personal tag filter
-  if(typeof s.showTags!=='boolean') s.showTags=true;   // personal: show tag chip next to project name
+  if(!s.showTagsByTribe || typeof s.showTagsByTribe!=='object'){   // personal, per-tribe: show tag chip next to project name
+    s.showTagsByTribe={};
+    if(typeof s.showTags==='boolean' && Array.isArray(s.tribes)) s.tribes.forEach(t=>{ s.showTagsByTribe[t.id]=s.showTags; });
+  }
+  delete s.showTags;
   if(typeof s.search!=='string') s.search='';   // personal search query
   if(!s.activeTribe && Array.isArray(s.tribes) && s.tribes[0]) s.activeTribe=s.tribes[0].id;   // personal
   return s;
@@ -1093,7 +1100,7 @@ function renderListByEnd(g){
         ${p.promo==='Yes'?`<span class="promochip">Promotion</span>`:''}
         ${p.size?`<span class="sizechip s-${p.size}">${esc(p.size)}</span>`:''}
         <span class="lv-dates">${fmtShort(p.start)} → ${fmtShort(p.end)}</span>
-        ${(p.tags && p.tags.length && state.showTags!==false)?tagsLineHTML(p.tags):''}`;
+        ${(p.tags && p.tags.length && showTagsOn())?tagsLineHTML(p.tags):''}`;
       row.onclick=()=>openPhaseModal(cat,p);
       grp.appendChild(row);
     });
@@ -1251,7 +1258,7 @@ function phaseRow(cat,proj,units,tw){
   const lab=left.querySelector('.label');
   if(q && lab) lab.innerHTML=highlight(proj.name,q);
   // stack the tag chips below the project name
-  if(proj.tags && proj.tags.length && state.showTags!==false && lab){
+  if(proj.tags && proj.tags.length && showTagsOn() && lab){
     const col=document.createElement('div'); col.className='namecol';
     left.insertBefore(col, lab); col.appendChild(lab);
     const wrap=document.createElement('span'); wrap.innerHTML=tagsLineHTML(proj.tags);
@@ -1716,9 +1723,9 @@ document.getElementById('tagFilter').onchange=e=>{ state.tagFilter=e.target.valu
 (function(){ const sb=document.getElementById('searchBox'); sb.value=state.search||''; sb.oninput=e=>{ state.search=e.target.value; render(); }; })();
 (function(){
   const btn=document.getElementById('settingsBtn'), menu=document.getElementById('settingsMenu'), tog=document.getElementById('showTags');
-  btn.onclick=e=>{ e.stopPropagation(); const open=menu.style.display==='none'; menu.style.display=open?'block':'none'; if(open){ tog.checked=state.showTags!==false; updateZoomLabel(); } };
+  btn.onclick=e=>{ e.stopPropagation(); const open=menu.style.display==='none'; menu.style.display=open?'block':'none'; if(open){ tog.checked=showTagsOn(); updateZoomLabel(); } };
   document.addEventListener('click',e=>{ if(!e.target.closest('.settings-wrap')) menu.style.display='none'; });
-  tog.onchange=e=>{ state.showTags=e.target.checked; render(); };
+  tog.onchange=e=>{ setShowTags(e.target.checked); render(); };
 })();
 // re-fit the timeline width when the window resizes
 let _resizeTimer=null;
