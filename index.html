@@ -7,7 +7,7 @@
 <style>
   :root{
     --bg:#ffffff; --panel:#ffffff; --border:#e8eaef; --text:#101828;
-    --muted:#8a93a3; --left-w:328px; --row-h:46px; --head-h:48px;
+    --muted:#8a93a3; --left-w:328px; --row-h:54px; --head-h:48px;
     --tab-h:40px;
   }
   *{box-sizing:border-box;}
@@ -103,6 +103,9 @@
   .left .dot{width:9px;height:9px;border-radius:50%;flex:none;}
   .left .label{flex:1;font-size:13px;line-height:1.2;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;word-break:break-word;}
   .tagchip{flex:none;font-size:10px;font-weight:700;color:#5b21b6;background:#ede9fe;border:1px solid #ddd6fe;border-radius:999px;padding:1px 7px;white-space:nowrap;}
+  .namecol{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;align-items:flex-start;}
+  .namecol .label{flex:0 0 auto;}
+  .namecol .tagchip{align-self:flex-start;}
   .tagfilter{border:1px solid var(--border);background:#fff;border-radius:8px;padding:6px 8px;font-size:13px;font-family:inherit;font-weight:600;cursor:pointer;}
   .searchbox{border:1px solid var(--border);background:#fff;border-radius:8px;padding:7px 12px;font-size:13px;font-family:inherit;width:220px;margin-left:10px;}
   .searchbox:focus{outline:none;border-color:#4c6fff;box-shadow:0 0 0 2px rgba(76,111,255,.15);}
@@ -1145,8 +1148,15 @@ function phaseRow(cat,proj,units,tw){
   const {left,caret}=leftCell(1,isCollapsed(proj)?'closed':'open',null,proj.name,acts);
   caret.onclick=()=>{toggleCollapsed(proj);render();};
   const q=(state.search||'').trim().toLowerCase();
-  if(q){ const lab=left.querySelector('.label'); if(lab) lab.innerHTML=highlight(proj.name,q); }
-  if(proj.tag && state.showTags!==false){ const chip=document.createElement('span'); chip.className='tagchip'; chip.textContent=shortTag(proj.tag); chip.title='Tag: '+proj.tag; left.insertBefore(chip, left.querySelector('.acts')); }
+  const lab=left.querySelector('.label');
+  if(q && lab) lab.innerHTML=highlight(proj.name,q);
+  // stack the tag chip below the project name
+  if(proj.tag && state.showTags!==false && lab){
+    const col=document.createElement('div'); col.className='namecol';
+    left.insertBefore(col, lab); col.appendChild(lab);
+    const chip=document.createElement('span'); chip.className='tagchip'; chip.textContent=shortTag(proj.tag); chip.title='Tag: '+proj.tag;
+    col.appendChild(chip);
+  }
   const links=indicatorsHTML(proj);
   if(links){ const span=document.createElement('span'); span.style.cssText='display:flex;gap:3px;flex:none;'; span.innerHTML=links; left.insertBefore(span, left.querySelector('.acts')); }
   if(!inVirtual()){
