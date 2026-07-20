@@ -1114,13 +1114,14 @@ function renderGantt(){
   });
   g.appendChild(grid);
   updateTodayMarkVis();
-  // On first load / refresh, center the timeline on today once.
-  if(!_initialJumpDone && g.querySelector('.today-mark')){
-    _initialJumpDone=true;
+  // Center the timeline on today the first time each tab (squad) is viewed this session.
+  const jk=state.activeSquad||'';
+  if(!_jumpedTabs.has(jk) && g.querySelector('.today-mark')){
+    _jumpedTabs.add(jk);
     requestAnimationFrame(()=>jumpToday(true));
   }
 }
-let _initialJumpDone=false;
+const _jumpedTabs=new Set();
 // Hide the "Today" marker when it scrolls behind the sticky left panel (it lives in the header,
 // which stacks above the left column, so it can't be covered by z-index alone).
 function updateTodayMarkVis(){
