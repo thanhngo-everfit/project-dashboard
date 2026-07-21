@@ -501,9 +501,9 @@ const VIRTUAL_VIEWS = [
 ];
 function activeVirtual(){ return VIRTUAL_VIEWS.find(v=>v.id===state.activeSquad); }
 function inVirtual(){ return !!activeVirtual(); }
-// URL <-> active tab mapping (shareable ?view= param)
+// URL <-> active tab mapping (shareable ?tribe= & ?view= params)
 const VIEW_SLUGS = {'view:all':'all-squads','view:jon':'jon-request','view:long':'long-request','view:marketing':'marketing'};
-let pendingViewSlug = null;
+let pendingViewSlug = null, pendingTribeSlug = null;
 function viewSlug(id){ return VIEW_SLUGS[id] || id; }   // real squads use their id
 function idFromSlug(slug){
   if(!slug) return null;
@@ -512,8 +512,25 @@ function idFromSlug(slug){
   if(curSquads().some(s=>s.id===slug)) return slug;
   return null;
 }
+// which tribe owns a given (real) squad id — squad ids are unique across tribes
+function tribeOfSquad(sid){ return (state.tribes||[]).find(t=>(t.squads||[]).some(s=>s.id===sid)); }
+// apply the ?tribe=/?view= params captured at boot, once tribes are loaded
+function applyPendingView(){
+  if(pendingTribeSlug){
+    const tr=(state.tribes||[]).find(t=>t.id===pendingTribeSlug);
+    if(tr){ state.activeTribe=tr.id; pendingTribeSlug=null; }   // keep pending until its tribe loads
+  }
+  if(pendingViewSlug){
+    // a real squad may live in another tribe — switch to its tribe first
+    const owner=tribeOfSquad(pendingViewSlug);
+    if(owner) state.activeTribe=owner.id;
+    const id=idFromSlug(pendingViewSlug);
+    if(id) state.activeSquad=id;
+    if(id||owner) pendingViewSlug=null;
+  }
+}
 function syncUrl(){
-  try{ const u=new URL(location.href); u.searchParams.set('view', viewSlug(state.activeSquad)); history.replaceState(null,'',u); }catch(e){}
+  try{ const u=new URL(location.href); u.searchParams.set('tribe', state.activeTribe); u.searchParams.set('view', viewSlug(state.activeSquad)); history.replaceState(null,'',u); }catch(e){}
 }
 function endLabel(iso){ const d=parse(iso); return MONTHS[d.getMonth()]+' '+d.getDate()+', '+d.getFullYear(); }
 function fmtShort(iso){ if(!iso)return '—'; const d=parse(iso); return MONTHS[d.getMonth()]+' '+d.getDate(); }
@@ -895,7 +912,7 @@ function headShade(i,n){
 
 /* ============================ Render ============================ */
 function render(){
-  if(pendingViewSlug){ const id=idFromSlug(pendingViewSlug); if(id){ state.activeSquad=id; pendingViewSlug=null; } }
+  applyPendingView();
   if(!isAdmin() && isHidden(state.activeSquad)){   // members can't stay on a hidden tab
     const s=curSquads().find(x=>!isHidden(x.id));
     const v=VIRTUAL_VIEWS.find(x=>!isHidden(x.id));
@@ -1930,7 +1947,7 @@ document.getElementById('signOut').onclick=()=>{
 })();
 
 (function bootstrap(){
-  try{ pendingViewSlug = new URL(location.href).searchParams.get('view'); }catch(e){}
+  try{ const q=new URL(location.href).searchParams; pendingViewSlug=q.get('view'); pendingTribeSlug=q.get('tribe'); }catch(e){}
   const saved=loadAuth();
   if(saved) showApp(saved); else showGate();
 })();
