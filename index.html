@@ -1371,6 +1371,8 @@ function renderGantt(){
   const av=activeVirtual();
   if(av && av.listByEnd){ g.innerHTML=''; renderListByEnd(g); return; }
   const squad=activeSquad();
+  // "No design" chips only appear when the squad uses design somewhere; if every project has none, hide them all.
+  curSquadHasDesign=(squad.projects||[]).some(cat=>(cat.phases||[]).some(ph=>(ph.tasks||[]).some(t=>t.type==='design')));
   const units=buildUnits(squad);
   const tw=totalWidth(units);
   g.innerHTML='';
@@ -1448,6 +1450,7 @@ function renderGantt(){
   }
 }
 let _lastJumpSquad=null;
+let curSquadHasDesign=false;   // true if any project in the active squad has design work (drives "No design" chips)
 // Hide the "Today" marker when it scrolls behind the sticky left panel (it lives in the header,
 // which stacks above the left column, so it can't be covered by z-index alone).
 function updateTodayMarkVis(){
@@ -1658,7 +1661,7 @@ function phaseRow(cat,proj,units,tw){
   const designTasks=(proj.tasks||[]).filter(t=>t.type==='design');   // design sticks to the project bar
   const hasWork=(proj.tasks||[]).some(t=>t.type!=='design');         // only dev work drives the collapse caret
   const designOn = !inVirtual() && showDesignOn();                   // personal toggle: show design work at all
-  const noDesign = designOn && designTasks.length===0;               // no design work at all -> "No design" chip
+  const noDesign = designOn && designTasks.length===0 && curSquadHasDesign;   // hide "No design" if the whole squad has none
   if(designOn && (designTasks.some(t=>t.start||t.end) || noDesign)) row.classList.add('has-design');   // room for the below-bar chip
   const {left,caret}=leftCell(1, hasWork?(isCollapsed(proj)?'closed':'open'):null, null,proj.name,acts);
   if(caret) caret.onclick=()=>{toggleCollapsed(proj);render();};
