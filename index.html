@@ -1716,9 +1716,9 @@ function phaseRow(cat,proj,units,tw){
   const dStatus = designOn ? (proj.designStatus||'') : '';
   const dEndIso = designOn ? (designTasks.map(t=>t.end).filter(validISO).sort().pop()||'') : '';   // latest Design ETA
   const dStartIso = designOn ? (designTasks.map(t=>t.start).filter(validISO).sort()[0]||'') : '';  // earliest Design start
-  // A project participates in design tracking if it has a Jira link (status comes from Jira) or any design work.
-  // Null/unsynced status -> "Need Design Estimation". "No Design" only comes from the Jira "No Need Design" status.
-  const hasDesignInfo = designOn && ((proj.jira&&proj.jira.trim()) || designTasks.length>0 || dStatus);
+  // Show a design label only when the project actually has design info: a design work item OR a synced
+  // design status. (Removing the design work — and its status — hides the label.)
+  const hasDesignInfo = designOn && (designTasks.length>0 || !!dStatus);
   const designLabel = hasDesignInfo ? designStatusLabel(dStatus, dEndIso, dStartIso, proj.start||'') : '';
   if(designLabel) row.classList.add('has-design');   // room for the below-bar chip
   const {left,caret}=leftCell(1, hasWork?(isCollapsed(proj)?'closed':'open'):null, null,proj.name,acts);
@@ -2299,6 +2299,8 @@ function openTaskModal(phase,t){
     modal.querySelector('#m_del').onclick=()=>{
       if(!confirm('Remove '+label+'?')) return;
       phase.tasks=phase.tasks.filter(x=>x!==t);
+      // removing the last design work also clears the synced design status, so the label disappears
+      if(t.type==='design' && !phase.tasks.some(x=>x.type==='design')) phase.designStatus='';
       closeModal(); render();
     };
   }
