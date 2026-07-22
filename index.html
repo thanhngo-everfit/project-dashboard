@@ -67,6 +67,8 @@
   .btn:hover{background:#f5f7fa;}
   .btn.primary{background:#4c6fff;border-color:#4c6fff;color:#fff;}
   .btn.primary:hover{background:#3a5cf0;}
+  .btn.danger{color:#d92d20;border-color:#fecdca;background:#fff;margin-right:auto;}
+  .btn.danger:hover{background:#fef3f2;border-color:#f97066;}
   .zoom{display:flex;align-items:center;gap:4px;}
   .zoom button{width:28px;height:28px;border:1px solid var(--border);background:#fff;border-radius:6px;cursor:pointer;font-size:15px;}
   .zoom button:hover{background:#f5f7fa;}
@@ -1794,7 +1796,7 @@ function openTaskModal(phase,t){
       <div id="m_blockers" class="checklist"></div>
       <div class="addrow"><input id="m_blkinput" placeholder="Add a blocker…"><button type="button" class="btn" id="m_blkadd">Add</button></div>
     </div>
-    <div class="modal-actions"><button class="btn" id="m_cancel">Cancel</button><button class="btn primary" id="m_save">Save</button></div>`;
+    <div class="modal-actions">${editing?'<button class="btn danger" id="m_del">Delete work</button>':''}<button class="btn" id="m_cancel">Cancel</button><button class="btn primary" id="m_save">Save</button></div>`;
   const typeSel=modal.querySelector('#m_type'), prow=modal.querySelector('#m_prow'), namerow=modal.querySelector('#m_namerow');
   const prog=modal.querySelector('#m_prog'), pval=modal.querySelector('#m_pval');
   function syncType(){
@@ -1826,6 +1828,14 @@ function openTaskModal(phase,t){
   wireDateClears();
   modalBg.classList.add('open');
   modal.querySelector('#m_cancel').onclick=closeModal;
+  if(editing){
+    const label=t.type==='custom'?(t.customName||'this work'):(TASK_MAP[t.type]||TASK_MAP.custom).label+' work';
+    modal.querySelector('#m_del').onclick=()=>{
+      if(!confirm('Remove '+label+'?')) return;
+      phase.tasks=phase.tasks.filter(x=>x!==t);
+      closeModal(); render();
+    };
+  }
   modal.querySelector('#m_save').onclick=()=>{
     const type=typeSel.value;
     const customName=type==='custom'?modal.querySelector('#m_cname').value.trim():'';
