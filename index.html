@@ -779,18 +779,41 @@ async function jiraSync(){
                : 'Jira sync failed';
       setSync(msg,'bad'); console.warn('jira sync error:', j); return;
     }
-    let updated=0, missing=0;
+    let updated=0, noEta=0, errored=0;
     (j.results||[]).forEach(rec=>{
       const t=targets[rec.id]; if(!t) return;
-      if(rec.designEta){ if(setDesignEnd(t.proj, rec.designEta)) updated++; }
-      else missing++;
+      if(rec.error) errored++;
+      else if(rec.designEta){ if(setDesignEnd(t.proj, rec.designEta)) updated++; }
+      else noEta++;
     });
+    // Diagnostics: what Jira returned for each linked project (open DevTools console to inspect)
+    console.log('%c[Jira sync]','font-weight:bold','field id:', j.fieldId);
+    console.table((j.results||[]).map(rec=>({
+      project: (targets[rec.id]&&targets[rec.id].proj.name)||'', key: rec.key,
+      designEta: rec.designEta||'', error: rec.error||''
+    })));
     state.lastJiraSync = j.syncedAt || Date.now();
     lastSyncedJSON=null;   // ensure a save is pushed even if only the sync timestamp changed
     save(); renderJiraSync(); render();
-    setSync('Jira synced — '+updated+' updated'+(missing?', '+missing+' without ETA':''),'ok');
+    setSync('Jira: '+updated+' updated'+(noEta?', '+noEta+' no ETA':'')+(errored?', '+errored+' errors':''),'ok');
   }catch(e){ setSync('Jira sync error','bad'); console.warn(e); }
   finally{ if(btn) btn.disabled=false; }
+}
+// Shift-click the Jira Sync button to list Jira fields matching "eta"/"design" (helps find the field id/name).
+async function jiraListFields(){
+  if(!isAdmin() || !idToken) return;
+  setSync('Listing Jira fields…');
+  try{
+    const r = await apiFetch('/api/jira', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({action:'fields'})});
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok){ setSync('Field list failed','bad'); console.warn('jira fields error:', j); return; }
+    const all = j.fields||[];
+    const hits = all.filter(f=>/eta|design/i.test(f.name||''));
+    console.log('%c[Jira fields] matching eta/design:','font-weight:bold'); console.table(hits);
+    console.log('[Jira fields] all '+all.length+' fields:'); console.table(all);
+    setSync(hits.length+' field(s) match eta/design — see console','ok');
+  }catch(e){ setSync('Field list error','bad'); console.warn(e); }
 }
 function fmtSyncTime(ts){
   if(!ts) return 'never';
@@ -1994,7 +2017,7 @@ function jumpToday(instant){
   g.scrollTo({left:Math.max(0,target), behavior:instant?'auto':'smooth'});
 }
 document.getElementById('jumpToday').onclick=()=>jumpToday();
-document.getElementById('jiraSyncBtn').onclick=()=>jiraSync();
+document.getElementById('jiraSyncBtn').onclick=(e)=>{ if(e.shiftKey) jiraListFields(); else jiraSync(); };
 (function(){ const sb=document.getElementById('searchBox'); sb.value=state.search||''; sb.oninput=e=>{ state.search=e.target.value; render(); }; })();
 (function(){
   const btn=document.getElementById('settingsBtn'), menu=document.getElementById('settingsMenu'), tog=document.getElementById('showTags');
