@@ -1437,10 +1437,14 @@ function taskRow(p,ph,t,units,tw,last,projStartX,projStartDate){
   row.appendChild(left);
   const track=document.createElement('div'); track.className='track'; track.style.width=tw+'px';
   track.appendChild(gridlinesEl(units,tw));
+  // No start date -> anchor the work to the project's start. But if the work ends before the
+  // project even starts, the project start can't be its start; fall back to the 1st of the
+  // work's end-date month instead.
+  const taskFb=(!t.start && t.end && parse(t.end)<projStartDate) ? addMonths(parse(t.end),0) : projStartDate;
   // dashed connector thread on the timeline: a vertical line in the margin just left of the
   // project's start, with a visible elbow branching into each work bar.
   if(typeof projStartX==='number'){
-    const bx=dateToX(effStart(t,units,projStartDate),units);
+    const bx=dateToX(effStart(t,units,taskFb),units);
     const cx=Math.max(2, projStartX-14);             // sit in the gutter, left of the bars
     const v=document.createElement('div'); v.className='tl-v'+(last?' last':''); v.style.left=cx+'px';
     track.appendChild(v);
@@ -1451,8 +1455,8 @@ function taskRow(p,ph,t,units,tw,last,projStartX,projStartDate){
   if(t.start||t.end){
     const lbl=baseLabel+(showPct?' '+t.progress+'%':'');
     const bar=makeBar(workColor, lbl, meta.progress?(t.progress||0):null, ()=>openTaskModal(ph,t));
-    placeBar(bar,t,units,projStartDate);
-    attachDrag(bar,t,units,'task',ph,projStartDate);
+    placeBar(bar,t,units,taskFb);
+    attachDrag(bar,t,units,'task',ph,taskFb);
     track.appendChild(bar);
   }
   row.appendChild(track);
@@ -1790,7 +1794,7 @@ function openTaskModal(phase,t){
       <div><label>Start (optional)</label>${dateField('m_start',def.start)}</div>
       <div><label>End (optional)</label>${dateField('m_end',def.end)}</div>
     </div>
-    <div class="field" style="margin-top:-6px;"><span style="font-size:11px;color:var(--muted);">Leave a date blank to extend to the edge of the current view.</span></div>
+    <div class="field" style="margin-top:-6px;"><span style="font-size:11px;color:var(--muted);">Blank start → the project's start date (or the 1st of the end-date month if it ends before the project starts). Blank end → the edge of the current view.</span></div>
     <div class="field progress-row" id="m_prow"><label>Progress: <span id="m_pval">${def.progress||0}</span>%</label><input type="range" min="0" max="100" id="m_prog" value="${def.progress||0}"></div>
     <div class="field"><label>Blockers</label>
       <div id="m_blockers" class="checklist"></div>
