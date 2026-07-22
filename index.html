@@ -1800,7 +1800,7 @@ function phaseRow(cat,proj,units,tw){
     chip.style.background=st.bg; chip.style.color=st.c; chip.style.borderColor=st.bd;
     chip.textContent=designLabel; chip.title='Design status: '+designLabel;
     chip.style.left=homeX+'px'; chip.style.transform = align==='right'?'translateX(-100%)':'none';
-    if(dTasks.length){ chip.style.pointerEvents='auto'; chip.style.cursor='pointer'; chip.onclick=()=>openTaskModal(proj,dTasks[0]); }
+    if(designTasks.length){ chip.style.pointerEvents='auto'; chip.style.cursor='pointer'; chip.onclick=()=>openTaskModal(proj,designTasks[0]); }   // clickable even if the design work has no dates
     track.appendChild(chip);
   }
   row.appendChild(track);
