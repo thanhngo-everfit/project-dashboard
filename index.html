@@ -275,6 +275,23 @@
   .modal-bg.open{display:flex;}
   .modal-wrap{position:relative;display:flex;align-items:flex-start;}
   .modal{background:#fff;border-radius:14px;width:460px;max-width:92vw;padding:22px;box-shadow:0 20px 50px rgba(0,0,0,.25);max-height:90vh;overflow-y:auto;position:relative;}
+  /* Jira sync review list */
+  .jr-head{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px;}
+  .jr-list{max-height:52vh;overflow-y:auto;border:1px solid var(--border);border-radius:10px;}
+  .jr-row{display:flex;gap:10px;padding:10px 12px;border-bottom:1px solid #f0f1f4;align-items:flex-start;cursor:pointer;margin:0;}
+  .jr-row:last-child{border-bottom:none;}
+  .jr-row.nochange{opacity:.5;}
+  .jr-cb{margin-top:2px;flex:none;}
+  .jr-main{flex:1;min-width:0;}
+  .jr-name{font-weight:700;font-size:13px;}
+  .jr-key{color:var(--muted);font-weight:600;font-size:11px;}
+  .jr-dates{font-size:12px;color:var(--text);margin-top:3px;}
+  .jr-dates .old{color:var(--muted);text-decoration:line-through;}
+  .jr-dates .new{font-weight:800;color:#067647;}
+  .jr-badge{flex:none;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.3px;padding:2px 8px;border-radius:999px;white-space:nowrap;}
+  .jr-badge.create{color:#067647;background:#ecfdf3;}
+  .jr-badge.update{color:#b54708;background:#fffaeb;}
+  .jr-badge.nochange{color:var(--muted);background:#f0f1f4;}
   /* Note dock: a column to the right of the modal (button + side popup) */
   .note-dock{margin-left:14px;display:flex;flex-direction:column;align-items:flex-start;gap:12px;}
   .note-fab{position:relative;width:44px;height:44px;border-radius:50%;border:none;background:#fff;color:#667085;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 16px rgba(16,24,40,.18);transition:all .12s;}
@@ -788,30 +805,83 @@ async function jiraSync(){
                : 'Jira sync failed ('+r.status+')';
       setSync(msg,'bad'); console.warn('[Jira sync] failed', r.status, r.url, j); return;
     }
-    let updated=0, noEta=0, errored=0;
+    // Build the proposed-changes list; nothing is applied until the user confirms in the review popup.
+    let noEta=0, errored=0; const rows=[];
     (j.results||[]).forEach(rec=>{
       const t=targets[rec.id]; if(!t) return;
       if(rec.error){ errored++; return; }
       // two separate Jira fields: Design Start (customfield_12752) + Design ETA (customfield_10666)
       const end = rec.designEnd || rec.designStart;   // prefer the ETA; fall back to start if only that is set
-      const start = (rec.designStart && rec.designStart!==end) ? rec.designStart : '';
-      if(end){ if(applyDesignDates(t.proj, start, end)) updated++; }
-      else noEta++;
+      const newStart = (rec.designStart && rec.designStart!==end && validISO(rec.designStart)) ? rec.designStart : '';
+      if(!end || !validISO(end)){ noEta++; return; }
+      const proj=t.proj;
+      const existing=(proj.tasks||[]).find(x=>x.type==='design');
+      const curStart=existing?(existing.start||''):'';
+      const curEnd=existing?(existing.end||''):'';
+      const endDiff = curEnd!==end;
+      const startDiff = !!newStart && curStart!==newStart;
+      const changed = !existing ? true : (endDiff||startDiff);
+      rows.push({proj, key:rec.key, name:proj.name, curStart, curEnd, newStart, newEnd:end,
+        action: !existing?'Create':(changed?'Update':'No change'), changed});
     });
-    // Diagnostics: what Jira returned for each linked project (open DevTools console to inspect)
-    console.log('%c[Jira sync]','font-weight:bold','field id:', j.fieldId);
-    console.table((j.results||[]).map(rec=>({
-      project: (targets[rec.id]&&targets[rec.id].proj.name)||'', key: rec.key,
-      designStart: rec.designStart||'', designEnd: rec.designEnd||'', error: rec.error||''
-    })));
-    // full raw field values (expand in console to see the exact shape/format)
-    console.log('[Jira sync] sample raw values:', (j.results||[]).filter(r=>r.raw && r.raw!=='(field absent)').slice(0,6).map(r=>({key:r.key, raw:r.raw})));
-    state.lastJiraSync = j.syncedAt || Date.now();
-    lastSyncedJSON=null;   // ensure a save is pushed even if only the sync timestamp changed
-    save(); renderJiraSync(); render();
-    setSync('Jira: '+updated+' updated'+(noEta?', '+noEta+' no ETA':'')+(errored?', '+errored+' errors':''),'ok');
+    // Diagnostics (console)
+    console.log('%c[Jira sync]','font-weight:bold','ETA field:', j.fieldId, 'Start field:', j.startFieldId);
+    console.table((j.results||[]).map(rec=>({ project:(targets[rec.id]&&targets[rec.id].proj.name)||'', key:rec.key,
+      designStart:rec.designStart||'', designEnd:rec.designEnd||'', error:rec.error||'' })));
+    openJiraReview(rows, j.syncedAt, {noEta, errored});
+    const changedN=rows.filter(r=>r.changed).length;
+    setSync('Jira: review '+changedN+' change(s)', 'ok');
   }catch(e){ setSync('Jira sync error','bad'); console.warn(e); }
   finally{ if(btn) btn.disabled=false; }
+}
+// Review popup: list every project with Jira Design data + the change it would make; apply only the ticked ones.
+function openJiraReview(rows, syncedAt, stats){
+  stats=stats||{};
+  const changedCount=rows.filter(r=>r.changed).length;
+  const d=v=>v?esc(v):'—';
+  const listHtml = rows.length ? rows.map((r,i)=>{
+    const sChanged=(r.newStart||'')!==(r.curStart||'') && !!r.newStart;
+    const eChanged=(r.newEnd||'')!==(r.curEnd||'');
+    const startLine = r.newStart
+      ? `Start: <span class="${sChanged?'old':''}">${d(r.curStart)}</span>${sChanged?' → <span class="new">'+esc(r.newStart)+'</span>':''}`
+      : (r.curStart?`Start: ${d(r.curStart)}`:'');
+    const endLine = `End: <span class="${eChanged?'old':''}">${d(r.curEnd)}</span>${eChanged?' → <span class="new">'+esc(r.newEnd)+'</span>':''}`;
+    const badgeCls = r.action==='Create'?'create':r.action==='Update'?'update':'nochange';
+    return `<label class="jr-row ${r.changed?'':'nochange'}">
+      <input type="checkbox" class="jr-cb" data-i="${i}" ${r.changed?'checked':''}>
+      <span class="jr-main">
+        <div><span class="jr-name">${esc(r.name)}</span> <span class="jr-key">${esc(r.key)}</span></div>
+        <div class="jr-dates">${startLine}${(startLine&&endLine)?' &nbsp;·&nbsp; ':''}${endLine}</div>
+      </span>
+      <span class="jr-badge ${badgeCls}">${r.action}</span>
+    </label>`;
+  }).join('') : '<div style="padding:16px;color:var(--muted);font-size:13px;">No Design ETA data returned from Jira.</div>';
+  modal.style.width='720px';
+  modal.innerHTML = `<h3>Jira Sync — review changes</h3>
+    <div style="font-size:12px;color:var(--muted);margin:-6px 0 12px;">${changedCount} change(s)${stats.noEta?', '+stats.noEta+' without Design ETA':''}${stats.errored?', '+stats.errored+' error(s)':''}. Tick the ones to apply.</div>
+    <div class="jr-head"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="jr-all"> Select all</label></div>
+    <div class="jr-list">${listHtml}</div>
+    <div class="modal-actions"><button class="btn" id="jr-cancel">Cancel</button><button class="btn primary" id="jr-save">Apply selected</button></div>`;
+  const cbs=[...modal.querySelectorAll('.jr-cb')];
+  const saveBtn=modal.querySelector('#jr-save'), allCb=modal.querySelector('#jr-all');
+  function refresh(){
+    const n=cbs.filter(c=>c.checked).length;
+    saveBtn.textContent='Apply selected ('+n+')'; saveBtn.disabled=n===0;
+    allCb.checked = n>0 && n===cbs.length;
+  }
+  cbs.forEach(c=>c.onchange=refresh);
+  allCb.onchange=()=>{ cbs.forEach(c=>c.checked=allCb.checked); refresh(); };
+  refresh();
+  modal.querySelector('#jr-cancel').onclick=closeModal;
+  saveBtn.onclick=()=>{
+    let applied=0;
+    cbs.forEach(c=>{ if(c.checked){ const r=rows[+c.dataset.i]; if(applyDesignDates(r.proj, r.newStart, r.newEnd)) applied++; } });
+    state.lastJiraSync = syncedAt || Date.now();
+    lastSyncedJSON=null;   // force a save even if only the timestamp changed
+    closeModal(); save(); renderJiraSync(); render();
+    setSync('Jira: applied '+applied+' change(s)','ok');
+  };
+  modalBg.classList.add('open');
 }
 // Alt/Option-click the Jira Sync button to dump one issue's exact Design ETA value + schema.
 async function jiraRawDump(key){
@@ -1788,7 +1858,7 @@ function wireNoteDock(initialNote){
   noteBtn.onclick=()=>{ open=!open; sync(); if(open) noteTa.focus(); };
   noteTa.oninput=()=>noteBtn.classList.toggle('has',noteTa.value.trim()!=='');
 }
-function closeModal(){modalBg.classList.remove('open');modal.innerHTML='';hideNoteDock();}
+function closeModal(){modalBg.classList.remove('open');modal.innerHTML='';modal.style.width='';hideNoteDock();}
 // Date input with a clear (×) button. Wire with wireDateClears() after innerHTML is set.
 function dateField(id,val){
   return `<div class="datewrap"><input type="date" id="${id}" value="${val||''}"><button type="button" class="dateclear" data-for="${id}" title="Clear date">×</button></div>`;
