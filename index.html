@@ -773,11 +773,12 @@ async function jiraSync(){
       body: JSON.stringify({action:'sync', issues: targets.map((t,i)=>({id:i, key:t.key}))})});
     const j = await r.json().catch(()=>({}));
     if(!r.ok){
-      const msg = j.error==='jira_not_configured' ? 'Jira not configured — set env vars'
+      const msg = r.status===404 ? 'Jira API not found (404) — redeploy needed'
+               : j.error==='jira_not_configured' ? 'Jira not configured — set env vars'
                : j.error==='design_eta_field_not_found' ? 'Jira: "Design ETA" field not found'
                : j.error==='forbidden' ? 'Only Thanh can sync Jira'
-               : 'Jira sync failed';
-      setSync(msg,'bad'); console.warn('jira sync error:', j); return;
+               : 'Jira sync failed ('+r.status+')';
+      setSync(msg,'bad'); console.warn('[Jira sync] failed', r.status, r.url, j); return;
     }
     let updated=0, noEta=0, errored=0;
     (j.results||[]).forEach(rec=>{
