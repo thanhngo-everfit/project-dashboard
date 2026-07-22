@@ -236,6 +236,7 @@
   .design-span{position:absolute;top:calc(50% - 16px);height:32px;border-radius:9px;z-index:0;cursor:pointer;}
   .design-tick{position:absolute;top:calc(50% - 23px);height:46px;width:2px;border-radius:1px;z-index:6;pointer-events:none;}
   .design-cap{position:absolute;top:calc(50% - 33px);font-size:9px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;white-space:nowrap;cursor:pointer;z-index:6;padding-left:3px;}
+  .design-cap.r{padding-left:0;padding-right:3px;transform:translateX(-100%);}   /* right edge sits on the end tick */
   .row.phase.has-design{min-height:80px;}
 
   .today{position:absolute;top:0;bottom:0;width:0;border-left:2px dashed #f04438;z-index:7;pointer-events:none;transform:translateX(-1px);}
@@ -1472,13 +1473,17 @@ function phaseRow(cat,proj,units,tw){
     attachDrag(bar,proj,units,'phase',cat);
     track.appendChild(bar);
   }
-  // design start/end signals + "Design" label, drawn on top so they stay visible over the project bar
+  // design start/end signals + labels, drawn on top so they stay visible over the project bar
   if(dSpan){
     const tickColor=mix(barColor,0.5);
     [dSpan.x,dSpan.xe].forEach(px=>{ const tk=document.createElement('div'); tk.className='design-tick'; tk.style.left=(px-1)+'px'; tk.style.background=tickColor; track.appendChild(tk); });
-    const cap=document.createElement('div'); cap.className='design-cap'; cap.style.left=dSpan.x+'px'; cap.style.color=tickColor; cap.textContent='Design';
-    cap.onclick=()=>openTaskModal(proj,dTasks[0]);
-    track.appendChild(cap);
+    const mkCap=(x,text,right)=>{
+      const cap=document.createElement('div'); cap.className='design-cap'+(right?' r':''); cap.style.left=x+'px'; cap.style.color=tickColor; cap.textContent=text;
+      cap.onclick=()=>openTaskModal(proj,dTasks[0]);
+      track.appendChild(cap);
+    };
+    mkCap(dSpan.x,'Design Start',false);    // above the start tick
+    mkCap(dSpan.xe,'Design End',true);      // above the end tick (right-aligned to it)
   }
   row.appendChild(track);
   return row;
