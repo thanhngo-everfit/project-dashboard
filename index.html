@@ -236,7 +236,7 @@
        transition:filter .12s ease;}
   .designbar:hover{filter:brightness(1.05);}
   .designbar.dragging{cursor:grabbing;opacity:.9;}
-  .designbar .dlabel{font-size:9px;font-weight:800;color:#fff;letter-spacing:.4px;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;}
+  .designbar .dlabel{font-size:9px;font-weight:800;color:inherit;letter-spacing:.4px;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;}
   .designbar .handle{position:absolute;top:0;bottom:0;width:8px;cursor:ew-resize;z-index:3;}
   .designbar .handle.l{left:0;} .designbar .handle.r{right:0;}
   .row.phase.has-design{min-height:76px;}
@@ -1403,7 +1403,8 @@ function projBarColor(cat,proj){ return (cat._colorByProj&&cat._colorByProj[proj
 // Uses a deeper shade of the project colour so it reads as part of the same project.
 function designStrip(proj,t,units,idx,projColor){
   const strip=document.createElement('div'); strip.className='designbar';
-  strip.style.background=mix(projColor,0.34);   // same hue as the project bar, a bit darker
+  strip.style.background=rgba(projColor,0.5);        // same project colour, lighter (reduced opacity)
+  strip.style.color=mix(projColor,0.62);             // dark, matching-hue label like the project bar
   strip.style.top='calc(50% + '+(17+idx*17)+'px)';   // stack if a project has more than one design item
   const x=dateToX(effStart(t,units),units);
   const w=Math.max(dateToX(addDays(effEnd(t,units),1),units)-x, 6);
