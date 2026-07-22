@@ -83,6 +83,10 @@
   .row.project .left{font-weight:800;}
   .row.phase{height:auto;min-height:var(--row-h);}
   .row.phase .left{font-weight:600;padding-top:11px;padding-bottom:11px;padding-left:6px;}
+  /* completed project: struck-through name + dimmed bar/labels */
+  .row.phase.done .label{text-decoration:line-through;color:var(--muted);}
+  .row.phase.done .bar{opacity:.5;}
+  .row.phase.done .design-span,.row.phase.done .design-tick,.row.phase.done .design-cap,.row.phase.done .design-ready{opacity:.45;}
   .row.task{height:32px;}
   .row.task .left{font-weight:500;color:#475467;}
   .row.task .left .label{font-size:12px;}
@@ -489,7 +493,8 @@
           <label class="sm-switch" style="margin-bottom:12px;"><span>Show tags</span><input type="checkbox" id="showTags"><span class="track"></span></label>
           <label class="sm-switch" style="margin-bottom:12px;"><span>Show links</span><input type="checkbox" id="showLinks"><span class="track"></span></label>
           <label class="sm-switch" style="margin-bottom:12px;"><span>Show size</span><input type="checkbox" id="showSize"><span class="track"></span></label>
-          <label class="sm-switch"><span>Show design work</span><input type="checkbox" id="showDesign"><span class="track"></span></label>
+          <label class="sm-switch" style="margin-bottom:12px;"><span>Show design work</span><input type="checkbox" id="showDesign"><span class="track"></span></label>
+          <label class="sm-switch"><span>Show completed projects</span><input type="checkbox" id="showCompleted"><span class="track"></span></label>
         </div>
       </div>
     </div>
@@ -538,6 +543,7 @@ function setShowTags(v){ if(!state.showTagsByTribe) state.showTagsByTribe={}; st
 function showLinksOn(){ return state.showLinks !== false; }
 function showSizeOn(){ return state.showSize !== false; }
 function showDesignOn(){ return state.showDesign !== false; }
+function showCompletedOn(){ return state.showCompleted !== false; }
 
 /* ============================ State ============================ */
 const STORE_KEY = 'roadmapDashboardV2';
@@ -723,6 +729,7 @@ function migrate(s){
       if(typeof proj.priority!=='string') proj.priority='';
       if(typeof proj.jira!=='string') proj.jira='';
       if(typeof proj.designStatus!=='string') proj.designStatus='';   // synced from Jira (customfield_10139)
+      if(typeof proj.done!=='boolean') proj.done=false;   // manually marked complete (shared)
       if(!Array.isArray(proj.docs)) proj.docs=[];
       if(typeof proj.note!=='string') proj.note='';
       delete proj.color; delete proj.wip; delete proj.badge;   // color comes from the category now
@@ -751,6 +758,7 @@ function migrate(s){
   if(typeof s.showLinks!=='boolean') s.showLinks=true;    // personal display toggles, on by default
   if(typeof s.showSize!=='boolean') s.showSize=true;
   if(typeof s.showDesign!=='boolean') s.showDesign=true;
+  if(typeof s.showCompleted!=='boolean') s.showCompleted=true;   // personal: show projects marked done
   if(!['week','month','quarter'].includes(s.defaultView)) s.defaultView='week';   // personal: fallback view mode
   if(typeof s.search!=='string') s.search='';   // personal search query
   if(!s.activeTribe && Array.isArray(s.tribes) && s.tribes[0]) s.activeTribe=s.tribes[0].id;   // personal
@@ -1439,7 +1447,7 @@ function renderGantt(){
   let projCount=0;
   squad.projects.forEach(p=>{
     const catMatch=q0 && p.name.toLowerCase().includes(q0);
-    let ps = (p.phases||[]).filter(x=>tagFilterMatch(x.tags));
+    let ps = (p.phases||[]).filter(x=>tagFilterMatch(x.tags) && (showCompletedOn()||!x.done));
     if(q0 && !catMatch) ps=ps.filter(x=>x.name.toLowerCase().includes(q0));
     projCount+=ps.length;
   });
@@ -1476,9 +1484,9 @@ function renderGantt(){
   const anyTag=(state.tagFilters||[]).length>0;
   squad.projects.forEach(p=>{
     const catMatch = q && p.name.toLowerCase().includes(q);
-    let projs = p.phases.filter(x=>tagFilterMatch(x.tags));
+    let projs = p.phases.filter(x=>tagFilterMatch(x.tags) && (showCompletedOn()||!x.done));
     if(q && !catMatch) projs = projs.filter(x=>x.name.toLowerCase().includes(q));
-    if((anyTag||q) && projs.length===0) return;   // hide categories with no matching projects
+    if((anyTag||q||!showCompletedOn()) && projs.length===0) return;   // hide categories with no matching/visible projects
     grid.appendChild(projectRow(p,units,tw));
     projs.forEach(ph=>{
       grid.appendChild(phaseRow(p,ph,units,tw));
@@ -1536,7 +1544,7 @@ function updateDesignReadyChips(){
 // Marketing list view: all projects across squads, grouped by end date.
 function renderListByEnd(g){
   const q=(state.search||'').trim().toLowerCase();
-  let items=allProjects().filter(x=>tagFilterMatch(x.p.tags));
+  let items=allProjects().filter(x=>tagFilterMatch(x.p.tags) && (showCompletedOn()||!x.p.done));
   if(q) items=items.filter(x=> x.p.name.toLowerCase().includes(q) || (x.cat.name||'').toLowerCase().includes(q) || (x.squad.name||'').toLowerCase().includes(q));
   // group by end date
   const map=new Map();
@@ -1675,7 +1683,7 @@ function projectRow(p,units,tw){
   const row=document.createElement('div'); row.className='row project';
   const q=(state.search||'').trim().toLowerCase();
   const catMatch=q && p.name.toLowerCase().includes(q);
-  let vis = (p.phases||[]).filter(x=>tagFilterMatch(x.tags));
+  let vis = (p.phases||[]).filter(x=>tagFilterMatch(x.tags) && (showCompletedOn()||!x.done));
   if(q && !catMatch) vis = vis.filter(x=>x.name.toLowerCase().includes(q));
   const count=vis.length;
   const acts = inVirtual() ? [] : [
@@ -1710,8 +1718,10 @@ function phaseRow(cat,proj,units,tw){
   const delHost=(cat._srcCatByProj&&cat._srcCatByProj[proj.id])||cat._srcCat||cat;   // in virtual view, delete from the real category
   const acts=[];
   if(!inVirtual()) acts.push({icon:'＋',title:'Add work',fn:()=>openTaskModal(proj)});   // no add-work in Jon/Long views
+  acts.push({icon: proj.done?'↩':'✓', title: proj.done?'Mark as not done':'Mark as done', fn:()=>{ proj.done=!proj.done; render(); }});
   acts.push({icon:'✎',title:'Edit project',fn:()=>openPhaseModal(cat,proj)});
   acts.push({icon:'🗑',title:'Delete',fn:()=>{if(confirm('Delete project "'+proj.name+'"?')){delHost.phases=delHost.phases.filter(x=>x!==proj);render();}}});
+  if(proj.done) row.classList.add('done');
   const designTasks=(proj.tasks||[]).filter(t=>t.type==='design');   // design sticks to the project bar
   const hasWork=(proj.tasks||[]).some(t=>t.type!=='design');         // only dev work drives the collapse caret
   const designOn = showDesignOn();   // show design work (also in virtual views — they reference the real projects)
@@ -2373,15 +2383,17 @@ document.getElementById('historyBtn').onclick=()=>openVersionHistory();
 (function(){
   const btn=document.getElementById('settingsBtn'), menu=document.getElementById('settingsMenu'), tog=document.getElementById('showTags');
   const links=document.getElementById('showLinks'), size=document.getElementById('showSize'), design=document.getElementById('showDesign');
+  const completed=document.getElementById('showCompleted');
   const viewSeg=document.getElementById('defaultViewSeg');
   const syncViewSeg=()=>viewSeg.querySelectorAll('button').forEach(b=>b.classList.toggle('active', b.dataset.v===(state.defaultView||'week')));
   btn.onclick=e=>{ e.stopPropagation(); const open=menu.style.display==='none'; menu.style.display=open?'block':'none';
-    if(open){ tog.checked=showTagsOn(); links.checked=showLinksOn(); size.checked=showSizeOn(); design.checked=showDesignOn(); syncViewSeg(); updateZoomLabel(); document.getElementById('smRows').style.display=isAdmin()?'':'none'; } };
+    if(open){ tog.checked=showTagsOn(); links.checked=showLinksOn(); size.checked=showSizeOn(); design.checked=showDesignOn(); completed.checked=showCompletedOn(); syncViewSeg(); updateZoomLabel(); document.getElementById('smRows').style.display=isAdmin()?'':'none'; } };
   document.addEventListener('click',e=>{ if(!e.target.closest('.settings-wrap')) menu.style.display='none'; });
   tog.onchange=e=>{ setShowTags(e.target.checked); render(); };
   links.onchange=e=>{ state.showLinks=e.target.checked; render(); };
   size.onchange=e=>{ state.showSize=e.target.checked; render(); };
   design.onchange=e=>{ state.showDesign=e.target.checked; render(); };
+  completed.onchange=e=>{ state.showCompleted=e.target.checked; render(); };
   viewSeg.querySelectorAll('button').forEach(b=>b.onclick=()=>{ state.defaultView=b.dataset.v; state.viewBySquad={}; syncViewSeg(); render(); });   // apply to this session now
 })();
 // re-fit the timeline width when the window resizes
