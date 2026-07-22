@@ -1663,7 +1663,7 @@ function phaseRow(cat,proj,units,tw){
   acts.push({icon:'🗑',title:'Delete',fn:()=>{if(confirm('Delete project "'+proj.name+'"?')){delHost.phases=delHost.phases.filter(x=>x!==proj);render();}}});
   const designTasks=(proj.tasks||[]).filter(t=>t.type==='design');   // design sticks to the project bar
   const hasWork=(proj.tasks||[]).some(t=>t.type!=='design');         // only dev work drives the collapse caret
-  const designOn = !inVirtual() && showDesignOn();                   // personal toggle: show design work at all
+  const designOn = showDesignOn();   // show design work (also in virtual views — they reference the real projects)
   const noDesign = designOn && designTasks.length===0 && curSquadHasDesign;   // hide "No design" if the whole squad has none
   if(designOn && (designTasks.some(t=>t.start||t.end) || noDesign)) row.classList.add('has-design');   // room for the below-bar chip
   const {left,caret}=leftCell(1, hasWork?(isCollapsed(proj)?'closed':'open'):null, null,proj.name,acts);
