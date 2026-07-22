@@ -238,6 +238,7 @@
   .design-tick{position:absolute;top:calc(50% - 23px);height:46px;width:2px;border-radius:1px;z-index:6;pointer-events:none;}
   .design-cap{position:absolute;top:calc(50% - 33px);font-size:9px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;white-space:nowrap;cursor:pointer;z-index:6;padding-left:3px;}
   .design-cap.r{padding-left:0;padding-right:3px;transform:translateX(-100%);}   /* right edge sits on the end tick */
+  .design-cap.below{top:calc(50% + 24px);}   /* below the bar, so Start (above) and End (below) never overlap */
   .row.phase.has-design{min-height:80px;}
   /* pinned "design ready" chip shown when the design bar is scrolled off to the left */
   .design-ready{position:absolute;top:calc(50% - 10px);height:20px;z-index:6;display:none;align-items:center;gap:4px;
@@ -1632,13 +1633,13 @@ function phaseRow(cat,proj,units,tw){
   if(dSpan){
     const tickColor=mix(barColor,0.5);
     [dSpan.x,dSpan.xe].forEach(px=>{ const tk=document.createElement('div'); tk.className='design-tick'; tk.style.left=(px-1)+'px'; tk.style.background=tickColor; track.appendChild(tk); });
-    const mkCap=(x,text,right)=>{
-      const cap=document.createElement('div'); cap.className='design-cap'+(right?' r':''); cap.style.left=x+'px'; cap.style.color=tickColor; cap.textContent=text;
+    const mkCap=(x,text,right,below)=>{
+      const cap=document.createElement('div'); cap.className='design-cap'+(right?' r':'')+(below?' below':''); cap.style.left=x+'px'; cap.style.color=tickColor; cap.textContent=text;
       cap.onclick=()=>openTaskModal(proj,dTasks[0]);
       track.appendChild(cap);
     };
-    mkCap(dSpan.x,'Design Start',false);    // above the start tick
-    mkCap(dSpan.xe,'Design End',true);      // above the end tick (right-aligned to it)
+    mkCap(dSpan.x,'Design Start',false,false);   // above the start tick
+    mkCap(dSpan.xe,'Design End',true,true);      // below the bar, right-aligned to the end tick
     // "DESIGN READY" chip: shown (pinned to the left edge) when the whole design bar is scrolled off-left.
     const chip=document.createElement('div'); chip.className='design-ready'; chip.dataset.endx=dSpan.xe;
     chip.innerHTML='✓ Design ready'; chip.title='Design finished '+fmtShort(fmt(dSpan.e));
