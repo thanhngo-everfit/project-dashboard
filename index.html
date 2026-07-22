@@ -929,8 +929,10 @@ function fmtSyncTime(ts){
   return MONTHS[d.getMonth()]+' '+d.getDate()+', '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
 }
 function renderJiraSync(){
+  const admin=isAdmin();   // only thanhngo@everfit.io
   const wrap=document.getElementById('jiraSyncWrap'); if(!wrap) return;
-  wrap.style.display = isAdmin() ? 'flex' : 'none';
+  wrap.style.display = admin ? 'flex' : 'none';
+  const hb=document.getElementById('historyBtn'); if(hb) hb.style.display = admin ? 'inline-flex' : 'none';   // explicit admin gate
   const t=document.getElementById('jiraSyncTime'); if(t) t.textContent='Last Jira sync: '+fmtSyncTime(state.lastJiraSync);
 }
 // Admin: browse and restore previous saved versions (server keeps the last 30 automatically).
