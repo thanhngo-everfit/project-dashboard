@@ -814,20 +814,21 @@ function jiraIssueKey(url){
         || url.match(/\b([A-Za-z][A-Za-z0-9_]+-\d+)\b/);
   return m ? m[1].toUpperCase() : '';
 }
-// Apply a synced Jira row to a project: set design status, and (if an ETA is present) the design work dates.
+// Apply a synced Jira row: set design status, and the design work start/end (create the task if either date exists).
 function applyDesignSync(proj, startIso, endIso, status){
   let changed=false;
   const st=status||'';
   if((proj.designStatus||'')!==st){ proj.designStatus=st; changed=true; }
-  if(validISO(endIso)){
-    const start = validISO(startIso) ? startIso : '';
+  const start = validISO(startIso) ? startIso : '';
+  const end = validISO(endIso) ? endIso : '';
+  if(start || end){
     if(!Array.isArray(proj.tasks)) proj.tasks=[];
     const d = proj.tasks.find(t=>t.type==='design');
     if(d){
-      if(d.end!==endIso){ d.end=endIso; changed=true; }
-      if(start && d.start!==start){ d.start=start; changed=true; }   // don't wipe a manual start when Jira gives none
+      if(end && d.end!==end){ d.end=end; changed=true; }
+      if(start && d.start!==start){ d.start=start; changed=true; }
     } else {
-      proj.tasks.push({id:uid(), type:'design', start, end:endIso, progress:0, customName:'', note:'', blockers:[]});
+      proj.tasks.push({id:uid(), type:'design', start, end, progress:0, customName:'', note:'', blockers:[]});
       changed=true;
     }
   }
@@ -860,11 +861,11 @@ async function jiraSync(){
       const t=targets[rec.id]; if(!t) return;
       if(rec.error){ errored++; return; }
       const proj=t.proj;
-      // Design Start (customfield_12752) + Design ETA (customfield_10666) + Design Status (customfield_10139)
-      const end = (rec.designEnd && validISO(rec.designEnd)) ? rec.designEnd : ((rec.designStart&&validISO(rec.designStart))?rec.designStart:'');
-      const newStart = (rec.designStart && validISO(rec.designStart) && rec.designStart!==end) ? rec.designStart : '';
+      // Design Start (customfield_12752), Design ETA (customfield_10666), Design Status (customfield_10139) — kept separate
+      const newStart = (rec.designStart && validISO(rec.designStart)) ? rec.designStart : '';
+      const end = (rec.designEnd && validISO(rec.designEnd)) ? rec.designEnd : '';
       const status = rec.designStatus || '';
-      if(!end && !status){ noData++; return; }   // nothing to sync for this project
+      if(!newStart && !end && !status){ noData++; return; }   // nothing to sync for this project
       const existing=(proj.tasks||[]).find(x=>x.type==='design');
       const curStart=existing?(existing.start||''):'';
       const curEnd=existing?(existing.end||''):'';
@@ -872,10 +873,10 @@ async function jiraSync(){
       const endDiff = !!end && curEnd!==end;
       const startDiff = !!newStart && curStart!==newStart;
       const statusDiff = curStatus!==status;
-      const changed = endDiff || startDiff || statusDiff || (!existing && !!end);
+      const changed = endDiff || startDiff || statusDiff || (!existing && (newStart||end));
       const label = designStatusLabel(status, end||curEnd, newStart||curStart||'', proj.start||'');
       rows.push({proj, key:rec.key, name:proj.name, curStart, curEnd, newStart, newEnd:end, newStatus:status, label,
-        action: (!existing&&end)?'Create':(changed?'Update':'No change'), changed});
+        action: (!existing&&(newStart||end))?'Create':(changed?'Update':'No change'), changed});
     });
     // Diagnostics (console)
     console.log('%c[Jira sync]','font-weight:bold','ETA:', j.fieldId, 'Start:', j.startFieldId, 'Status:', j.statusFieldId);
@@ -1747,12 +1748,15 @@ function phaseRow(cat,proj,units,tw){
   track.appendChild(gridlinesEl(units,tw));
   const barColor=projBarColor(cat,proj);
   const projStartDate=effStart(proj,units);
-  // light design span bar over the dated design range (skip when the status label is "No Design")
+  const notNoDesign = designLabel && designLabel!=='No Design';
   const dTasks = designOn ? designTasks.filter(t=>t.start||t.end) : [];
-  let dSpan=null;
-  if(dTasks.length && designLabel!=='No Design'){
+  const dEndR = dTasks.map(t=>t.end).filter(validISO).sort().pop()||'';     // latest real end
+  const dStartR = dTasks.map(t=>t.start).filter(validISO).sort()[0]||'';    // earliest real start
+  let dSpan=null, dStartX=null;
+  if(notNoDesign && dEndR){
+    // full design span (start .. end)
     const s=new Date(Math.min(...dTasks.map(t=>effStart(t,units,workStartFallback(t,projStartDate)).getTime())));
-    const e=new Date(Math.max(...dTasks.map(t=>effEnd(t,units))));
+    const e=parse(dEndR);
     dSpan={s,e,x:dateToX(s,units),xe:dateToX(addDays(e,1),units)};
     const span=document.createElement('div'); span.className='design-span';
     span.style.left=dSpan.x+'px'; span.style.width=Math.max(dSpan.xe-dSpan.x,6)+'px';
@@ -1760,6 +1764,8 @@ function phaseRow(cat,proj,units,tw){
     span.title='Design: '+fmtShort(fmt(s))+' → '+fmtShort(fmt(e));
     span.onclick=()=>openTaskModal(proj,dTasks[0]);
     track.appendChild(span);
+  } else if(notNoDesign && dStartR){
+    dStartX=dateToX(parse(dStartR),units);   // start-only (e.g. Waiting): just mark the start
   }
   if(proj.start||proj.end){
     const bar=makeBar(barColor, proj.name, null, ()=>openPhaseModal(cat,proj), {});
@@ -1767,11 +1773,13 @@ function phaseRow(cat,proj,units,tw){
     attachDrag(bar,proj,units,'phase',cat);
     track.appendChild(bar);
   }
-  // design start/end ticks + "Design Start" cap (only with a real dated span)
-  if(dSpan){
+  // design start/end ticks + "Design Start" cap
+  if(dSpan || dStartX!=null){
     const tickColor=mix(barColor,0.5);
-    [dSpan.x,dSpan.xe].forEach(px=>{ const tk=document.createElement('div'); tk.className='design-tick'; tk.style.left=(px-1)+'px'; tk.style.background=tickColor; track.appendChild(tk); });
-    const cap=document.createElement('div'); cap.className='design-cap'; cap.style.left=dSpan.x+'px'; cap.style.color=tickColor; cap.textContent='Design Start';
+    const startX = dSpan ? dSpan.x : dStartX;
+    const tickXs = dSpan ? [dSpan.x, dSpan.xe] : [dStartX];
+    tickXs.forEach(px=>{ const tk=document.createElement('div'); tk.className='design-tick'; tk.style.left=(px-1)+'px'; tk.style.background=tickColor; track.appendChild(tk); });
+    const cap=document.createElement('div'); cap.className='design-cap'; cap.style.left=startX+'px'; cap.style.color=tickColor; cap.textContent='Design Start';
     cap.onclick=()=>openTaskModal(proj,dTasks[0]);
     track.appendChild(cap);
   }
@@ -1783,7 +1791,8 @@ function phaseRow(cat,proj,units,tw){
       const beforeProject = validISO(proj.start) && dSpan.e < parse(proj.start);
       homeX = beforeProject ? dateToX(projStartDate,units) : dSpan.xe;
       align = beforeProject ? 'left' : 'right';
-    } else { homeX = dateToX(projStartDate,units); align='left'; }
+    } else if(dStartX!=null){ homeX = dStartX; align='left'; }
+    else { homeX = dateToX(projStartDate,units); align='left'; }
     const chip=document.createElement('div'); chip.className='design-ready';
     chip.dataset.homex=homeX; chip.dataset.align=align;
     chip.style.background=st.bg; chip.style.color=st.c; chip.style.borderColor=st.bd;
@@ -1825,9 +1834,8 @@ function designStatusLabel(status, endIso, designStartIso, projStartIso){
   if(grp==='approved') return 'Design Ready';            // Team/Product/L-J Approved -> always Design Ready
   if(s==='need l/j review') return 'Need L/J Review';    // all cases
   const today=parse(todayISO());
-  // Waiting For Start: work hasn't begun yet — the design start (or, if none, the project start) is in the future.
-  const startRef = validISO(designStartIso) ? designStartIso : projStartIso;
-  if(validISO(startRef) && parse(startRef) > today) return 'Waiting For Start';
+  // Waiting For Start: the design start date is in the future (design scheduled but not begun).
+  if(validISO(designStartIso) && parse(designStartIso) > today) return 'Waiting For Start';
   // Overdue: the Design ETA falls on/after the project start (i.e. within the project window) and is now
   // in the past. An ETA that lands before the project start isn't flagged overdue — show the real status.
   const etaPast = validISO(endIso) && parse(endIso) < today;
