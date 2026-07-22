@@ -665,11 +665,13 @@ function validISO(s){
 function addDays(d,n){return new Date(d.getFullYear(),d.getMonth(),d.getDate()+n);}
 function addMonths(d,n){return new Date(d.getFullYear(),d.getMonth()+n,1);}
 
+const DEFAULT_ZOOM={quarter:3, month:3, week:1};   // default zoom per view (Week 100%, Month/Quarter 300%)
 function load(){
   let s=null;
   try{const raw=JSON.parse(localStorage.getItem(STORE_KEY)); if(raw&&raw.squads&&raw.squads.length) s=migrate(raw);}catch(e){}
   if(!s) s=migrate(seed());
-  s.viewBySquad={};   // Quarter/Month/Week is per-session only — reset to default on each page load (F5)
+  s.viewBySquad={};                 // Quarter/Month/Week is per-session only — reset to default on each page load (F5)
+  s.zoomByView={...DEFAULT_ZOOM};   // zoom also resets to the per-view defaults each session
   return s;
 }
 /* Model: squad.projects[] = Categories; category.phases[] = Projects (each = one bar with
@@ -745,7 +747,7 @@ function isCollapsed(p){ return state.uiCollapsed[p.id] !== false; }   // defaul
 function toggleCollapsed(p){ state.uiCollapsed[p.id] = isCollapsed(p) ? false : true; }
 function curView(){ return (state.viewBySquad && state.viewBySquad[state.activeSquad]) || 'week'; }   // default: Week
 function setView(v){ if(!state.viewBySquad) state.viewBySquad={}; state.viewBySquad[state.activeSquad]=v; }
-function curZoom(){ return (state.zoomByView && state.zoomByView[curView()]) || 1; }
+function curZoom(){ return (state.zoomByView && state.zoomByView[curView()]) || DEFAULT_ZOOM[curView()] || 1; }
 function setZoom(z){ if(!state.zoomByView) state.zoomByView={}; state.zoomByView[curView()]=z; }
 /* Local cache + shared-server sync.
  * - localStorage is an offline cache / fallback.
