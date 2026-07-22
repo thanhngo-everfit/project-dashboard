@@ -1815,14 +1815,14 @@ function designStatusGroup(s){
   if(s==='question'||s==='on hold') return 'pending';
   return 'estimation';   // '' (null), 'brainstorm', or anything unrecognised
 }
-// Map Jira design status + Design ETA end + project start -> the label shown on the timeline.
-function designStatusLabel(status, endIso, projStartIso){
+// Map Jira design status + Design ETA end -> the label shown on the timeline. (3rd arg kept for callers; unused.)
+function designStatusLabel(status, endIso, _projStartIso){
   const s=(status||'').toLowerCase().trim();
   if(s==='no need design') return 'No Design';          // Logic 1
   if(s==='need l/j review') return 'Need L/J Review';   // Logic 4 (all cases)
   const grp=designStatusGroup(s);
-  // Logic 3: ETA filled and ends before the project starts -> overdue (unless approved)
-  const overdue = validISO(endIso) && validISO(projStartIso) && parse(endIso)<parse(projStartIso);
+  // Overdue: ETA filled and ends before TODAY (unless approved). No ETA / ETA today-or-later -> normal mapping.
+  const overdue = validISO(endIso) && parse(endIso)<parse(todayISO());
   if(overdue) return grp==='approved' ? 'Design Ready' : 'Design Overdue';
   // Logic 2 (ETA after project start) and Logic 5 (no ETA) share the same mapping
   return {estimation:'Need Design Estimation',progress:'Design In Progress',review:'Design In Review',approved:'Design Ready',pending:'Design Pending'}[grp];
