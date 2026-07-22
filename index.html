@@ -1716,9 +1716,10 @@ function phaseRow(cat,proj,units,tw){
   const dStatus = designOn ? (proj.designStatus||'') : '';
   const dEndIso = designOn ? (designTasks.map(t=>t.end).filter(validISO).sort().pop()||'') : '';   // latest Design ETA
   const dStartIso = designOn ? (designTasks.map(t=>t.start).filter(validISO).sort()[0]||'') : '';  // earliest Design start
-  const hasDesignInfo = designOn && (designTasks.length>0 || dStatus);
-  const showNoDesign = designOn && !hasDesignInfo && curSquadHasDesign;   // squad uses design but this project has none
-  const designLabel = hasDesignInfo ? designStatusLabel(dStatus, dEndIso, dStartIso, proj.start||'') : (showNoDesign?'No Design':'');
+  // A project participates in design tracking if it has a Jira link (status comes from Jira) or any design work.
+  // Null/unsynced status -> "Need Design Estimation". "No Design" only comes from the Jira "No Need Design" status.
+  const hasDesignInfo = designOn && ((proj.jira&&proj.jira.trim()) || designTasks.length>0 || dStatus);
+  const designLabel = hasDesignInfo ? designStatusLabel(dStatus, dEndIso, dStartIso, proj.start||'') : '';
   if(designLabel) row.classList.add('has-design');   // room for the below-bar chip
   const {left,caret}=leftCell(1, hasWork?(isCollapsed(proj)?'closed':'open'):null, null,proj.name,acts);
   if(caret) caret.onclick=()=>{toggleCollapsed(proj);render();};
@@ -2252,7 +2253,7 @@ function openTaskModal(phase,t){
       <div><label>End (optional)</label>${dateField('m_end',def.end)}</div>
     </div>
     <div class="field" style="margin-top:-6px;"><span style="font-size:11px;color:var(--muted);">Blank start → the project's start date (or the 1st of the end-date month if it ends before the project starts). Blank end → the edge of the current view.</span></div>
-    <div class="field" id="m_jiranote" style="margin-top:-6px;display:none;"><span style="font-size:11px;font-weight:600;color:#067647;">↻ Design dates last synced from Jira: ${state.lastJiraSync?esc(fmtSyncTime(state.lastJiraSync)):''}</span></div>
+    <div class="field" id="m_jiranote" style="margin-top:-6px;display:none;"><span style="font-size:11px;font-weight:600;color:#067647;">↻ Jira design status: <b>${esc(phase.designStatus||'—')}</b>${state.lastJiraSync?'  ·  synced '+esc(fmtSyncTime(state.lastJiraSync)):''}</span></div>
     <div class="field progress-row" id="m_prow"><label>Progress: <span id="m_pval">${def.progress||0}</span>%</label><input type="range" min="0" max="100" id="m_prog" value="${def.progress||0}"></div>
     <div class="field"><label>Blockers</label>
       <div id="m_blockers" class="checklist"></div>
@@ -2265,8 +2266,8 @@ function openTaskModal(phase,t){
   function syncType(){
     prow.style.display=TASK_MAP[typeSel.value].progress?'block':'none';
     namerow.style.display=typeSel.value==='custom'?'block':'none';
-    // Jira sync note only makes sense for Design work (the field pulled from Jira) and only if a sync has run
-    if(jiranote) jiranote.style.display=(typeSel.value==='design' && state.lastJiraSync)?'block':'none';
+    // Jira design-status note only makes sense for Design work (status/dates come from Jira)
+    if(jiranote) jiranote.style.display=(typeSel.value==='design' && (state.lastJiraSync||phase.designStatus))?'block':'none';
   }
   syncType(); typeSel.onchange=syncType;
   prog.oninput=()=>pval.textContent=prog.value;
