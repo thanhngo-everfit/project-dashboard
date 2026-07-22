@@ -1811,7 +1811,7 @@ function designStatusGroup(s){
   s=(s||'').toLowerCase().trim();
   if(s==='design in progress'||s==='need to fix') return 'progress';
   if(s==='team lead review'||s==='need beos review') return 'review';
-  if(s==='team lead approved'||s==='product lead approved') return 'approved';
+  if(s==='team lead approved'||s==='product lead approved'||s==='l/j approved') return 'approved';   // approved -> Design Ready (all cases)
   if(s==='question'||s==='on hold') return 'pending';
   return 'estimation';   // '' (null), 'brainstorm', or anything unrecognised
 }
