@@ -229,19 +229,12 @@
   .bar .handle.l{left:0;}
   .bar .handle.r{right:0;}
   .bar.summary{cursor:default;opacity:.5;height:5px;top:calc(50% - 2.5px);box-shadow:none;border-radius:3px;}
-  /* lighter lead-in on the project bar, back to an earlier design start (name stays at project start) */
-  .bar-lead{position:absolute;top:calc(50% - 16px);height:32px;border-radius:9px 0 0 9px;z-index:0;pointer-events:none;}
-  /* design work: a thin bar stuck to the bottom edge of the project bar so the design timeline
-     can be read against the project/development timeline on the same axis */
-  .designbar{position:absolute;height:15px;top:calc(50% + 18px);border-radius:6px;cursor:grab;z-index:5;
-       display:flex;align-items:center;padding:0 7px;overflow:hidden;box-shadow:0 1px 2px rgba(16,24,40,.18);
-       transition:filter .12s ease;}
-  .designbar:hover{filter:brightness(1.05);}
-  .designbar.dragging{cursor:grabbing;opacity:.9;}
-  .designbar .dlabel{font-size:9px;font-weight:800;color:inherit;letter-spacing:.4px;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;}
-  .designbar .handle{position:absolute;top:0;bottom:0;width:8px;cursor:ew-resize;z-index:3;}
-  .designbar .handle.l{left:0;} .designbar .handle.r{right:0;}
-  .row.phase.has-design{min-height:76px;}
+  /* design shown as one lighter bar merged with the project bar (spans the design date range),
+     with start/end ticks and a "Design" label so the design window reads on the same axis */
+  .design-span{position:absolute;top:calc(50% - 16px);height:32px;border-radius:9px;z-index:0;cursor:pointer;}
+  .design-tick{position:absolute;top:calc(50% - 23px);height:46px;width:2px;border-radius:1px;z-index:6;pointer-events:none;}
+  .design-cap{position:absolute;top:calc(50% - 33px);font-size:9px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;white-space:nowrap;cursor:pointer;z-index:6;padding-left:3px;}
+  .row.phase.has-design{min-height:80px;}
 
   .today{position:absolute;top:0;bottom:0;width:0;border-left:2px dashed #f04438;z-index:7;pointer-events:none;transform:translateX(-1px);}
   /* Today marker (dot + label) pinned at the top of the timeline */
@@ -1359,7 +1352,7 @@ function phaseRow(cat,proj,units,tw){
   acts.push({icon:'🗑',title:'Delete',fn:()=>{if(confirm('Delete project "'+proj.name+'"?')){delHost.phases=delHost.phases.filter(x=>x!==proj);render();}}});
   const designTasks=(proj.tasks||[]).filter(t=>t.type==='design');   // design sticks to the project bar
   const hasWork=(proj.tasks||[]).some(t=>t.type!=='design');         // only dev work drives the collapse caret
-  if(designTasks.length) row.classList.add('has-design');
+  if(!inVirtual() && designTasks.some(t=>t.start||t.end)) row.classList.add('has-design');
   const {left,caret}=leftCell(1, hasWork?(isCollapsed(proj)?'closed':'open'):null, null,proj.name,acts);
   if(caret) caret.onclick=()=>{toggleCollapsed(proj);render();};
   const q=(state.search||'').trim().toLowerCase();
@@ -1387,53 +1380,40 @@ function phaseRow(cat,proj,units,tw){
   const track=document.createElement('div'); track.className='track'; track.style.width=tw+'px';
   track.appendChild(gridlinesEl(units,tw));
   const barColor=projBarColor(cat,proj);
+  // design span: a lighter bar merged with the project bar, covering the full design date range.
+  // Drawn first so it paints behind the solid project bar.
+  const dTasks = inVirtual() ? [] : designTasks.filter(t=>t.start||t.end);
+  let dSpan=null;
+  if(dTasks.length){
+    const s=new Date(Math.min(...dTasks.map(t=>effStart(t,units))));
+    const e=new Date(Math.max(...dTasks.map(t=>effEnd(t,units))));
+    dSpan={s,e,x:dateToX(s,units),xe:dateToX(addDays(e,1),units)};
+    const span=document.createElement('div'); span.className='design-span';
+    span.style.left=dSpan.x+'px'; span.style.width=Math.max(dSpan.xe-dSpan.x,6)+'px';
+    span.style.background=rgba(barColor,0.35);
+    span.title='Design: '+fmtShort(fmt(s))+' → '+fmtShort(fmt(e));
+    span.onclick=()=>openTaskModal(proj,dTasks[0]);
+    track.appendChild(span);
+  }
   if(proj.start||proj.end){
-    // if design starts before the project, extend a lighter lead-in on the bar back to the design start
-    // (the project name stays anchored at the project start — this is purely a visual extension)
-    if(!inVirtual()){
-      const dStarts=designTasks.map(t=>t.start).filter(Boolean).map(parse);
-      if(dStarts.length){
-        const projStart=effStart(proj,units), dMin=new Date(Math.min(...dStarts));
-        if(dMin<projStart){
-          const x=dateToX(dMin,units), px=dateToX(projStart,units);
-          const lead=document.createElement('div'); lead.className='bar-lead';
-          lead.style.left=x+'px'; lead.style.width=(px-x+12)+'px';   // +12: tuck under the bar's rounded corner
-          lead.style.background=rgba(barColor,0.4);
-          track.appendChild(lead);   // appended before the bar -> paints behind it
-        }
-      }
-    }
     const bar=makeBar(barColor, proj.name, null, ()=>openPhaseModal(cat,proj), {});
     placeBar(bar,proj,units);
     attachDrag(bar,proj,units,'phase',cat);
     track.appendChild(bar);
   }
-  // design work strips, stacked just under the project bar (only in the real view, not virtual)
-  if(!inVirtual()) designTasks.forEach((t,i)=>track.appendChild(designStrip(proj,t,units,i,barColor)));
+  // design start/end signals + "Design" label, drawn on top so they stay visible over the project bar
+  if(dSpan){
+    const tickColor=mix(barColor,0.5);
+    [dSpan.x,dSpan.xe].forEach(px=>{ const tk=document.createElement('div'); tk.className='design-tick'; tk.style.left=(px-1)+'px'; tk.style.background=tickColor; track.appendChild(tk); });
+    const cap=document.createElement('div'); cap.className='design-cap'; cap.style.left=dSpan.x+'px'; cap.style.color=tickColor; cap.textContent='Design';
+    cap.onclick=()=>openTaskModal(proj,dTasks[0]);
+    track.appendChild(cap);
+  }
   row.appendChild(track);
   return row;
 }
 // the project bar's colour (category colour, or the per-project colour in a virtual view)
 function projBarColor(cat,proj){ return (cat._colorByProj&&cat._colorByProj[proj.id])||cat.color||PALETTE[0]; }
-
-// A thin "Design" bar stuck to the bottom edge of the project bar, spanning the design dates.
-// Uses a deeper shade of the project colour so it reads as part of the same project.
-function designStrip(proj,t,units,idx,projColor){
-  const strip=document.createElement('div'); strip.className='designbar';
-  strip.style.background=rgba(projColor,0.5);        // same project colour, lighter (reduced opacity)
-  strip.style.color=mix(projColor,0.62);             // dark, matching-hue label like the project bar
-  strip.style.top='calc(50% + '+(17+idx*17)+'px)';   // stack if a project has more than one design item
-  const x=dateToX(effStart(t,units),units);
-  const w=Math.max(dateToX(addDays(effEnd(t,units),1),units)-x, 6);
-  strip.style.left=x+'px'; strip.style.width=w+'px';
-  const lbl=document.createElement('span'); lbl.className='dlabel'; lbl.textContent='Design'; strip.appendChild(lbl);
-  const hl=document.createElement('div'); hl.className='handle l'; const hr=document.createElement('div'); hr.className='handle r';
-  strip.appendChild(hl); strip.appendChild(hr);
-  strip.title='Design: '+(t.start?fmtShort(t.start):'start of view')+' → '+(t.end?fmtShort(t.end):'end of view');
-  strip._onEdit=()=>openTaskModal(proj,t);
-  attachDrag(strip,t,units,'task',proj);
-  return strip;
-}
 
 function taskRow(p,ph,t,units,tw,last,projStartX,projStartDate){
   const meta=TASK_MAP[t.type] || TASK_MAP.custom;
