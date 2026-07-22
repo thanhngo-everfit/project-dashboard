@@ -944,6 +944,7 @@ function renderJiraSync(){
   wrap.style.display = 'flex';   // the "Last Jira sync" timestamp is visible to everyone
   const hb=document.getElementById('historyBtn'); if(hb) hb.style.display = admin ? 'inline-flex' : 'none';   // admin only
   const sb=document.getElementById('jiraSyncBtn'); if(sb) sb.style.display = admin ? 'inline-flex' : 'none';  // admin only
+  const ib=document.getElementById('importBtn'); if(ib) ib.style.display = admin ? '' : 'none';   // import (upload) is admin only; export stays for everyone
   const t=document.getElementById('jiraSyncTime'); if(t) t.textContent='Last Jira sync: '+fmtSyncTime(state.lastJiraSync);
 }
 // Admin: browse and restore previous saved versions (server keeps the last 30 automatically).
