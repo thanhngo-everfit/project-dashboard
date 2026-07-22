@@ -1230,6 +1230,12 @@ function render(){
     const v=VIRTUAL_VIEWS.find(x=>!isHidden(x.id));
     state.activeSquad = s?s.id : (v?v.id:state.activeSquad);
   }
+  // clear the search box when switching to a different squad/tab
+  if(_lastSearchSquad===null){ _lastSearchSquad=state.activeSquad; }
+  else if(state.activeSquad!==_lastSearchSquad){
+    _lastSearchSquad=state.activeSquad;
+    if(state.search){ state.search=''; const sb=document.getElementById('searchBox'); if(sb) sb.value=''; }
+  }
   renderTribes();
   renderTabs();
   document.getElementById('squadName').textContent=activeSquad().name;
@@ -1467,6 +1473,7 @@ function renderGantt(){
   }
 }
 let _lastJumpSquad=null;
+let _lastSearchSquad=null;   // clear the search box when the active squad changes
 let curSquadHasDesign=false;   // true if any project in the active squad has design work (drives "No design" chips)
 // Hide the "Today" marker when it scrolls behind the sticky left panel (it lives in the header,
 // which stacks above the left column, so it can't be covered by z-index alone).
