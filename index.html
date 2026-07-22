@@ -407,7 +407,7 @@
     <button class="iconbtn" id="importBtn" title="Import (upload JSON / tribe)">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
     </button>
-    <input type="file" id="importFile" accept="application/json" style="display:none">
+    <input type="file" id="importFile" accept="application/json,.json,text/csv,.csv" style="display:none">
     <span id="syncStatus" style="font-size:12px;font-weight:600;color:var(--muted);min-width:80px;text-align:right;"></span>
     <div class="acct" id="acct">
       <div class="profile-wrap">
@@ -2254,24 +2254,71 @@ document.getElementById('exportBtn').onclick=()=>{
 document.getElementById('importBtn').onclick=()=>document.getElementById('importFile').click();
 document.getElementById('importFile').onchange=e=>{
   const f=e.target.files[0];if(!f)return;const r=new FileReader();
-  r.onload=()=>{try{
-    const d=JSON.parse(r.result);
-    let incoming = Array.isArray(d.tribes)?d.tribes : (Array.isArray(d.squads)?[{name:d.name||'Imported',squads:d.squads}] : (d.name&&Array.isArray(d.squads)?[d]:null));
-    if(!incoming||!incoming.length){alert('Not a valid tribe export.');return;}
-    if(!Array.isArray(state.tribes)) state.tribes=[];
-    let firstNew=null;
-    incoming.forEach(tr=>{
-      const idx = tr.id ? state.tribes.findIndex(t=>t.id===tr.id) : -1;
-      if(idx>=0){ const old=state.tribes[idx]; state.tribes[idx]=Object.assign({},tr,{hidden:old.hidden||[]}); firstNew=tr.id; }   // replace same-id tribe in place (keep its hidden)
-      else { const tid=tr.id||('tribe_'+uid()); state.tribes.push(Object.assign({},tr,{id:tid})); if(!firstNew)firstNew=tid; }
-    });
-    state=migrate(state);
-    if(firstNew) state.activeTribe=firstNew;
-    const sqs=curSquads(); if(sqs[0]) state.activeSquad=sqs[0].id;
-    render();
-  }catch(err){alert('Invalid file');}};
+  r.onload=()=>{
+    const text=r.result, name=(f.name||'').toLowerCase(), head=(text||'').trim()[0];
+    // Roadmap CSV -> fill in missing Jira links by project name (non-destructive)
+    if(name.endsWith('.csv') || (head!=='{' && head!=='[')){ importRoadmapCSV(text); e.target.value=''; return; }
+    try{
+      const d=JSON.parse(text);
+      let incoming = Array.isArray(d.tribes)?d.tribes : (Array.isArray(d.squads)?[{name:d.name||'Imported',squads:d.squads}] : (d.name&&Array.isArray(d.squads)?[d]:null));
+      if(!incoming||!incoming.length){alert('Not a valid tribe export.');return;}
+      if(!Array.isArray(state.tribes)) state.tribes=[];
+      let firstNew=null;
+      incoming.forEach(tr=>{
+        const idx = tr.id ? state.tribes.findIndex(t=>t.id===tr.id) : -1;
+        if(idx>=0){ const old=state.tribes[idx]; state.tribes[idx]=Object.assign({},tr,{hidden:old.hidden||[]}); firstNew=tr.id; }   // replace same-id tribe in place (keep its hidden)
+        else { const tid=tr.id||('tribe_'+uid()); state.tribes.push(Object.assign({},tr,{id:tid})); if(!firstNew)firstNew=tid; }
+      });
+      state=migrate(state);
+      if(firstNew) state.activeTribe=firstNew;
+      const sqs=curSquads(); if(sqs[0]) state.activeSquad=sqs[0].id;
+      render();
+    }catch(err){alert('Invalid file');}
+    e.target.value='';
+  };
   r.readAsText(f);
 };
+// Minimal RFC-4180 CSV parser (handles quoted fields with commas/newlines/"" escapes).
+function parseCSV(text){
+  const rows=[]; let row=[], field='', i=0, inQ=false;
+  text=String(text||'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+  while(i<text.length){
+    const c=text[i];
+    if(inQ){
+      if(c==='"'){ if(text[i+1]==='"'){ field+='"'; i+=2; continue; } inQ=false; i++; continue; }
+      field+=c; i++; continue;
+    }
+    if(c==='"'){ inQ=true; i++; continue; }
+    if(c===','){ row.push(field); field=''; i++; continue; }
+    if(c==='\n'){ row.push(field); rows.push(row); row=[]; field=''; i++; continue; }
+    field+=c; i++;
+  }
+  if(field.length||row.length){ row.push(field); rows.push(row); }
+  return rows;
+}
+// Fill Jira links from a roadmap CSV: match by Phase (project) name, only where the project has no link.
+function importRoadmapCSV(text){
+  const rows=parseCSV(text);
+  if(rows.length<2){ alert('CSV looks empty.'); return; }
+  const header=rows[0].map(h=>h.trim().toLowerCase());
+  const iPhase=header.indexOf('phase'), iJira=header.indexOf('jira');
+  if(iPhase<0 || iJira<0){ alert('CSV must have "Phase" and "Jira" columns.'); return; }
+  const norm=s=>String(s||'').toLowerCase().replace(/[’‘]/g,"'").replace(/[“”]/g,'"').replace(/["']/g,'').replace(/[–—]/g,'-').replace(/\s+/g,' ').trim();
+  const map={};
+  for(let i=1;i<rows.length;i++){
+    const ph=rows[i][iPhase], jira=(rows[i][iJira]||'').trim();
+    if(ph && /^https?:\/\//i.test(jira)) map[norm(ph)]=jira;
+  }
+  let filled=0, had=0; const unmatched=[];
+  (state.tribes||[]).forEach(tr=>(tr.squads||[]).forEach(sq=>(sq.projects||[]).forEach(cat=>(cat.phases||[]).forEach(p=>{
+    if(p.jira && p.jira.trim()){ had++; return; }
+    const j=map[norm(p.name)];
+    if(j){ p.jira=j; filled++; } else unmatched.push(p.name);
+  }))));
+  render();   // saves (only jira changed -> passes the wipe-guard)
+  alert('Jira links added: '+filled+'\nAlready had a link: '+had+'\nNo match in CSV: '+unmatched.length+
+    (unmatched.length? '\n\nUnmatched:\n• '+unmatched.slice(0,20).join('\n• ')+(unmatched.length>20?'\n…':'') : ''));
+}
 
 /* ============================ Auth flow ============================ */
 function decodeJwt(token){
