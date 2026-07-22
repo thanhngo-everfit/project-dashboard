@@ -1366,9 +1366,9 @@ function renderGantt(){
   g.appendChild(grid);
   updateTodayMarkVis();
   updateDesignReadyChips();
-  // Center the timeline on today whenever the active tab (squad) changes — including
-  // reselecting a previous tab. Re-renders of the same tab (edits, polling) keep scroll.
-  const jk=state.activeSquad||'';
+  // Center the timeline on today whenever the active tab (squad) OR the view (quarter/month/week)
+  // changes. Re-renders of the same tab+view (edits, polling) keep scroll.
+  const jk=(state.activeSquad||'')+'|'+curView();
   if(jk!==_lastJumpSquad && g.querySelector('.today-mark')){
     _lastJumpSquad=jk;
     requestAnimationFrame(()=>jumpToday(true));
