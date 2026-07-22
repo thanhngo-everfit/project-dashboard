@@ -594,6 +594,10 @@ function fmtShort(iso){ if(!iso)return '—'; const d=parse(iso); return MONTHS[
 function allProjects(){ const out=[]; curSquads().forEach(sq=>(sq.projects||[]).forEach(cat=>(cat.phases||[]).forEach(p=>out.push({p,cat,squad:sq})))); return out; }
 // every distinct tag used anywhere (all tribes) — so custom tags can be reused
 function allUsedTags(){ const set=new Set(); (state.tribes||[]).forEach(tr=>(tr.squads||[]).forEach(sq=>(sq.projects||[]).forEach(cat=>(cat.phases||[]).forEach(p=>(p.tags||[]).forEach(t=>set.add(t)))))); return [...set]; }
+// shared custom-tag creators (tag -> email). Only recorded for brand-new custom tags.
+function tagCreator(t){ return (state.tagCreators && state.tagCreators[t]) || ''; }
+function recordTagCreator(t){ if(!state.tagCreators) state.tagCreators={}; if(!state.tagCreators[t]) state.tagCreators[t]=currentEmail; }
+function creatorLabel(email){ return (email||'').split('@')[0] || email; }
 // project passes the (multi) tag filter if it has ANY selected tag (empty filter = all pass)
 function tagFilterMatch(tags){ const tfs=state.tagFilters||[]; if(!tfs.length) return true; return (tags||[]).some(t=>tfs.includes(t)); }
 function buildVirtualSquad(v){
@@ -732,6 +736,7 @@ function migrate(s){
   if(typeof s.search!=='string') s.search='';   // personal search query
   if(!s.activeTribe && Array.isArray(s.tribes) && s.tribes[0]) s.activeTribe=s.tribes[0].id;   // personal
   if(typeof s.lastJiraSync!=='number') s.lastJiraSync=0;   // shared: last time Design ETA was pulled from Jira
+  if(!s.tagCreators || typeof s.tagCreators!=='object') s.tagCreators={};   // shared: custom tag -> creator email
   return s;
 }
 function isCollapsed(p){ return state.uiCollapsed[p.id] !== false; }   // default: collapsed
@@ -999,7 +1004,7 @@ async function syncSave(){
   setSync('Saving…');
   try{
     const r = await apiFetch('/api/state', {
-      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({state:{tribes:state.tribes, lastJiraSync:state.lastJiraSync||0}})
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({state:{tribes:state.tribes, lastJiraSync:state.lastJiraSync||0, tagCreators:state.tagCreators||{}}})
     });
     if(r.status===401){ handleAuthExpired(); return; }
     if(r.status===409){
@@ -1058,6 +1063,7 @@ function adoptRemoteData(data, updatedAt){
   saveBlocked = false;   // we now hold the good server copy again
   state.tribes = data.tribes;
   if(typeof data.lastJiraSync==='number') state.lastJiraSync = data.lastJiraSync;   // shared Jira sync time
+  if(data.tagCreators && typeof data.tagCreators==='object') state.tagCreators = data.tagCreators;   // shared tag creators
   if(!state.tribes.find(t=>t.id===state.activeTribe) && state.tribes[0]) state.activeTribe=state.tribes[0].id;
   if(!activeVirtual()){
     const sqs=curSquads();
@@ -2079,14 +2085,30 @@ function openPhaseModal(category,proj){
       const lab=document.createElement('div'); lab.className='tp-label'; lab.textContent=label; tagWrap.appendChild(lab);
       const row=document.createElement('div'); row.className='tp-row'; list.forEach(t=>row.appendChild(mk(t))); tagWrap.appendChild(row);
     };
-    const my=PREDEFINED_TAGS.slice();                                                        // My tags: the standard set
-    const other=[...new Set([...allUsedTags(), ...tags])].filter(t=>!PREDEFINED_TAGS.includes(t)); // Other tags: custom ones
-    group('My tags', my);
-    group('Other tags', other);
+    // custom tags grouped by who created them; predefined stay under "Standard tags"
+    const custom=[...new Set([...allUsedTags(), ...tags])].filter(t=>!PREDEFINED_TAGS.includes(t));
+    const mine=[], unknown=[], byCreator={};
+    custom.forEach(t=>{ const cr=tagCreator(t);
+      if(cr===currentEmail) mine.push(t);
+      else if(cr) (byCreator[cr]=byCreator[cr]||[]).push(t);
+      else unknown.push(t);
+    });
+    group('My tags', mine);
+    group('Standard tags', PREDEFINED_TAGS.slice());
+    Object.keys(byCreator).sort().forEach(email=> group('By '+creatorLabel(email), byCreator[email]));
+    if(unknown.length) group('Other tags', unknown);
   }
   renderTagPicker();
   const tagNew=modal.querySelector('#m_tagnew');
-  function addCustomTag(){ const v=tagNew.value.trim(); if(v && !tags.includes(v)) tags.push(v); tagNew.value=''; renderTagPicker(); tagNew.focus(); }
+  function addCustomTag(){
+    const v=tagNew.value.trim();
+    if(v && !tags.includes(v)){
+      const known = PREDEFINED_TAGS.includes(v) || allUsedTags().includes(v) || tagCreator(v);
+      if(!known) recordTagCreator(v);   // brand-new tag -> attribute it to the current user
+      tags.push(v);
+    }
+    tagNew.value=''; renderTagPicker(); tagNew.focus();
+  }
   modal.querySelector('#m_tagadd').onclick=addCustomTag;
   tagNew.onkeydown=e=>{ if(e.key==='Enter'){e.preventDefault();addCustomTag();} };
   // documentation multi-link list
