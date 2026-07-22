@@ -444,6 +444,7 @@
     <div class="spacer"></div>
     <div class="jira-sync" id="jiraSyncWrap" style="display:none;align-items:center;gap:8px;margin-right:8px;">
       <span id="jiraSyncTime" style="font-size:11px;color:var(--muted);white-space:nowrap;"></span>
+      <button class="btn" id="historyBtn" title="Restore a previous saved version">🕑 History</button>
       <button class="btn" id="jiraSyncBtn" title="Pull &quot;Design ETA&quot; from Jira into each linked project's design work">↻ Jira Sync</button>
     </div>
     <div class="settings-wrap">
@@ -744,9 +745,11 @@ let dragTabId = null;          // squad id while dragging a tab to reorder
 // state live in `state` too but are NEVER sent to the backend and never overwritten by
 // a teammate's copy — they persist per-browser via localStorage only.
 function dataJSON(){ return JSON.stringify(state.tribes); }
+let saveBlocked = false;      // set when the server rejects a save as a wipe; stops auto-save until reload
+let initialLoadDone = false;  // don't push anything until the first server load has resolved
 function save(){
   localStorage.setItem(STORE_KEY, JSON.stringify(state));   // full local cache incl. personal view
-  if(!idToken) return;
+  if(!idToken || saveBlocked || !initialLoadDone) return;   // never auto-save before we've seen the server copy
   if(dataJSON() === lastSyncedJSON) return;   // data unchanged (only view/UI changed) -> don't push
   scheduleSave();
 }
@@ -930,6 +933,48 @@ function renderJiraSync(){
   wrap.style.display = isAdmin() ? 'flex' : 'none';
   const t=document.getElementById('jiraSyncTime'); if(t) t.textContent='Last Jira sync: '+fmtSyncTime(state.lastJiraSync);
 }
+// Admin: browse and restore previous saved versions (server keeps the last 30 automatically).
+async function openVersionHistory(){
+  if(!isAdmin() || !idToken) return;
+  setSync('Loading history…');
+  let versions=[];
+  try{
+    const r=await apiFetch('/api/state?history=1',{method:'GET'});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok){ setSync('History failed','bad'); return; }
+    versions=j.versions||[];
+    setSync('Saved','ok');
+  }catch(e){ setSync('History error','bad'); return; }
+  const rows = versions.length ? versions.map(v=>`
+    <label class="jr-row">
+      <input type="radio" name="ver" class="jr-cb" data-i="${v.i}">
+      <span class="jr-main">
+        <div><span class="jr-name">${esc(fmtSyncTime(v.updatedAt))}</span> <span class="jr-key">${esc(v.updatedBy||'')}</span></div>
+        <div class="jr-dates">${v.tribes} tribe(s) · ${v.projects} project(s)</div>
+      </span>
+    </label>`).join('') : '<div style="padding:16px;color:var(--muted);font-size:13px;">No previous versions saved yet.</div>';
+  modal.style.width='620px';
+  modal.innerHTML=`<h3>Version history</h3>
+    <div style="font-size:12px;color:var(--muted);margin:-6px 0 12px;">Restore a previous saved version of the shared board. The current version is snapshotted before restoring.</div>
+    <div class="jr-list">${rows}</div>
+    <div class="modal-actions"><button class="btn" id="vh-cancel">Cancel</button><button class="btn primary" id="vh-restore" disabled>Restore selected</button></div>`;
+  const restoreBtn=modal.querySelector('#vh-restore');
+  modal.querySelectorAll('input[name=ver]').forEach(rb=>rb.onchange=()=>{ restoreBtn.disabled=false; });
+  modal.querySelector('#vh-cancel').onclick=closeModal;
+  restoreBtn.onclick=async()=>{
+    const sel=modal.querySelector('input[name=ver]:checked'); if(!sel) return;
+    if(!confirm('Restore this version? The current board will be replaced (and snapshotted first).')) return;
+    restoreBtn.disabled=true; setSync('Restoring…');
+    try{
+      const r=await apiFetch('/api/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'restore',index:+sel.dataset.i})});
+      const j=await r.json().catch(()=>({}));
+      if(!r.ok){ setSync('Restore failed','bad'); return; }
+      closeModal(); saveBlocked=false; await syncLoad();   // pull the restored copy
+      setSync('Restored','ok');
+    }catch(e){ setSync('Restore error','bad'); }
+  };
+  modalBg.classList.add('open');
+}
 async function syncSave(){
   if(!idToken) return;
   const payload = dataJSON();
@@ -939,6 +984,15 @@ async function syncSave(){
       method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({state:{tribes:state.tribes, lastJiraSync:state.lastJiraSync||0}})
     });
     if(r.status===401){ handleAuthExpired(); return; }
+    if(r.status===409){
+      // server refused to overwrite a populated board with a near-empty one (anti-wipe guard)
+      const j = await r.json().catch(()=>({}));
+      saveBlocked = true;   // stop auto-saving so we don't hammer the guard; keep the good server copy
+      setSync('Save blocked — would erase '+(j.oldCount||'')+' projects', 'bad');
+      console.warn('[save] wipe_guard: server has', j.oldCount, 'projects, refused to overwrite with', j.newCount);
+      await syncLoad();     // pull the good copy back into this session
+      return;
+    }
     if(r.ok){
       const j = await r.json();
       lastSyncedJSON = payload;
@@ -969,17 +1023,21 @@ async function syncLoad(){
         adoptRemoteData(migrate(rec.state), rec.updatedAt);
         setSync('Saved', 'ok');
       } else {
-        // first ever run: seed the shared copy with whatever we have locally
-        await syncSave();
+        // No shared data yet. Do NOT auto-write our seed — that once clobbered real data when a
+        // read blipped. Keep the local view; the first real edit/import will persist it (and the
+        // server refuses to overwrite a populated board anyway).
+        setSync('No shared data yet — edit or import to start', 'bad');
       }
     } else {
       setSync('Offline — using local copy', 'bad');
     }
   }catch(e){ setSync('Offline — using local copy', 'bad'); }
+  initialLoadDone = true;   // only now may auto-save push to the server (prevents pre-load races)
   render();
 }
 // Replace only the shared data; keep this browser's personal view/tab/zoom/collapse.
 function adoptRemoteData(data, updatedAt){
+  saveBlocked = false;   // we now hold the good server copy again
   state.tribes = data.tribes;
   if(typeof data.lastJiraSync==='number') state.lastJiraSync = data.lastJiraSync;   // shared Jira sync time
   if(!state.tribes.find(t=>t.id===state.activeTribe) && state.tribes[0]) state.activeTribe=state.tribes[0].id;
@@ -2173,6 +2231,7 @@ document.getElementById('jiraSyncBtn').onclick=(e)=>{
   else if(e.shiftKey) jiraListFields();
   else jiraSync();
 };
+document.getElementById('historyBtn').onclick=()=>openVersionHistory();
 (function(){ const sb=document.getElementById('searchBox'); sb.value=state.search||''; sb.oninput=e=>{ state.search=e.target.value; render(); }; })();
 (function(){
   const btn=document.getElementById('settingsBtn'), menu=document.getElementById('settingsMenu'), tog=document.getElementById('showTags');
