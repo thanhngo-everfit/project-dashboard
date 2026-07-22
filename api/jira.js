@@ -17,6 +17,9 @@ const ALLOWED_DOMAIN = 'everfit.io';
 const ADMIN_EMAIL = 'thanhngo@everfit.io';   // only this user may sync Jira
 const END_FIELD_NAME = 'design eta';         // -> design work END (matched case-insensitively if no id set)
 const START_FIELD_NAME = 'design start';     // -> design work START
+// Known Everfit field ids (override via env). Design ETA -> end, Design Start -> start.
+const END_FIELD_DEFAULT = 'customfield_10666';
+const START_FIELD_DEFAULT = 'customfield_12752';
 
 const oauth = new OAuth2Client(CLIENT_ID);
 
@@ -91,9 +94,9 @@ export default async function handler(req, res) {
       return;
     }
 
-    // resolve the Design ETA (end) and Design Start field ids (env override, else auto-detect by name)
-    let fieldId = process.env.JIRA_DESIGN_ETA_FIELD || '';        // design work END
-    let startFieldId = process.env.JIRA_DESIGN_START_FIELD || ''; // design work START
+    // resolve the Design ETA (end) and Design Start field ids: env override -> known default -> auto-detect by name
+    let fieldId = process.env.JIRA_DESIGN_ETA_FIELD || END_FIELD_DEFAULT || '';        // design work END
+    let startFieldId = process.env.JIRA_DESIGN_START_FIELD || START_FIELD_DEFAULT || ''; // design work START
     if (!fieldId || !startFieldId) {
       const r = await fetch(base + '/rest/api/3/field', { headers: jheaders });
       if (!r.ok) { res.status(502).json({ error: 'jira_http_' + r.status, detail: 'could not list fields to auto-detect Design fields' }); return; }
