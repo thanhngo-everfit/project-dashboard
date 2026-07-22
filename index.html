@@ -1826,11 +1826,11 @@ function designStatusLabel(status, endIso, designStartIso, projStartIso){
   if(s==='need l/j review') return 'Need L/J Review';    // all cases
   const today=parse(todayISO());
   if(validISO(designStartIso) && parse(designStartIso) > today) return 'Waiting For Start';   // design hasn't started yet
-  // Overdue only if the design ETA has passed AND the project hasn't started yet. Once the project is
-  // underway (start on/before today), show the design's real status instead of "overdue".
+  // Overdue: the Design ETA falls on/after the project start (i.e. within the project window) and is now
+  // in the past. An ETA that lands before the project start isn't flagged overdue — show the real status.
   const etaPast = validISO(endIso) && parse(endIso) < today;
-  const projStarted = validISO(projStartIso) && parse(projStartIso) <= today;
-  if(etaPast && !projStarted) return 'Design Overdue';
+  const etaWithinProject = validISO(endIso) && (!validISO(projStartIso) || parse(endIso) >= parse(projStartIso));
+  if(etaPast && etaWithinProject) return 'Design Overdue';
   return {estimation:'Need Design Estimation',progress:'Design In Progress',review:'Design In Review',pending:'Design Pending'}[grp];
 }
 
