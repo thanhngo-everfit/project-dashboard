@@ -86,20 +86,29 @@ export default async function handler(req, res) {
     }
 
     const issues = Array.isArray(body.issues) ? body.issues.slice(0, 200) : [];
-    const results = [];
-    for (const it of issues) {
-      const key = String((it && it.key) || '').trim();
-      if (!key) { results.push({ id: it && it.id, key, error: 'no_key' }); continue; }
-      try {
-        const r = await fetch(base + '/rest/api/3/issue/' + encodeURIComponent(key) + '?fields=' + encodeURIComponent(fieldId), { headers: jheaders });
-        if (!r.ok) { results.push({ id: it.id, key, error: 'http_' + r.status }); continue; }
-        const j = await r.json();
-        const raw = j && j.fields ? j.fields[fieldId] : null;
-        results.push({ id: it.id, key, designEta: normalizeDate(raw) });
-      } catch (e) {
-        results.push({ id: it.id, key, error: String((e && e.message) || e) });
+    // Fetch in parallel (bounded concurrency) so many linked projects don't blow the function timeout.
+    const results = new Array(issues.length);
+    const CONCURRENCY = 12;
+    let next = 0;
+    async function worker() {
+      while (true) {
+        const i = next++;
+        if (i >= issues.length) return;
+        const it = issues[i];
+        const key = String((it && it.key) || '').trim();
+        if (!key) { results[i] = { id: it && it.id, key, error: 'no_key' }; continue; }
+        try {
+          const r = await fetch(base + '/rest/api/3/issue/' + encodeURIComponent(key) + '?fields=' + encodeURIComponent(fieldId), { headers: jheaders });
+          if (!r.ok) { results[i] = { id: it.id, key, error: 'http_' + r.status }; continue; }
+          const j = await r.json();
+          const raw = j && j.fields ? j.fields[fieldId] : null;
+          results[i] = { id: it.id, key, designEta: normalizeDate(raw) };
+        } catch (e) {
+          results[i] = { id: it.id, key, error: String((e && e.message) || e) };
+        }
       }
     }
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, issues.length) }, worker));
     res.status(200).json({ results, syncedAt: Date.now(), fieldId });
   } catch (e) {
     res.status(500).json({ error: 'server_error', detail: String((e && e.message) || e) });
