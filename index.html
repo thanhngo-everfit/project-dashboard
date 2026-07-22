@@ -648,6 +648,7 @@ function inferPhaseType(seg){
 }
 const TASK_MAP = Object.fromEntries(TASK_TYPES.map(t=>[t.key,t]));
 
+const DEFAULT_ZOOM={quarter:3, month:3, week:1};   // default zoom per view (Week 100%, Month/Quarter 300%) — declared before load() uses it
 let state = load();
 
 function uid(){return Math.random().toString(36).slice(2,9);}
@@ -665,7 +666,6 @@ function validISO(s){
 function addDays(d,n){return new Date(d.getFullYear(),d.getMonth(),d.getDate()+n);}
 function addMonths(d,n){return new Date(d.getFullYear(),d.getMonth()+n,1);}
 
-const DEFAULT_ZOOM={quarter:3, month:3, week:1};   // default zoom per view (Week 100%, Month/Quarter 300%)
 function load(){
   let s=null;
   try{const raw=JSON.parse(localStorage.getItem(STORE_KEY)); if(raw&&raw.squads&&raw.squads.length) s=migrate(raw);}catch(e){}
