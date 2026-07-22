@@ -145,6 +145,8 @@
   .tagfilter{border:1px solid var(--border);background:#fff;border-radius:8px;padding:7px 10px;font-size:13px;font-family:inherit;font-weight:600;cursor:pointer;color:var(--text);}
   .tagfilter:hover{background:#f5f7fa;}
   .tagfilter.active-filter{border-color:#4c6fff;color:#4c6fff;}
+  .tagfilter .tf-x{display:inline-flex;align-items:center;justify-content:center;margin-left:7px;width:17px;height:17px;border-radius:50%;font-size:14px;line-height:1;color:inherit;opacity:.7;}
+  .tagfilter .tf-x:hover{background:rgba(76,111,255,.15);opacity:1;}
   .tagfilter-menu{position:absolute;top:calc(100% + 6px);left:34px;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 14px 34px rgba(16,24,40,.18);padding:8px;z-index:55;min-width:180px;max-height:320px;overflow-y:auto;}
   .tagfilter-menu .tf-row{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:7px;cursor:pointer;font-size:13px;}
   .tagfilter-menu .tf-row:hover{background:#f5f7fa;}
@@ -441,7 +443,7 @@
     <input id="searchBox" class="searchbox" type="search" placeholder="Search projects…" autocomplete="off">
     <div class="tagfilter-wrap" style="margin-left:6px;">
       <span style="font-size:12px;color:var(--muted);font-weight:600;">Tag</span>
-      <button id="tagFilterBtn" class="tagfilter">All tags ▾</button>
+      <button id="tagFilterBtn" class="tagfilter">All tags</button>
       <div id="tagFilterMenu" class="tagfilter-menu" style="display:none"></div>
     </div>
     <button class="btn" id="jumpToday" title="Scroll the timeline to today"><span style="color:#f04438;">●</span> Jump to Today</button>
@@ -1249,8 +1251,10 @@ function renderTagFilter(){
   if(!Array.isArray(state.tagFilters)) state.tagFilters=[];
   state.tagFilters=state.tagFilters.filter(t=>used.has(t));   // drop filters for tags no longer present
   const n=state.tagFilters.length;
-  btn.textContent=(n===0?'All tags':(n===1?state.tagFilters[0]:n+' tags'))+' ▾';
+  const label=(n===0?'All tags':(n===1?state.tagFilters[0]:n+' tags'));
+  btn.innerHTML=esc(label)+(n>0?' <span class="tf-x" title="Clear tag filter">×</span>':'');
   btn.classList.toggle('active-filter', n>0);
+  const x=btn.querySelector('.tf-x'); if(x) x.onclick=e=>{ e.stopPropagation(); state.tagFilters=[]; render(); };   // quick clear (doesn't open the menu)
   menu.innerHTML='';
   if(!tags.length){ const e=document.createElement('div'); e.className='tf-empty'; e.textContent='No tags yet'; menu.appendChild(e); return; }
   tags.forEach(t=>{
