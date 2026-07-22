@@ -803,12 +803,28 @@ async function jiraSync(){
       project: (targets[rec.id]&&targets[rec.id].proj.name)||'', key: rec.key,
       designStart: rec.designStart||'', designEnd: rec.designEnd||'', error: rec.error||''
     })));
+    // full raw field values (expand in console to see the exact shape/format)
+    console.log('[Jira sync] sample raw values:', (j.results||[]).filter(r=>r.raw && r.raw!=='(field absent)').slice(0,6).map(r=>({key:r.key, raw:r.raw})));
     state.lastJiraSync = j.syncedAt || Date.now();
     lastSyncedJSON=null;   // ensure a save is pushed even if only the sync timestamp changed
     save(); renderJiraSync(); render();
     setSync('Jira: '+updated+' updated'+(noEta?', '+noEta+' no ETA':'')+(errored?', '+errored+' errors':''),'ok');
   }catch(e){ setSync('Jira sync error','bad'); console.warn(e); }
   finally{ if(btn) btn.disabled=false; }
+}
+// Alt/Option-click the Jira Sync button to dump one issue's exact Design ETA value + schema.
+async function jiraRawDump(key){
+  if(!isAdmin() || !idToken) return;
+  key = (key||'').trim(); if(!key) return;
+  setSync('Fetching '+key+'…');
+  try{
+    const r = await apiFetch('/api/jira', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({action:'raw', key})});
+    const j = await r.json().catch(()=>({}));
+    console.log('%c[Jira raw] '+key,'font-weight:bold', j);
+    console.log('[Jira raw] value:', j.value, '\nschema:', j.schema);
+    setSync('Raw for '+key+' — see console', j.status===200?'ok':'bad');
+  }catch(e){ setSync('Raw fetch error','bad'); console.warn(e); }
 }
 // Shift-click the Jira Sync button to list Jira fields matching "eta"/"design" (helps find the field id/name).
 async function jiraListFields(){
@@ -2028,7 +2044,11 @@ function jumpToday(instant){
   g.scrollTo({left:Math.max(0,target), behavior:instant?'auto':'smooth'});
 }
 document.getElementById('jumpToday').onclick=()=>jumpToday();
-document.getElementById('jiraSyncBtn').onclick=(e)=>{ if(e.shiftKey) jiraListFields(); else jiraSync(); };
+document.getElementById('jiraSyncBtn').onclick=(e)=>{
+  if(e.altKey){ const k=prompt('Dump raw Design ETA for issue key:', 'PLAN-1338'); if(k) jiraRawDump(k); }
+  else if(e.shiftKey) jiraListFields();
+  else jiraSync();
+};
 (function(){ const sb=document.getElementById('searchBox'); sb.value=state.search||''; sb.oninput=e=>{ state.search=e.target.value; render(); }; })();
 (function(){
   const btn=document.getElementById('settingsBtn'), menu=document.getElementById('settingsMenu'), tog=document.getElementById('showTags');

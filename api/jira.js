@@ -96,6 +96,19 @@ export default async function handler(req, res) {
       fieldId = hit.id;
     }
 
+    // debug: dump the exact Design ETA value + schema for one issue
+    if (body.action === 'raw') {
+      const key = String(body.key || '').trim();
+      const r = await fetch(base + '/rest/api/3/issue/' + encodeURIComponent(key) + '?fields=' + encodeURIComponent(fieldId) + '&expand=schema', { headers: jheaders });
+      const j = await r.json().catch(() => ({}));
+      res.status(200).json({
+        key, fieldId, status: r.status,
+        value: j && j.fields ? j.fields[fieldId] : null,
+        schema: j && j.schema ? j.schema[fieldId] : null,
+      });
+      return;
+    }
+
     const issues = Array.isArray(body.issues) ? body.issues.slice(0, 200) : [];
     // Fetch in parallel (bounded concurrency) so many linked projects don't blow the function timeout.
     const results = new Array(issues.length);
