@@ -469,7 +469,10 @@
         </div>
         <div class="sm-sec">
           <div class="sm-label">Display</div>
-          <label class="sm-switch"><span>Show tags next to project name</span><input type="checkbox" id="showTags"><span class="track"></span></label>
+          <label class="sm-switch" style="margin-bottom:12px;"><span>Show tags</span><input type="checkbox" id="showTags"><span class="track"></span></label>
+          <label class="sm-switch" style="margin-bottom:12px;"><span>Show links</span><input type="checkbox" id="showLinks"><span class="track"></span></label>
+          <label class="sm-switch" style="margin-bottom:12px;"><span>Show size</span><input type="checkbox" id="showSize"><span class="track"></span></label>
+          <label class="sm-switch"><span>Show design work</span><input type="checkbox" id="showDesign"><span class="track"></span></label>
         </div>
       </div>
     </div>
@@ -514,6 +517,10 @@ function toggleHidden(id){ const t=activeTribe(); if(!t)return; if(!Array.isArra
 // personal, per-tribe: show tag chips next to project names
 function showTagsOn(){ const m=state.showTagsByTribe; const k=state.activeTribe; return !(m && m[k]===false); }
 function setShowTags(v){ if(!state.showTagsByTribe) state.showTagsByTribe={}; state.showTagsByTribe[state.activeTribe]=v; }
+// personal display toggles (per user, on by default) — never shared to the server
+function showLinksOn(){ return state.showLinks !== false; }
+function showSizeOn(){ return state.showSize !== false; }
+function showDesignOn(){ return state.showDesign !== false; }
 
 /* ============================ State ============================ */
 const STORE_KEY = 'roadmapDashboardV2';
@@ -715,6 +722,9 @@ function migrate(s){
     if(typeof s.showTags==='boolean' && Array.isArray(s.tribes)) s.tribes.forEach(t=>{ s.showTagsByTribe[t.id]=s.showTags; });
   }
   delete s.showTags;
+  if(typeof s.showLinks!=='boolean') s.showLinks=true;    // personal display toggles, on by default
+  if(typeof s.showSize!=='boolean') s.showSize=true;
+  if(typeof s.showDesign!=='boolean') s.showDesign=true;
   if(typeof s.search!=='string') s.search='';   // personal search query
   if(!s.activeTribe && Array.isArray(s.tribes) && s.tribes[0]) s.activeTribe=s.tribes[0].id;   // personal
   if(typeof s.lastJiraSync!=='number') s.lastJiraSync=0;   // shared: last time Design ETA was pulled from Jira
@@ -1647,16 +1657,17 @@ function phaseRow(cat,proj,units,tw){
   acts.push({icon:'🗑',title:'Delete',fn:()=>{if(confirm('Delete project "'+proj.name+'"?')){delHost.phases=delHost.phases.filter(x=>x!==proj);render();}}});
   const designTasks=(proj.tasks||[]).filter(t=>t.type==='design');   // design sticks to the project bar
   const hasWork=(proj.tasks||[]).some(t=>t.type!=='design');         // only dev work drives the collapse caret
-  const noDesign = !inVirtual() && designTasks.length===0;           // no design work at all -> "No design" chip
-  if(!inVirtual() && (designTasks.some(t=>t.start||t.end) || noDesign)) row.classList.add('has-design');   // room for the below-bar chip
+  const designOn = !inVirtual() && showDesignOn();                   // personal toggle: show design work at all
+  const noDesign = designOn && designTasks.length===0;               // no design work at all -> "No design" chip
+  if(designOn && (designTasks.some(t=>t.start||t.end) || noDesign)) row.classList.add('has-design');   // room for the below-bar chip
   const {left,caret}=leftCell(1, hasWork?(isCollapsed(proj)?'closed':'open'):null, null,proj.name,acts);
   if(caret) caret.onclick=()=>{toggleCollapsed(proj);render();};
   const q=(state.search||'').trim().toLowerCase();
   const lab=left.querySelector('.label');
   if(q && lab) lab.innerHTML=highlight(proj.name,q);
-  // below the project name: Size > Tags > Links, each on its own line
-  const size=sizeLineHTML(proj);
-  const links=linksLineHTML(proj);
+  // below the project name: Size > Tags > Links, each on its own line (each toggle is personal)
+  const size=showSizeOn()?sizeLineHTML(proj):'';
+  const links=showLinksOn()?linksLineHTML(proj):'';
   const showTagChips = proj.tags && proj.tags.length && showTagsOn();
   if((size || links || showTagChips) && lab){
     const col=document.createElement('div'); col.className='namecol';
@@ -1678,7 +1689,7 @@ function phaseRow(cat,proj,units,tw){
   const barColor=projBarColor(cat,proj);
   // design span: a lighter bar merged with the project bar, covering the full design date range.
   // Drawn first so it paints behind the solid project bar.
-  const dTasks = inVirtual() ? [] : designTasks.filter(t=>t.start||t.end);
+  const dTasks = designOn ? designTasks.filter(t=>t.start||t.end) : [];
   let dSpan=null;
   if(dTasks.length){
     const projStart=effStart(proj,units);   // blank work start anchors here (or 1st of end-month if it ends earlier)
@@ -2237,9 +2248,14 @@ document.getElementById('historyBtn').onclick=()=>openVersionHistory();
 (function(){ const sb=document.getElementById('searchBox'); sb.value=state.search||''; sb.oninput=e=>{ state.search=e.target.value; render(); }; })();
 (function(){
   const btn=document.getElementById('settingsBtn'), menu=document.getElementById('settingsMenu'), tog=document.getElementById('showTags');
-  btn.onclick=e=>{ e.stopPropagation(); const open=menu.style.display==='none'; menu.style.display=open?'block':'none'; if(open){ tog.checked=showTagsOn(); updateZoomLabel(); document.getElementById('smRows').style.display=isAdmin()?'':'none'; } };
+  const links=document.getElementById('showLinks'), size=document.getElementById('showSize'), design=document.getElementById('showDesign');
+  btn.onclick=e=>{ e.stopPropagation(); const open=menu.style.display==='none'; menu.style.display=open?'block':'none';
+    if(open){ tog.checked=showTagsOn(); links.checked=showLinksOn(); size.checked=showSizeOn(); design.checked=showDesignOn(); updateZoomLabel(); document.getElementById('smRows').style.display=isAdmin()?'':'none'; } };
   document.addEventListener('click',e=>{ if(!e.target.closest('.settings-wrap')) menu.style.display='none'; });
   tog.onchange=e=>{ setShowTags(e.target.checked); render(); };
+  links.onchange=e=>{ state.showLinks=e.target.checked; render(); };
+  size.onchange=e=>{ state.showSize=e.target.checked; render(); };
+  design.onchange=e=>{ state.showDesign=e.target.checked; render(); };
 })();
 // re-fit the timeline width when the window resizes
 document.getElementById('gantt').addEventListener('scroll', ()=>{ updateTodayMarkVis(); updateDesignReadyChips(); });
