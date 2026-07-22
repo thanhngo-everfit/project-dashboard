@@ -116,8 +116,10 @@ that issue's **Design ETA**, and sets it as the End date of the project's design
    - `JIRA_BASE_URL` — e.g. `https://everfit.atlassian.net`
    - `JIRA_EMAIL` — the Atlassian account email that owns the token
    - `JIRA_API_TOKEN` — the API token from step 1
-   - `JIRA_DESIGN_ETA_FIELD` *(optional)* — the custom field id, e.g. `customfield_10123`.
-     If omitted, the field **named "Design ETA"** is auto-detected.
+   - `JIRA_DESIGN_ETA_FIELD` *(optional)* — the Design ETA field id (design work **end**),
+     e.g. `customfield_10666`. If omitted, the field **named "Design ETA"** is auto-detected.
+   - `JIRA_DESIGN_START_FIELD` *(optional)* — the Design Start field id (design work **start**),
+     e.g. `customfield_12752`. If omitted, the field **named "Design Start"** is auto-detected.
 3. **Redeploy** so the function picks up the env vars.
 
 ### Notes

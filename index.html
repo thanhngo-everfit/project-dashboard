@@ -792,9 +792,9 @@ async function jiraSync(){
     (j.results||[]).forEach(rec=>{
       const t=targets[rec.id]; if(!t) return;
       if(rec.error){ errored++; return; }
-      const end = rec.designEnd || rec.designStart;                   // ETA = range end (or a lone date)
-      // only set a design start for a genuine range; Jira returns start===end when just the ETA is filled
-      const start = (rec.designStart && rec.designEnd && rec.designStart!==rec.designEnd) ? rec.designStart : '';
+      // two separate Jira fields: Design Start (customfield_12752) + Design ETA (customfield_10666)
+      const end = rec.designEnd || rec.designStart;   // prefer the ETA; fall back to start if only that is set
+      const start = (rec.designStart && rec.designStart!==end) ? rec.designStart : '';
       if(end){ if(applyDesignDates(t.proj, start, end)) updated++; }
       else noEta++;
     });

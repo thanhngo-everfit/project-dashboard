@@ -15,7 +15,8 @@ import { OAuth2Client } from 'google-auth-library';
 const CLIENT_ID = '292601272916-9kkgsjlp8fdo9eskuj0lelufve2h7cvq.apps.googleusercontent.com';
 const ALLOWED_DOMAIN = 'everfit.io';
 const ADMIN_EMAIL = 'thanhngo@everfit.io';   // only this user may sync Jira
-const FIELD_NAME = 'design eta';             // matched case-insensitively when no field id is configured
+const END_FIELD_NAME = 'design eta';         // -> design work END (matched case-insensitively if no id set)
+const START_FIELD_NAME = 'design start';     // -> design work START
 
 const oauth = new OAuth2Client(CLIENT_ID);
 
@@ -90,17 +91,19 @@ export default async function handler(req, res) {
       return;
     }
 
-    // resolve the Design ETA field id (env override, else auto-detect by name)
-    let fieldId = process.env.JIRA_DESIGN_ETA_FIELD || '';
-    if (!fieldId) {
+    // resolve the Design ETA (end) and Design Start field ids (env override, else auto-detect by name)
+    let fieldId = process.env.JIRA_DESIGN_ETA_FIELD || '';        // design work END
+    let startFieldId = process.env.JIRA_DESIGN_START_FIELD || ''; // design work START
+    if (!fieldId || !startFieldId) {
       const r = await fetch(base + '/rest/api/3/field', { headers: jheaders });
-      if (!r.ok) { res.status(502).json({ error: 'jira_http_' + r.status, detail: 'could not list fields to auto-detect Design ETA' }); return; }
+      if (!r.ok) { res.status(502).json({ error: 'jira_http_' + r.status, detail: 'could not list fields to auto-detect Design fields' }); return; }
       const all = await r.json();
-      const hit = (Array.isArray(all) ? all : []).find(f => (f.name || '').toLowerCase() === FIELD_NAME)
-        || (Array.isArray(all) ? all : []).find(f => (f.name || '').toLowerCase().includes(FIELD_NAME));
-      if (!hit) { res.status(500).json({ error: 'design_eta_field_not_found', hint: 'Set JIRA_DESIGN_ETA_FIELD, or rename the Jira field to "Design ETA".' }); return; }
-      fieldId = hit.id;
+      const list = Array.isArray(all) ? all : [];
+      const findBy = name => { const n = name.toLowerCase(); return list.find(f => (f.name || '').toLowerCase() === n) || list.find(f => (f.name || '').toLowerCase().includes(n)); };
+      if (!fieldId) { const h = findBy(END_FIELD_NAME); if (h) fieldId = h.id; }
+      if (!startFieldId) { const h = findBy(START_FIELD_NAME); if (h) startFieldId = h.id; }
     }
+    if (!fieldId) { res.status(500).json({ error: 'design_eta_field_not_found', hint: 'Set JIRA_DESIGN_ETA_FIELD, or rename the Jira field to "Design ETA".' }); return; }
 
     // debug: dump the exact Design ETA value + schema for one issue
     if (body.action === 'raw') {
@@ -128,19 +131,26 @@ export default async function handler(req, res) {
         const key = String((it && it.key) || '').trim();
         if (!key) { results[i] = { id: it && it.id, key, error: 'no_key' }; continue; }
         try {
-          const r = await fetch(base + '/rest/api/3/issue/' + encodeURIComponent(key) + '?fields=' + encodeURIComponent(fieldId), { headers: jheaders });
+          const fieldsParam = [fieldId, startFieldId].filter(Boolean).join(',');
+          const r = await fetch(base + '/rest/api/3/issue/' + encodeURIComponent(key) + '?fields=' + encodeURIComponent(fieldsParam), { headers: jheaders });
           if (!r.ok) { results[i] = { id: it.id, key, error: 'http_' + r.status }; continue; }
           const j = await r.json();
-          const raw = j && j.fields ? j.fields[fieldId] : undefined;
-          const range = extractRange(raw);
-          results[i] = { id: it.id, key, designStart: range.start, designEnd: range.end, raw: raw === undefined ? '(field absent)' : raw };
+          const f = (j && j.fields) || {};
+          const endR = extractRange(f[fieldId]);                 // Design ETA -> end
+          const startR = startFieldId ? extractRange(f[startFieldId]) : { start: null, end: null };  // Design Start
+          results[i] = {
+            id: it.id, key,
+            designStart: startR.start || startR.end,             // each field is a single date (start===end)
+            designEnd: endR.end || endR.start,
+            raw: { start: startFieldId ? f[startFieldId] ?? null : '(no start field)', end: f[fieldId] ?? null },
+          };
         } catch (e) {
           results[i] = { id: it.id, key, error: String((e && e.message) || e) };
         }
       }
     }
     await Promise.all(Array.from({ length: Math.min(CONCURRENCY, issues.length) }, worker));
-    res.status(200).json({ results, syncedAt: Date.now(), fieldId });
+    res.status(200).json({ results, syncedAt: Date.now(), fieldId, startFieldId });
   } catch (e) {
     res.status(500).json({ error: 'server_error', detail: String((e && e.message) || e) });
   }
