@@ -309,6 +309,7 @@
   .jr-badge.create{color:#067647;background:#ecfdf3;}
   .jr-badge.update{color:#b54708;background:#fffaeb;}
   .jr-badge.nochange{color:var(--muted);background:#f0f1f4;}
+  .jr-lbl{display:inline-block;font-size:10px;font-weight:800;padding:1px 7px;border-radius:999px;border:1px solid transparent;}
   /* Note dock: a column to the right of the modal (button + side popup) */
   .note-dock{margin-left:14px;display:flex;flex-direction:column;align-items:flex-start;gap:12px;}
   .note-fab{position:relative;width:44px;height:44px;border-radius:50%;border:none;background:#fff;color:#667085;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 16px rgba(16,24,40,.18);transition:all .12s;}
@@ -719,6 +720,7 @@ function migrate(s){
       if(typeof proj.promo!=='string') proj.promo='';
       if(typeof proj.priority!=='string') proj.priority='';
       if(typeof proj.jira!=='string') proj.jira='';
+      if(typeof proj.designStatus!=='string') proj.designStatus='';   // synced from Jira (customfield_10139)
       if(!Array.isArray(proj.docs)) proj.docs=[];
       if(typeof proj.note!=='string') proj.note='';
       delete proj.color; delete proj.wip; delete proj.badge;   // color comes from the category now
@@ -812,21 +814,24 @@ function jiraIssueKey(url){
         || url.match(/\b([A-Za-z][A-Za-z0-9_]+-\d+)\b/);
   return m ? m[1].toUpperCase() : '';
 }
-// set a project's design work dates from the Jira Design ETA (create the design task if none exists).
-// endIso is required (the ETA); startIso is optional (only set when the field is a real range).
-function applyDesignDates(proj, startIso, endIso){
-  if(!validISO(endIso)) return false;   // need a valid end (the ETA)
-  const start = validISO(startIso) ? startIso : '';
-  if(!Array.isArray(proj.tasks)) proj.tasks=[];
-  const d = proj.tasks.find(t=>t.type==='design');
-  if(d){
-    let changed=false;
-    if(d.end!==endIso){ d.end=endIso; changed=true; }
-    if(start && d.start!==start){ d.start=start; changed=true; }   // don't wipe a manual start when Jira gives no start
-    return changed;
+// Apply a synced Jira row to a project: set design status, and (if an ETA is present) the design work dates.
+function applyDesignSync(proj, startIso, endIso, status){
+  let changed=false;
+  const st=status||'';
+  if((proj.designStatus||'')!==st){ proj.designStatus=st; changed=true; }
+  if(validISO(endIso)){
+    const start = validISO(startIso) ? startIso : '';
+    if(!Array.isArray(proj.tasks)) proj.tasks=[];
+    const d = proj.tasks.find(t=>t.type==='design');
+    if(d){
+      if(d.end!==endIso){ d.end=endIso; changed=true; }
+      if(start && d.start!==start){ d.start=start; changed=true; }   // don't wipe a manual start when Jira gives none
+    } else {
+      proj.tasks.push({id:uid(), type:'design', start, end:endIso, progress:0, customName:'', note:'', blockers:[]});
+      changed=true;
+    }
   }
-  proj.tasks.push({id:uid(), type:'design', start, end:endIso, progress:0, customName:'', note:'', blockers:[]});
-  return true;
+  return changed;
 }
 async function jiraSync(){
   if(!isAdmin() || !idToken) return;
@@ -850,29 +855,33 @@ async function jiraSync(){
       setSync(msg,'bad'); console.warn('[Jira sync] failed', r.status, r.url, j); return;
     }
     // Build the proposed-changes list; nothing is applied until the user confirms in the review popup.
-    let noEta=0, errored=0; const rows=[];
+    let noData=0, errored=0; const rows=[];
     (j.results||[]).forEach(rec=>{
       const t=targets[rec.id]; if(!t) return;
       if(rec.error){ errored++; return; }
-      // two separate Jira fields: Design Start (customfield_12752) + Design ETA (customfield_10666)
-      const end = rec.designEnd || rec.designStart;   // prefer the ETA; fall back to start if only that is set
-      const newStart = (rec.designStart && rec.designStart!==end && validISO(rec.designStart)) ? rec.designStart : '';
-      if(!end || !validISO(end)){ noEta++; return; }
       const proj=t.proj;
+      // Design Start (customfield_12752) + Design ETA (customfield_10666) + Design Status (customfield_10139)
+      const end = (rec.designEnd && validISO(rec.designEnd)) ? rec.designEnd : ((rec.designStart&&validISO(rec.designStart))?rec.designStart:'');
+      const newStart = (rec.designStart && validISO(rec.designStart) && rec.designStart!==end) ? rec.designStart : '';
+      const status = rec.designStatus || '';
+      if(!end && !status){ noData++; return; }   // nothing to sync for this project
       const existing=(proj.tasks||[]).find(x=>x.type==='design');
       const curStart=existing?(existing.start||''):'';
       const curEnd=existing?(existing.end||''):'';
-      const endDiff = curEnd!==end;
+      const curStatus=proj.designStatus||'';
+      const endDiff = !!end && curEnd!==end;
       const startDiff = !!newStart && curStart!==newStart;
-      const changed = !existing ? true : (endDiff||startDiff);
-      rows.push({proj, key:rec.key, name:proj.name, curStart, curEnd, newStart, newEnd:end,
-        action: !existing?'Create':(changed?'Update':'No change'), changed});
+      const statusDiff = curStatus!==status;
+      const changed = endDiff || startDiff || statusDiff || (!existing && !!end);
+      const label = designStatusLabel(status, end||curEnd, proj.start||'');
+      rows.push({proj, key:rec.key, name:proj.name, curStart, curEnd, newStart, newEnd:end, newStatus:status, label,
+        action: (!existing&&end)?'Create':(changed?'Update':'No change'), changed});
     });
     // Diagnostics (console)
-    console.log('%c[Jira sync]','font-weight:bold','ETA field:', j.fieldId, 'Start field:', j.startFieldId);
+    console.log('%c[Jira sync]','font-weight:bold','ETA:', j.fieldId, 'Start:', j.startFieldId, 'Status:', j.statusFieldId);
     console.table((j.results||[]).map(rec=>({ project:(targets[rec.id]&&targets[rec.id].proj.name)||'', key:rec.key,
-      designStart:rec.designStart||'', designEnd:rec.designEnd||'', error:rec.error||'' })));
-    openJiraReview(rows, j.syncedAt, {noEta, errored});
+      designStart:rec.designStart||'', designEnd:rec.designEnd||'', designStatus:rec.designStatus||'', error:rec.error||'' })));
+    openJiraReview(rows, j.syncedAt, {noData, errored});
     const changedN=rows.filter(r=>r.changed).length;
     setSync('Jira: review '+changedN+' change(s)', 'ok');
   }catch(e){ setSync('Jira sync error','bad'); console.warn(e); }
@@ -889,20 +898,25 @@ function openJiraReview(rows, syncedAt, stats){
     const startLine = r.newStart
       ? `Start: <span class="${sChanged?'old':''}">${d(r.curStart)}</span>${sChanged?' → <span class="new">'+esc(r.newStart)+'</span>':''}`
       : (r.curStart?`Start: ${d(r.curStart)}`:'');
-    const endLine = `End: <span class="${eChanged?'old':''}">${d(r.curEnd)}</span>${eChanged?' → <span class="new">'+esc(r.newEnd)+'</span>':''}`;
+    const endLine = r.newEnd
+      ? `End: <span class="${eChanged?'old':''}">${d(r.curEnd)}</span>${eChanged?' → <span class="new">'+esc(r.newEnd)+'</span>':''}`
+      : (r.curEnd?`End: ${d(r.curEnd)}`:'');
+    const dateLine = (startLine||endLine) ? `<div class="jr-dates">${startLine}${(startLine&&endLine)?' &nbsp;·&nbsp; ':''}${endLine}</div>` : '';
+    const st=DESIGN_LABEL_STYLE[r.label]||{};
+    const statusLine = `<div class="jr-dates">Status: <b>${esc(r.newStatus||'—')}</b> → <span class="jr-lbl" style="color:${st.c||''};background:${st.bg||''};border-color:${st.bd||''}">${esc(r.label||'')}</span></div>`;
     const badgeCls = r.action==='Create'?'create':r.action==='Update'?'update':'nochange';
     return `<label class="jr-row ${r.changed?'':'nochange'}">
       <input type="checkbox" class="jr-cb" data-i="${i}" ${r.changed?'checked':''}>
       <span class="jr-main">
         <div><span class="jr-name">${esc(r.name)}</span> <span class="jr-key">${esc(r.key)}</span></div>
-        <div class="jr-dates">${startLine}${(startLine&&endLine)?' &nbsp;·&nbsp; ':''}${endLine}</div>
+        ${dateLine}${statusLine}
       </span>
       <span class="jr-badge ${badgeCls}">${r.action}</span>
     </label>`;
-  }).join('') : '<div style="padding:16px;color:var(--muted);font-size:13px;">No Design ETA data returned from Jira.</div>';
+  }).join('') : '<div style="padding:16px;color:var(--muted);font-size:13px;">No design data returned from Jira.</div>';
   modal.style.width='720px';
   modal.innerHTML = `<h3>Jira Sync — review changes</h3>
-    <div style="font-size:12px;color:var(--muted);margin:-6px 0 12px;">${changedCount} change(s)${stats.noEta?', '+stats.noEta+' without Design ETA':''}${stats.errored?', '+stats.errored+' error(s)':''}. Tick the ones to apply.</div>
+    <div style="font-size:12px;color:var(--muted);margin:-6px 0 12px;">${changedCount} change(s)${stats.noData?', '+stats.noData+' without design data':''}${stats.errored?', '+stats.errored+' error(s)':''}. Tick the ones to apply.</div>
     <div class="jr-head"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="jr-all"> Select all</label></div>
     <div class="jr-list">${listHtml}</div>
     <div class="modal-actions"><button class="btn" id="jr-cancel">Cancel</button><button class="btn primary" id="jr-save">Apply selected</button></div>`;
@@ -919,7 +933,7 @@ function openJiraReview(rows, syncedAt, stats){
   modal.querySelector('#jr-cancel').onclick=closeModal;
   saveBtn.onclick=()=>{
     let applied=0;
-    cbs.forEach(c=>{ if(c.checked){ const r=rows[+c.dataset.i]; if(applyDesignDates(r.proj, r.newStart, r.newEnd)) applied++; } });
+    cbs.forEach(c=>{ if(c.checked){ const r=rows[+c.dataset.i]; if(applyDesignSync(r.proj, r.newStart, r.newEnd, r.newStatus)) applied++; } });
     state.lastJiraSync = syncedAt || Date.now();
     lastSyncedJSON=null;   // force a save even if only the timestamp changed
     closeModal(); save(); renderJiraSync(); render();
@@ -1698,8 +1712,12 @@ function phaseRow(cat,proj,units,tw){
   const designTasks=(proj.tasks||[]).filter(t=>t.type==='design');   // design sticks to the project bar
   const hasWork=(proj.tasks||[]).some(t=>t.type!=='design');         // only dev work drives the collapse caret
   const designOn = showDesignOn();   // show design work (also in virtual views — they reference the real projects)
-  const noDesign = designOn && designTasks.length===0 && curSquadHasDesign;   // hide "No design" if the whole squad has none
-  if(designOn && (designTasks.some(t=>t.start||t.end) || noDesign)) row.classList.add('has-design');   // room for the below-bar chip
+  const dStatus = designOn ? (proj.designStatus||'') : '';
+  const dEndIso = designOn ? (designTasks.map(t=>t.end).filter(validISO).sort().pop()||'') : '';   // latest Design ETA
+  const hasDesignInfo = designOn && (designTasks.length>0 || dStatus);
+  const showNoDesign = designOn && !hasDesignInfo && curSquadHasDesign;   // squad uses design but this project has none
+  const designLabel = hasDesignInfo ? designStatusLabel(dStatus, dEndIso, proj.start||'') : (showNoDesign?'No Design':'');
+  if(designLabel) row.classList.add('has-design');   // room for the below-bar chip
   const {left,caret}=leftCell(1, hasWork?(isCollapsed(proj)?'closed':'open'):null, null,proj.name,acts);
   if(caret) caret.onclick=()=>{toggleCollapsed(proj);render();};
   const q=(state.search||'').trim().toLowerCase();
@@ -1727,13 +1745,12 @@ function phaseRow(cat,proj,units,tw){
   const track=document.createElement('div'); track.className='track'; track.style.width=tw+'px';
   track.appendChild(gridlinesEl(units,tw));
   const barColor=projBarColor(cat,proj);
-  // design span: a lighter bar merged with the project bar, covering the full design date range.
-  // Drawn first so it paints behind the solid project bar.
+  const projStartDate=effStart(proj,units);
+  // light design span bar over the dated design range (skip when the status label is "No Design")
   const dTasks = designOn ? designTasks.filter(t=>t.start||t.end) : [];
   let dSpan=null;
-  if(dTasks.length){
-    const projStart=effStart(proj,units);   // blank work start anchors here (or 1st of end-month if it ends earlier)
-    const s=new Date(Math.min(...dTasks.map(t=>effStart(t,units,workStartFallback(t,projStart)).getTime())));
+  if(dTasks.length && designLabel!=='No Design'){
+    const s=new Date(Math.min(...dTasks.map(t=>effStart(t,units,workStartFallback(t,projStartDate)).getTime())));
     const e=new Date(Math.max(...dTasks.map(t=>effEnd(t,units))));
     dSpan={s,e,x:dateToX(s,units),xe:dateToX(addDays(e,1),units)};
     const span=document.createElement('div'); span.className='design-span';
@@ -1749,39 +1766,29 @@ function phaseRow(cat,proj,units,tw){
     attachDrag(bar,proj,units,'phase',cat);
     track.appendChild(bar);
   }
-  // design start/end signals + labels, drawn on top so they stay visible over the project bar
+  // design start/end ticks + "Design Start" cap (only with a real dated span)
   if(dSpan){
     const tickColor=mix(barColor,0.5);
     [dSpan.x,dSpan.xe].forEach(px=>{ const tk=document.createElement('div'); tk.className='design-tick'; tk.style.left=(px-1)+'px'; tk.style.background=tickColor; track.appendChild(tk); });
-    const mkCap=(x,text,right,below)=>{
-      const cap=document.createElement('div'); cap.className='design-cap'+(right?' r':'')+(below?' below':''); cap.style.left=x+'px'; cap.style.color=tickColor; cap.textContent=text;
-      cap.onclick=()=>openTaskModal(proj,dTasks[0]);
-      track.appendChild(cap);
-    };
-    mkCap(dSpan.x,'Design Start',false,false);   // above the start tick
-    const designDone = dSpan.e < parse(todayISO());   // design finished before today
-    if(designDone){
-      // "DESIGN READY" chip (always shown when design is done). If design finished before the project
-      // even starts, anchor it at the project start (like "No design"); otherwise at the design-end tick.
-      const projStartDate=effStart(proj,units);
-      const beforeProject = dSpan.e < projStartDate;
-      const homeX = beforeProject ? dateToX(projStartDate,units) : dSpan.xe;
-      const align = beforeProject ? 'left' : 'right';
-      const chip=document.createElement('div'); chip.className='design-ready';
-      chip.dataset.homex=homeX; chip.dataset.align=align;
-      chip.innerHTML='✓ Design ready'; chip.title='Design finished '+fmtShort(fmt(dSpan.e));
-      chip.style.left=homeX+'px'; chip.style.transform = align==='right'?'translateX(-100%)':'none';
-      track.appendChild(chip);
-    } else {
-      mkCap(dSpan.xe,'Design End',true,true);    // below the bar, right-aligned to the end tick
-    }
-  } else if(noDesign){
-    // no design work at all -> a muted "No design" chip below the bar at the project's start
-    const homeX=dateToX(effStart(proj,units),units);
-    const chip=document.createElement('div'); chip.className='design-ready design-none';
-    chip.dataset.homex=homeX; chip.dataset.align='left';
-    chip.textContent='No design'; chip.title='No design work added';
-    chip.style.left=homeX+'px';
+    const cap=document.createElement('div'); cap.className='design-cap'; cap.style.left=dSpan.x+'px'; cap.style.color=tickColor; cap.textContent='Design Start';
+    cap.onclick=()=>openTaskModal(proj,dTasks[0]);
+    track.appendChild(cap);
+  }
+  // design status chip (below the bar), colour-coded; pinned to the left edge when its anchor scrolls off
+  if(designLabel){
+    const st=DESIGN_LABEL_STYLE[designLabel]||DESIGN_LABEL_STYLE['Need Design Estimation'];
+    let homeX, align;
+    if(dSpan){
+      const beforeProject = validISO(proj.start) && dSpan.e < parse(proj.start);
+      homeX = beforeProject ? dateToX(projStartDate,units) : dSpan.xe;
+      align = beforeProject ? 'left' : 'right';
+    } else { homeX = dateToX(projStartDate,units); align='left'; }
+    const chip=document.createElement('div'); chip.className='design-ready';
+    chip.dataset.homex=homeX; chip.dataset.align=align;
+    chip.style.background=st.bg; chip.style.color=st.c; chip.style.borderColor=st.bd;
+    chip.textContent=designLabel; chip.title='Design status: '+designLabel;
+    chip.style.left=homeX+'px'; chip.style.transform = align==='right'?'translateX(-100%)':'none';
+    if(dTasks.length){ chip.style.pointerEvents='auto'; chip.style.cursor='pointer'; chip.onclick=()=>openTaskModal(proj,dTasks[0]); }
     track.appendChild(chip);
   }
   row.appendChild(track);
@@ -1789,6 +1796,37 @@ function phaseRow(cat,proj,units,tw){
 }
 // the project bar's colour (category colour, or the per-project colour in a virtual view)
 function projBarColor(cat,proj){ return (cat._colorByProj&&cat._colorByProj[proj.id])||cat.color||PALETTE[0]; }
+// ----- Design status (synced from Jira customfield_10139) -> timeline label -----
+const DESIGN_LABEL_STYLE={
+  'No Design':             {c:'#667085',bg:'#f2f4f7',bd:'#e4e7ec'},
+  'Need Design Estimation':{c:'#475467',bg:'#eef1f4',bd:'#e4e7ec'},
+  'Design In Progress':    {c:'#1849a9',bg:'#eff8ff',bd:'#b2ddff'},
+  'Design In Review':      {c:'#6941c6',bg:'#f4f3ff',bd:'#d9d6fe'},
+  'Design Ready':          {c:'#067647',bg:'#ecfdf3',bd:'#abefc6'},
+  'Design Pending':        {c:'#b54708',bg:'#fffaeb',bd:'#fedf89'},
+  'Design Overdue':        {c:'#b42318',bg:'#fef3f2',bd:'#fecdca'},
+  'Need L/J Review':       {c:'#3538cd',bg:'#eef4ff',bd:'#c7d7fe'},
+};
+function designStatusGroup(s){
+  s=(s||'').toLowerCase().trim();
+  if(s==='design in progress'||s==='need to fix') return 'progress';
+  if(s==='team lead review'||s==='need beos review') return 'review';
+  if(s==='team lead approved'||s==='product lead approved') return 'approved';
+  if(s==='question'||s==='on hold') return 'pending';
+  return 'estimation';   // '' (null), 'brainstorm', or anything unrecognised
+}
+// Map Jira design status + Design ETA end + project start -> the label shown on the timeline.
+function designStatusLabel(status, endIso, projStartIso){
+  const s=(status||'').toLowerCase().trim();
+  if(s==='no need design') return 'No Design';          // Logic 1
+  if(s==='need l/j review') return 'Need L/J Review';   // Logic 4 (all cases)
+  const grp=designStatusGroup(s);
+  // Logic 3: ETA filled and ends before the project starts -> overdue (unless approved)
+  const overdue = validISO(endIso) && validISO(projStartIso) && parse(endIso)<parse(projStartIso);
+  if(overdue) return grp==='approved' ? 'Design Ready' : 'Design Overdue';
+  // Logic 2 (ETA after project start) and Logic 5 (no ETA) share the same mapping
+  return {estimation:'Need Design Estimation',progress:'Design In Progress',review:'Design In Review',approved:'Design Ready',pending:'Design Pending'}[grp];
+}
 
 function taskRow(p,ph,t,units,tw,last,projStartX,projStartDate){
   const meta=TASK_MAP[t.type] || TASK_MAP.custom;
