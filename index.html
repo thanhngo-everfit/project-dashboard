@@ -1455,7 +1455,8 @@ function phaseRow(cat,proj,units,tw){
   const dTasks = inVirtual() ? [] : designTasks.filter(t=>t.start||t.end);
   let dSpan=null;
   if(dTasks.length){
-    const s=new Date(Math.min(...dTasks.map(t=>effStart(t,units))));
+    const projStart=effStart(proj,units);   // blank work start anchors here (or 1st of end-month if it ends earlier)
+    const s=new Date(Math.min(...dTasks.map(t=>effStart(t,units,workStartFallback(t,projStart)).getTime())));
     const e=new Date(Math.max(...dTasks.map(t=>effEnd(t,units))));
     dSpan={s,e,x:dateToX(s,units),xe:dateToX(addDays(e,1),units)};
     const span=document.createElement('div'); span.className='design-span';
@@ -1505,10 +1506,9 @@ function taskRow(p,ph,t,units,tw,last,projStartX,projStartDate){
   row.appendChild(left);
   const track=document.createElement('div'); track.className='track'; track.style.width=tw+'px';
   track.appendChild(gridlinesEl(units,tw));
-  // No start date -> anchor the work to the project's start. But if the work ends before the
-  // project even starts, the project start can't be its start; fall back to the 1st of the
-  // work's end-date month instead.
-  const taskFb=(!t.start && t.end && parse(t.end)<projStartDate) ? addMonths(parse(t.end),0) : projStartDate;
+  // No start date -> anchor to the project start (or the 1st of the work's end-date month
+  // if the work ends before the project even starts).
+  const taskFb=workStartFallback(t,projStartDate);
   // dashed connector thread on the timeline: a vertical line in the margin just left of the
   // project's start, with a visible elbow branching into each work bar.
   if(typeof projStartX==='number'){
@@ -1558,6 +1558,14 @@ function mix(hex,t){const h=hex.replace('#','');let r=parseInt(h.slice(0,2),16),
 // Effective dates: blank start -> first date in view; blank end -> last date in view.
 function effStart(obj,units,fb){ return obj.start ? parse(obj.start) : (fb || (units.length?units[0].start:new Date())); }
 function effEnd(obj,units){ return obj.end ? parse(obj.end) : (units.length?addDays(units[units.length-1].end,-1):new Date()); }
+// Where a work item (dev/design) starts when it has no start date:
+//   - has its own start          -> that date
+//   - ends on/after project start -> the project's start date
+//   - ends before project start   -> the 1st of the work's end-date month
+function workStartFallback(t,projStart){
+  if(t && t.end && parse(t.end)<projStart) return addMonths(parse(t.end),0);
+  return projStart;
+}
 function placeBar(bar,obj,units,fb){
   const x=dateToX(effStart(obj,units,fb),units);
   const w=Math.max(dateToX(addDays(effEnd(obj,units),1),units)-x, 6);
