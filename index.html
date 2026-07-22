@@ -792,8 +792,9 @@ async function jiraSync(){
     console.log('%c[Jira sync]','font-weight:bold','field id:', j.fieldId);
     console.table((j.results||[]).map(rec=>({
       project: (targets[rec.id]&&targets[rec.id].proj.name)||'', key: rec.key,
-      designEta: rec.designEta||'', error: rec.error||''
+      designEta: rec.designEta||'', raw: typeof rec.raw==='object'?JSON.stringify(rec.raw):(rec.raw??''), error: rec.error||''
     })));
+    console.log('[Jira sync] first raw value:', (j.results||[])[0] && (j.results||[])[0].raw);
     state.lastJiraSync = j.syncedAt || Date.now();
     lastSyncedJSON=null;   // ensure a save is pushed even if only the sync timestamp changed
     save(); renderJiraSync(); render();

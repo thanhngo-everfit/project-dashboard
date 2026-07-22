@@ -105,8 +105,8 @@ export default async function handler(req, res) {
           const r = await fetch(base + '/rest/api/3/issue/' + encodeURIComponent(key) + '?fields=' + encodeURIComponent(fieldId), { headers: jheaders });
           if (!r.ok) { results[i] = { id: it.id, key, error: 'http_' + r.status }; continue; }
           const j = await r.json();
-          const raw = j && j.fields ? j.fields[fieldId] : null;
-          results[i] = { id: it.id, key, designEta: normalizeDate(raw) };
+          const raw = j && j.fields ? j.fields[fieldId] : undefined;
+          results[i] = { id: it.id, key, designEta: normalizeDate(raw), raw: raw === undefined ? '(field absent)' : raw };
         } catch (e) {
           results[i] = { id: it.id, key, error: String((e && e.message) || e) };
         }
