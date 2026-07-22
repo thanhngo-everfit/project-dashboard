@@ -229,6 +229,17 @@
   .bar .handle.l{left:0;}
   .bar .handle.r{right:0;}
   .bar.summary{cursor:default;opacity:.5;height:5px;top:calc(50% - 2.5px);box-shadow:none;border-radius:3px;}
+  /* design work: a thin bar stuck to the bottom edge of the project bar so the design timeline
+     can be read against the project/development timeline on the same axis */
+  .designbar{position:absolute;height:15px;top:calc(50% + 17px);border-radius:0 0 7px 7px;cursor:grab;z-index:5;
+       display:flex;align-items:center;padding:0 7px;overflow:hidden;box-shadow:0 1px 2px rgba(16,24,40,.18);
+       transition:filter .12s ease;}
+  .designbar:hover{filter:brightness(1.05);}
+  .designbar.dragging{cursor:grabbing;opacity:.9;}
+  .designbar .dlabel{font-size:9px;font-weight:800;color:#fff;letter-spacing:.4px;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;}
+  .designbar .handle{position:absolute;top:0;bottom:0;width:8px;cursor:ew-resize;z-index:3;}
+  .designbar .handle.l{left:0;} .designbar .handle.r{right:0;}
+  .row.phase.has-design{min-height:76px;}
 
   .today{position:absolute;top:0;bottom:0;width:0;border-left:2px dashed #f04438;z-index:7;pointer-events:none;transform:translateX(-1px);}
   /* Today marker (dot + label) pinned at the top of the timeline */
@@ -567,7 +578,7 @@ function buildVirtualSquad(v){
 }
 const PALETTE =['#cdb4f6','#fcd9a8','#bfe3c9','#bcd9ec','#f6bcbc','#bcd1f6','#cfe6b4','#f6c6e0','#b4e6e0','#d9d2c4'];
 const TASK_TYPES = [
-  {key:'design', label:'Design',   color:'#9b6dff', progress:true},
+  {key:'design', label:'Design',   color:'#9b6dff', progress:false, onBar:true},   // design sticks to the project bar; no progress
   {key:'ba',     label:'BA',       color:'#12b3a6', progress:true},
   {key:'be',     label:'Backend',  color:'#3b82f6', progress:true},
   {key:'fe',     label:'Frontend', color:'#f59e0b', progress:true},
@@ -1138,7 +1149,8 @@ function renderGantt(){
         // project start -> root of the timeline connector thread for its dev work
         const projStartDate=effStart(ph,units);
         const projStartX=dateToX(projStartDate,units);
-        ph.tasks.forEach((t,ti)=>grid.appendChild(taskRow(p,ph,t,units,tw, ti===ph.tasks.length-1, projStartX, projStartDate)));
+        const devTasks=ph.tasks.filter(t=>t.type!=='design');   // design shows on the project bar, not as its own row
+        devTasks.forEach((t,ti)=>grid.appendChild(taskRow(p,ph,t,units,tw, ti===devTasks.length-1, projStartX, projStartDate)));
       }
     });
   });
@@ -1343,7 +1355,9 @@ function phaseRow(cat,proj,units,tw){
   if(!inVirtual()) acts.push({icon:'＋',title:'Add work',fn:()=>openTaskModal(proj)});   // no add-work in Jon/Long views
   acts.push({icon:'✎',title:'Edit project',fn:()=>openPhaseModal(cat,proj)});
   acts.push({icon:'🗑',title:'Delete',fn:()=>{if(confirm('Delete project "'+proj.name+'"?')){delHost.phases=delHost.phases.filter(x=>x!==proj);render();}}});
-  const hasWork=(proj.tasks||[]).length>0;   // no dev work -> hide the collapse/expand caret
+  const designTasks=(proj.tasks||[]).filter(t=>t.type==='design');   // design sticks to the project bar
+  const hasWork=(proj.tasks||[]).some(t=>t.type!=='design');         // only dev work drives the collapse caret
+  if(designTasks.length) row.classList.add('has-design');
   const {left,caret}=leftCell(1, hasWork?(isCollapsed(proj)?'closed':'open'):null, null,proj.name,acts);
   if(caret) caret.onclick=()=>{toggleCollapsed(proj);render();};
   const q=(state.search||'').trim().toLowerCase();
@@ -1377,8 +1391,28 @@ function phaseRow(cat,proj,units,tw){
     attachDrag(bar,proj,units,'phase',cat);
     track.appendChild(bar);
   }
+  // design work strips, stacked just under the project bar (only in the real view, not virtual)
+  if(!inVirtual()) designTasks.forEach((t,i)=>track.appendChild(designStrip(proj,t,units,i)));
   row.appendChild(track);
   return row;
+}
+
+// A thin "Design" bar stuck to the bottom edge of the project bar, spanning the design dates.
+function designStrip(proj,t,units,idx){
+  const color=TASK_MAP.design.color;
+  const strip=document.createElement('div'); strip.className='designbar';
+  strip.style.background=color;
+  strip.style.top='calc(50% + '+(17+idx*17)+'px)';   // stack if a project has more than one design item
+  const x=dateToX(effStart(t,units),units);
+  const w=Math.max(dateToX(addDays(effEnd(t,units),1),units)-x, 6);
+  strip.style.left=x+'px'; strip.style.width=w+'px';
+  const lbl=document.createElement('span'); lbl.className='dlabel'; lbl.textContent='Design'; strip.appendChild(lbl);
+  const hl=document.createElement('div'); hl.className='handle l'; const hr=document.createElement('div'); hr.className='handle r';
+  strip.appendChild(hl); strip.appendChild(hr);
+  strip.title='Design: '+(t.start?fmtShort(t.start):'start of view')+' → '+(t.end?fmtShort(t.end):'end of view');
+  strip._onEdit=()=>openTaskModal(proj,t);
+  attachDrag(strip,t,units,'task',proj);
+  return strip;
 }
 
 function taskRow(p,ph,t,units,tw,last,projStartX,projStartDate){
