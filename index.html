@@ -1235,6 +1235,7 @@ function renderTagFilter(){
   const av=activeVirtual();
   if(av&&av.listByEnd){ allProjects().forEach(x=>(x.p.tags||[]).forEach(t=>used.add(t))); }
   else activeSquad().projects.forEach(cat=>cat.phases.forEach(pr=>(pr.tags||[]).forEach(t=>used.add(t))));
+  if(av && av.tag) used.delete(av.tag);   // the view is already filtered by this tag -> don't offer it again
   const tags=[...new Set([...PREDEFINED_TAGS.filter(t=>used.has(t)), ...[...used].filter(t=>!PREDEFINED_TAGS.includes(t))])];
   if(!Array.isArray(state.tagFilters)) state.tagFilters=[];
   state.tagFilters=state.tagFilters.filter(t=>used.has(t));   // drop filters for tags no longer present
