@@ -229,6 +229,8 @@
   .bar .handle.l{left:0;}
   .bar .handle.r{right:0;}
   .bar.summary{cursor:default;opacity:.5;height:5px;top:calc(50% - 2.5px);box-shadow:none;border-radius:3px;}
+  /* lighter lead-in on the project bar, back to an earlier design start (name stays at project start) */
+  .bar-lead{position:absolute;top:calc(50% - 16px);height:32px;border-radius:9px 0 0 9px;z-index:0;pointer-events:none;}
   /* design work: a thin bar stuck to the bottom edge of the project bar so the design timeline
      can be read against the project/development timeline on the same axis */
   .designbar{position:absolute;height:15px;top:calc(50% + 18px);border-radius:6px;cursor:grab;z-index:5;
@@ -1386,6 +1388,21 @@ function phaseRow(cat,proj,units,tw){
   track.appendChild(gridlinesEl(units,tw));
   const barColor=projBarColor(cat,proj);
   if(proj.start||proj.end){
+    // if design starts before the project, extend a lighter lead-in on the bar back to the design start
+    // (the project name stays anchored at the project start — this is purely a visual extension)
+    if(!inVirtual()){
+      const dStarts=designTasks.map(t=>t.start).filter(Boolean).map(parse);
+      if(dStarts.length){
+        const projStart=effStart(proj,units), dMin=new Date(Math.min(...dStarts));
+        if(dMin<projStart){
+          const x=dateToX(dMin,units), px=dateToX(projStart,units);
+          const lead=document.createElement('div'); lead.className='bar-lead';
+          lead.style.left=x+'px'; lead.style.width=(px-x+12)+'px';   // +12: tuck under the bar's rounded corner
+          lead.style.background=rgba(barColor,0.4);
+          track.appendChild(lead);   // appended before the bar -> paints behind it
+        }
+      }
+    }
     const bar=makeBar(barColor, proj.name, null, ()=>openPhaseModal(cat,proj), {});
     placeBar(bar,proj,units);
     attachDrag(bar,proj,units,'phase',cat);
