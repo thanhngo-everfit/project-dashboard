@@ -1825,7 +1825,9 @@ function designStatusLabel(status, endIso, designStartIso, projStartIso){
   if(grp==='approved') return 'Design Ready';            // Team/Product/L-J Approved -> always Design Ready
   if(s==='need l/j review') return 'Need L/J Review';    // all cases
   const today=parse(todayISO());
-  if(validISO(designStartIso) && parse(designStartIso) > today) return 'Waiting For Start';   // design hasn't started yet
+  // Waiting For Start: work hasn't begun yet — the design start (or, if none, the project start) is in the future.
+  const startRef = validISO(designStartIso) ? designStartIso : projStartIso;
+  if(validISO(startRef) && parse(startRef) > today) return 'Waiting For Start';
   // Overdue: the Design ETA falls on/after the project start (i.e. within the project window) and is now
   // in the past. An ETA that lands before the project start isn't flagged overdue — show the real status.
   const etaPast = validISO(endIso) && parse(endIso) < today;
