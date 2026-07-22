@@ -416,6 +416,10 @@
     </div>
     <button class="btn" id="jumpToday" title="Scroll the timeline to today"><span style="color:#f04438;">●</span> Jump to Today</button>
     <div class="spacer"></div>
+    <div class="jira-sync" id="jiraSyncWrap" style="display:none;align-items:center;gap:8px;margin-right:8px;">
+      <span id="jiraSyncTime" style="font-size:11px;color:var(--muted);white-space:nowrap;"></span>
+      <button class="btn" id="jiraSyncBtn" title="Pull &quot;Design ETA&quot; from Jira into each linked project's design work">↻ Jira Sync</button>
+    </div>
     <div class="settings-wrap">
       <button class="settings-btn" id="settingsBtn" title="View settings">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -672,6 +676,7 @@ function migrate(s){
   delete s.showTags;
   if(typeof s.search!=='string') s.search='';   // personal search query
   if(!s.activeTribe && Array.isArray(s.tribes) && s.tribes[0]) s.activeTribe=s.tribes[0].id;   // personal
+  if(typeof s.lastJiraSync!=='number') s.lastJiraSync=0;   // shared: last time Design ETA was pulled from Jira
   return s;
 }
 function isCollapsed(p){ return state.uiCollapsed[p.id] !== false; }   // default: collapsed
@@ -720,13 +725,74 @@ function setSync(text, tone){
   el.textContent = text;
   el.style.color = tone === 'bad' ? '#d92d20' : tone === 'ok' ? '#067647' : 'var(--muted)';
 }
+// ---------- Jira sync (admin only) ----------
+// Pull the issue key from a pasted Jira link: /browse/KEY-123, ?selectedIssue=KEY-123
+// (Jira Product Discovery idea links), or a bare KEY-123.
+function jiraIssueKey(url){
+  if(!url) return '';
+  const m = url.match(/[?&]selectedIssue=([A-Za-z][A-Za-z0-9_]+-\d+)/i)
+        || url.match(/\/browse\/([A-Za-z][A-Za-z0-9_]+-\d+)/i)
+        || url.match(/\b([A-Za-z][A-Za-z0-9_]+-\d+)\b/);
+  return m ? m[1].toUpperCase() : '';
+}
+// set the End date of a project's design work (create the design task if none exists)
+function setDesignEnd(proj, endIso){
+  if(!Array.isArray(proj.tasks)) proj.tasks=[];
+  const d = proj.tasks.find(t=>t.type==='design');
+  if(d){ if(d.end===endIso) return false; d.end=endIso; return true; }
+  proj.tasks.push({id:uid(), type:'design', start:'', end:endIso, progress:0, customName:'', note:'', blockers:[]});
+  return true;
+}
+async function jiraSync(){
+  if(!isAdmin() || !idToken) return;
+  const targets=[];   // every project across every tribe that has a Jira link
+  (state.tribes||[]).forEach(tr=>(tr.squads||[]).forEach(sq=>(sq.projects||[]).forEach(cat=>(cat.phases||[]).forEach(p=>{
+    const key=jiraIssueKey(p.jira); if(key) targets.push({proj:p, key});
+  }))));
+  if(!targets.length){ setSync('No Jira links to sync','bad'); return; }
+  const btn=document.getElementById('jiraSyncBtn'); if(btn) btn.disabled=true;
+  setSync('Syncing Jira…');
+  try{
+    const r = await apiFetch('/api/jira', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({action:'sync', issues: targets.map((t,i)=>({id:i, key:t.key}))})});
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok){
+      const msg = j.error==='jira_not_configured' ? 'Jira not configured — set env vars'
+               : j.error==='design_eta_field_not_found' ? 'Jira: "Design ETA" field not found'
+               : j.error==='forbidden' ? 'Only Thanh can sync Jira'
+               : 'Jira sync failed';
+      setSync(msg,'bad'); console.warn('jira sync error:', j); return;
+    }
+    let updated=0, missing=0;
+    (j.results||[]).forEach(rec=>{
+      const t=targets[rec.id]; if(!t) return;
+      if(rec.designEta){ if(setDesignEnd(t.proj, rec.designEta)) updated++; }
+      else missing++;
+    });
+    state.lastJiraSync = j.syncedAt || Date.now();
+    lastSyncedJSON=null;   // ensure a save is pushed even if only the sync timestamp changed
+    save(); renderJiraSync(); render();
+    setSync('Jira synced — '+updated+' updated'+(missing?', '+missing+' without ETA':''),'ok');
+  }catch(e){ setSync('Jira sync error','bad'); console.warn(e); }
+  finally{ if(btn) btn.disabled=false; }
+}
+function fmtSyncTime(ts){
+  if(!ts) return 'never';
+  const d=new Date(ts);
+  return MONTHS[d.getMonth()]+' '+d.getDate()+', '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+}
+function renderJiraSync(){
+  const wrap=document.getElementById('jiraSyncWrap'); if(!wrap) return;
+  wrap.style.display = isAdmin() ? 'flex' : 'none';
+  const t=document.getElementById('jiraSyncTime'); if(t) t.textContent='Last Jira sync: '+fmtSyncTime(state.lastJiraSync);
+}
 async function syncSave(){
   if(!idToken) return;
   const payload = dataJSON();
   setSync('Saving…');
   try{
     const r = await apiFetch('/api/state', {
-      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({state:{tribes:state.tribes}})
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({state:{tribes:state.tribes, lastJiraSync:state.lastJiraSync||0}})
     });
     if(r.status===401){ handleAuthExpired(); return; }
     if(r.ok){
@@ -771,6 +837,7 @@ async function syncLoad(){
 // Replace only the shared data; keep this browser's personal view/tab/zoom/collapse.
 function adoptRemoteData(data, updatedAt){
   state.tribes = data.tribes;
+  if(typeof data.lastJiraSync==='number') state.lastJiraSync = data.lastJiraSync;   // shared Jira sync time
   if(!state.tribes.find(t=>t.id===state.activeTribe) && state.tribes[0]) state.activeTribe=state.tribes[0].id;
   if(!activeVirtual()){
     const sqs=curSquads();
@@ -937,6 +1004,7 @@ function render(){
   document.getElementById('squadName').textContent=activeSquad().name;
   document.querySelectorAll('#viewToggle button').forEach(b=>b.classList.toggle('active',b.dataset.view===curView()));
   renderTagFilter();
+  renderJiraSync();
   renderGantt();
   syncUrl();
   save();
@@ -1895,6 +1963,7 @@ function jumpToday(instant){
   g.scrollTo({left:Math.max(0,target), behavior:instant?'auto':'smooth'});
 }
 document.getElementById('jumpToday').onclick=()=>jumpToday();
+document.getElementById('jiraSyncBtn').onclick=()=>jiraSync();
 (function(){ const sb=document.getElementById('searchBox'); sb.value=state.search||''; sb.oninput=e=>{ state.search=e.target.value; render(); }; })();
 (function(){
   const btn=document.getElementById('settingsBtn'), menu=document.getElementById('settingsMenu'), tog=document.getElementById('showTags');

@@ -97,3 +97,32 @@ still overwrite each other (whoever saves last wins). True real-time co-editing 
 - Client gate: Google button uses `hd: "everfit.io"`; the app rejects non-`everfit.io` tokens.
 - Server enforcement: `/api/state` re-verifies the Google token on every read/write (Step 3).
 - Using **Internal** OAuth consent (Step 1.2) makes Google enforce the Workspace boundary too.
+
+---
+
+## Step 4 — Jira "Design ETA" sync (admin only)
+
+The **Jira Sync** button (top bar, visible only to `thanhngo@everfit.io`) pulls the
+**Design ETA** field from Jira into each linked project's **design work end date**.
+
+For each project that has a **Jira link** set, the app extracts the issue key
+(`/browse/KEY-123`, `?selectedIssue=KEY-123`, or a bare `KEY-123`), asks the backend for
+that issue's **Design ETA**, and sets it as the End date of the project's design work
+(creating the design work if none exists). A "Last Jira sync" timestamp is stored and shown.
+
+### One-time setup (Vercel env vars)
+1. Create an Atlassian API token: <https://id.atlassian.com/manage-profile/security/api-tokens>.
+2. In the **Vercel dashboard** → project → **Settings → Environment Variables**, add:
+   - `JIRA_BASE_URL` — e.g. `https://everfit.atlassian.net`
+   - `JIRA_EMAIL` — the Atlassian account email that owns the token
+   - `JIRA_API_TOKEN` — the API token from step 1
+   - `JIRA_DESIGN_ETA_FIELD` *(optional)* — the custom field id, e.g. `customfield_10123`.
+     If omitted, the field **named "Design ETA"** is auto-detected.
+3. **Redeploy** so the function picks up the env vars.
+
+### Notes
+- Auth is enforced server-side: the endpoint requires a valid Google token **and** the
+  admin email; everyone else gets `403`.
+- To find the field id (if auto-detect fails), the endpoint supports
+  `POST /api/jira {"action":"fields","query":"eta"}` which lists matching Jira fields.
+- Local `npx serve` does not run `/api`; test on the deployed URL or with `vercel dev`.
