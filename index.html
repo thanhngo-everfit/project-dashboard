@@ -231,7 +231,7 @@
   .bar.summary{cursor:default;opacity:.5;height:5px;top:calc(50% - 2.5px);box-shadow:none;border-radius:3px;}
   /* design work: a thin bar stuck to the bottom edge of the project bar so the design timeline
      can be read against the project/development timeline on the same axis */
-  .designbar{position:absolute;height:15px;top:calc(50% + 17px);border-radius:0 0 7px 7px;cursor:grab;z-index:5;
+  .designbar{position:absolute;height:15px;top:calc(50% + 18px);border-radius:6px;cursor:grab;z-index:5;
        display:flex;align-items:center;padding:0 7px;overflow:hidden;box-shadow:0 1px 2px rgba(16,24,40,.18);
        transition:filter .12s ease;}
   .designbar:hover{filter:brightness(1.05);}
@@ -1384,24 +1384,26 @@ function phaseRow(cat,proj,units,tw){
   row.appendChild(left);
   const track=document.createElement('div'); track.className='track'; track.style.width=tw+'px';
   track.appendChild(gridlinesEl(units,tw));
+  const barColor=projBarColor(cat,proj);
   if(proj.start||proj.end){
-    const barColor=(cat._colorByProj&&cat._colorByProj[proj.id])||cat.color;
     const bar=makeBar(barColor, proj.name, null, ()=>openPhaseModal(cat,proj), {});
     placeBar(bar,proj,units);
     attachDrag(bar,proj,units,'phase',cat);
     track.appendChild(bar);
   }
   // design work strips, stacked just under the project bar (only in the real view, not virtual)
-  if(!inVirtual()) designTasks.forEach((t,i)=>track.appendChild(designStrip(proj,t,units,i)));
+  if(!inVirtual()) designTasks.forEach((t,i)=>track.appendChild(designStrip(proj,t,units,i,barColor)));
   row.appendChild(track);
   return row;
 }
+// the project bar's colour (category colour, or the per-project colour in a virtual view)
+function projBarColor(cat,proj){ return (cat._colorByProj&&cat._colorByProj[proj.id])||cat.color||PALETTE[0]; }
 
 // A thin "Design" bar stuck to the bottom edge of the project bar, spanning the design dates.
-function designStrip(proj,t,units,idx){
-  const color=TASK_MAP.design.color;
+// Uses a deeper shade of the project colour so it reads as part of the same project.
+function designStrip(proj,t,units,idx,projColor){
   const strip=document.createElement('div'); strip.className='designbar';
-  strip.style.background=color;
+  strip.style.background=mix(projColor,0.34);   // same hue as the project bar, a bit darker
   strip.style.top='calc(50% + '+(17+idx*17)+'px)';   // stack if a project has more than one design item
   const x=dateToX(effStart(t,units),units);
   const w=Math.max(dateToX(addDays(effEnd(t,units),1),units)-x, 6);
@@ -1417,13 +1419,14 @@ function designStrip(proj,t,units,idx){
 
 function taskRow(p,ph,t,units,tw,last,projStartX,projStartDate){
   const meta=TASK_MAP[t.type] || TASK_MAP.custom;
+  const workColor=projBarColor(p,ph);   // all work shares the project colour, so nothing needs manual recolouring
   const row=document.createElement('div'); row.className='row task';
   const baseLabel = t.type==='custom' ? (t.customName||'Custom') : meta.label;
   const showPct=meta.progress && t.progress>0;   // hide 0%
   const hasNote=!!(t.note && t.note.trim());
   const openBlk=(t.blockers||[]).filter(b=>!b.done).length;
   const lblTxt=baseLabel+(showPct?'  ·  '+t.progress+'%':'')+(openBlk?'  ⛔'+openBlk:'')+(hasNote?'  📝':'');
-  const {left}=leftCell(2,null,meta.color,lblTxt,[
+  const {left}=leftCell(2,null,workColor,lblTxt,[
     {icon:'✎',title:'Edit',fn:()=>openTaskModal(ph,t)},
     {icon:'🗑',title:'Delete',fn:()=>{ph.tasks=ph.tasks.filter(x=>x!==t);render();}},
   ],{connector:true,last:!!last});
@@ -1447,7 +1450,7 @@ function taskRow(p,ph,t,units,tw,last,projStartX,projStartDate){
   }
   if(t.start||t.end){
     const lbl=baseLabel+(showPct?' '+t.progress+'%':'');
-    const bar=makeBar(meta.color, lbl, meta.progress?(t.progress||0):null, ()=>openTaskModal(ph,t));
+    const bar=makeBar(workColor, lbl, meta.progress?(t.progress||0):null, ()=>openTaskModal(ph,t));
     placeBar(bar,t,units,projStartDate);
     attachDrag(bar,t,units,'task',ph,projStartDate);
     track.appendChild(bar);
