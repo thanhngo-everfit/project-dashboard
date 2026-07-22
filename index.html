@@ -2085,19 +2085,12 @@ function openPhaseModal(category,proj){
       const lab=document.createElement('div'); lab.className='tp-label'; lab.textContent=label; tagWrap.appendChild(lab);
       const row=document.createElement('div'); row.className='tp-row'; list.forEach(t=>row.appendChild(mk(t))); tagWrap.appendChild(row);
     };
-    // group by recorded creator; a tag with no creator falls back to Standard (predefined) or Other (custom)
+    // two groups only: tags I created vs. everything else
     const all=[...new Set([...PREDEFINED_TAGS, ...allUsedTags(), ...tags])];
-    const mine=[], standard=[], other=[], byCreator={};
-    all.forEach(t=>{ const cr=tagCreator(t);
-      if(cr===currentEmail) mine.push(t);
-      else if(cr) (byCreator[cr]=byCreator[cr]||[]).push(t);
-      else if(PREDEFINED_TAGS.includes(t)) standard.push(t);
-      else other.push(t);
-    });
+    const mine=[], other=[];
+    all.forEach(t=>{ if(tagCreator(t)===currentEmail) mine.push(t); else other.push(t); });
     group('My tags', mine);
-    group('Standard tags', standard);
-    Object.keys(byCreator).sort().forEach(email=> group('By '+creatorLabel(email), byCreator[email]));
-    if(other.length) group('Other tags', other);
+    group('Other tags', other);
   }
   renderTagPicker();
   const tagNew=modal.querySelector('#m_tagnew');
