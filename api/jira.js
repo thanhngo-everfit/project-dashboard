@@ -34,8 +34,7 @@ async function verify(req) {
   }
 }
 
-// A Jira date custom field comes back as "YYYY-MM-DD" (or a datetime, or {value}). Normalize to
-// a clean YYYY-MM-DD, or null if it isn't a plausible date (so bad values never reach the client).
+// Normalize a single date to a clean YYYY-MM-DD, or null if not a plausible date.
 function normalizeDate(v) {
   if (!v) return null;
   let s = typeof v === 'string' ? v : (typeof v === 'object' && v.value) ? String(v.value) : '';
@@ -44,6 +43,14 @@ function normalizeDate(v) {
   const y = Number(s.slice(0, 4));
   if (y < 2000 || y > 2100) return null;
   return s;
+}
+// Design ETA can be a plain date string OR a date-range object {start,end} (Jira Product Discovery).
+// Return {start,end}: a range keeps both; a lone date is treated as the ETA (end).
+function extractRange(raw) {
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    return { start: normalizeDate(raw.start), end: normalizeDate(raw.end) };
+  }
+  return { start: null, end: normalizeDate(raw) };
 }
 
 export default async function handler(req, res) {
@@ -106,7 +113,8 @@ export default async function handler(req, res) {
           if (!r.ok) { results[i] = { id: it.id, key, error: 'http_' + r.status }; continue; }
           const j = await r.json();
           const raw = j && j.fields ? j.fields[fieldId] : undefined;
-          results[i] = { id: it.id, key, designEta: normalizeDate(raw), raw: raw === undefined ? '(field absent)' : raw };
+          const range = extractRange(raw);
+          results[i] = { id: it.id, key, designStart: range.start, designEnd: range.end, raw: raw === undefined ? '(field absent)' : raw };
         } catch (e) {
           results[i] = { id: it.id, key, error: String((e && e.message) || e) };
         }

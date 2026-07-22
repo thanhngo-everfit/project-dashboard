@@ -751,13 +751,20 @@ function jiraIssueKey(url){
         || url.match(/\b([A-Za-z][A-Za-z0-9_]+-\d+)\b/);
   return m ? m[1].toUpperCase() : '';
 }
-// set the End date of a project's design work (create the design task if none exists)
-function setDesignEnd(proj, endIso){
-  if(!validISO(endIso)) return false;   // ignore anything that isn't a clean YYYY-MM-DD date
+// set a project's design work dates from the Jira Design ETA (create the design task if none exists).
+// endIso is required (the ETA); startIso is optional (only set when the field is a real range).
+function applyDesignDates(proj, startIso, endIso){
+  if(!validISO(endIso)) return false;   // need a valid end (the ETA)
+  const start = validISO(startIso) ? startIso : '';
   if(!Array.isArray(proj.tasks)) proj.tasks=[];
   const d = proj.tasks.find(t=>t.type==='design');
-  if(d){ if(d.end===endIso) return false; d.end=endIso; return true; }
-  proj.tasks.push({id:uid(), type:'design', start:'', end:endIso, progress:0, customName:'', note:'', blockers:[]});
+  if(d){
+    let changed=false;
+    if(d.end!==endIso){ d.end=endIso; changed=true; }
+    if(start && d.start!==start){ d.start=start; changed=true; }   // don't wipe a manual start when Jira gives no start
+    return changed;
+  }
+  proj.tasks.push({id:uid(), type:'design', start, end:endIso, progress:0, customName:'', note:'', blockers:[]});
   return true;
 }
 async function jiraSync(){
@@ -784,17 +791,18 @@ async function jiraSync(){
     let updated=0, noEta=0, errored=0;
     (j.results||[]).forEach(rec=>{
       const t=targets[rec.id]; if(!t) return;
-      if(rec.error) errored++;
-      else if(rec.designEta){ if(setDesignEnd(t.proj, rec.designEta)) updated++; }
+      if(rec.error){ errored++; return; }
+      const end = rec.designEnd || rec.designStart;                   // ETA = range end (or a lone date)
+      const start = (rec.designEnd && rec.designStart) ? rec.designStart : '';  // start only for a real range
+      if(end){ if(applyDesignDates(t.proj, start, end)) updated++; }
       else noEta++;
     });
     // Diagnostics: what Jira returned for each linked project (open DevTools console to inspect)
     console.log('%c[Jira sync]','font-weight:bold','field id:', j.fieldId);
     console.table((j.results||[]).map(rec=>({
       project: (targets[rec.id]&&targets[rec.id].proj.name)||'', key: rec.key,
-      designEta: rec.designEta||'', raw: typeof rec.raw==='object'?JSON.stringify(rec.raw):(rec.raw??''), error: rec.error||''
+      designStart: rec.designStart||'', designEnd: rec.designEnd||'', error: rec.error||''
     })));
-    console.log('[Jira sync] first raw value:', (j.results||[])[0] && (j.results||[])[0].raw);
     state.lastJiraSync = j.syncedAt || Date.now();
     lastSyncedJSON=null;   // ensure a save is pushed even if only the sync timestamp changed
     save(); renderJiraSync(); render();
