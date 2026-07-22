@@ -2269,9 +2269,10 @@ function highlight(text,q){
 })();
 document.querySelectorAll('#viewToggle button').forEach(b=>b.onclick=()=>{setView(b.dataset.view);render();});
 function updateZoomLabel(){ const el=document.getElementById('zoomVal'); if(el) el.textContent=Math.round(curZoom()*100)+'%'; }
-document.getElementById('zoomIn').onclick=()=>{setZoom(Math.min(3,curZoom()*1.25));render();updateZoomLabel();};
+function maxZoom(){ const v=curView(); return (v==='month'||v==='quarter')?5:3; }   // Month/Quarter up to 500%, Week 300%
+document.getElementById('zoomIn').onclick=()=>{setZoom(Math.min(maxZoom(),curZoom()*1.25));render();updateZoomLabel();};
 document.getElementById('zoomOut').onclick=()=>{setZoom(Math.max(.4,curZoom()/1.25));render();updateZoomLabel();};
-document.getElementById('zoomReset').onclick=()=>{setZoom(1);render();updateZoomLabel();};
+document.getElementById('zoomReset').onclick=()=>{setZoom(DEFAULT_ZOOM[curView()]||1);render();updateZoomLabel();};
 function setAllCollapsed(v){
   activeSquad().projects.forEach(cat=>cat.phases.forEach(proj=>{ state.uiCollapsed[proj.id]=v; }));
   render();
