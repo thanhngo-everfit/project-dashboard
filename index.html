@@ -165,6 +165,10 @@
   .settings-menu .sm-title{font-size:15px;font-weight:800;color:var(--text);padding:12px 0 4px;}
   .settings-menu .sm-sec{padding:14px 0;border-top:1px solid #eef0f3;}
   .settings-menu .sm-label{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px;}
+  .settings-menu .sm-viewseg{display:flex;gap:0;border:1px solid var(--border);border-radius:9px;overflow:hidden;}
+  .settings-menu .sm-viewseg button{flex:1;border:none;background:#fff;color:var(--muted);padding:9px 0;font-size:13px;font-weight:700;cursor:pointer;border-left:1px solid var(--border);}
+  .settings-menu .sm-viewseg button:first-child{border-left:none;}
+  .settings-menu .sm-viewseg button.active{background:#4c6fff;color:#fff;}
   .settings-menu .sm-btns{display:flex;gap:8px;}
   .settings-menu .sm-act{flex:1;border:1px solid var(--border);background:#fff;border-radius:9px;padding:9px 8px;font-size:13px;font-weight:600;cursor:pointer;color:var(--text);}
   .settings-menu .sm-act:hover{background:#f5f7fa;border-color:#d0d5dd;}
@@ -460,6 +464,12 @@
       </button>
       <div class="settings-menu" id="settingsMenu" style="display:none">
         <div class="sm-title">View Settings</div>
+        <div class="sm-sec">
+          <div class="sm-label">My Default View</div>
+          <div class="sm-viewseg" id="defaultViewSeg">
+            <button data-v="week">Week</button><button data-v="month">Month</button><button data-v="quarter">Quarter</button>
+          </div>
+        </div>
         <div class="sm-sec" id="smRows">
           <div class="sm-label">Rows</div>
           <div class="sm-btns"><button class="sm-act" id="expandAll">⊞ Expand all</button><button class="sm-act" id="collapseAll">⊟ Collapse all</button></div>
@@ -737,6 +747,7 @@ function migrate(s){
   if(typeof s.showLinks!=='boolean') s.showLinks=true;    // personal display toggles, on by default
   if(typeof s.showSize!=='boolean') s.showSize=true;
   if(typeof s.showDesign!=='boolean') s.showDesign=true;
+  if(!['week','month','quarter'].includes(s.defaultView)) s.defaultView='week';   // personal: fallback view mode
   if(typeof s.search!=='string') s.search='';   // personal search query
   if(!s.activeTribe && Array.isArray(s.tribes) && s.tribes[0]) s.activeTribe=s.tribes[0].id;   // personal
   if(typeof s.lastJiraSync!=='number') s.lastJiraSync=0;   // shared: last time Design ETA was pulled from Jira
@@ -745,7 +756,7 @@ function migrate(s){
 }
 function isCollapsed(p){ return state.uiCollapsed[p.id] !== false; }   // default: collapsed
 function toggleCollapsed(p){ state.uiCollapsed[p.id] = isCollapsed(p) ? false : true; }
-function curView(){ return (state.viewBySquad && state.viewBySquad[state.activeSquad]) || 'week'; }   // default: Week
+function curView(){ return (state.viewBySquad && state.viewBySquad[state.activeSquad]) || state.defaultView || 'week'; }   // per-user default
 function setView(v){ if(!state.viewBySquad) state.viewBySquad={}; state.viewBySquad[state.activeSquad]=v; }
 function curZoom(){ return (state.zoomByView && state.zoomByView[curView()]) || DEFAULT_ZOOM[curView()] || 1; }
 function setZoom(z){ if(!state.zoomByView) state.zoomByView={}; state.zoomByView[curView()]=z; }
@@ -2302,13 +2313,16 @@ document.getElementById('historyBtn').onclick=()=>openVersionHistory();
 (function(){
   const btn=document.getElementById('settingsBtn'), menu=document.getElementById('settingsMenu'), tog=document.getElementById('showTags');
   const links=document.getElementById('showLinks'), size=document.getElementById('showSize'), design=document.getElementById('showDesign');
+  const viewSeg=document.getElementById('defaultViewSeg');
+  const syncViewSeg=()=>viewSeg.querySelectorAll('button').forEach(b=>b.classList.toggle('active', b.dataset.v===(state.defaultView||'week')));
   btn.onclick=e=>{ e.stopPropagation(); const open=menu.style.display==='none'; menu.style.display=open?'block':'none';
-    if(open){ tog.checked=showTagsOn(); links.checked=showLinksOn(); size.checked=showSizeOn(); design.checked=showDesignOn(); updateZoomLabel(); document.getElementById('smRows').style.display=isAdmin()?'':'none'; } };
+    if(open){ tog.checked=showTagsOn(); links.checked=showLinksOn(); size.checked=showSizeOn(); design.checked=showDesignOn(); syncViewSeg(); updateZoomLabel(); document.getElementById('smRows').style.display=isAdmin()?'':'none'; } };
   document.addEventListener('click',e=>{ if(!e.target.closest('.settings-wrap')) menu.style.display='none'; });
   tog.onchange=e=>{ setShowTags(e.target.checked); render(); };
   links.onchange=e=>{ state.showLinks=e.target.checked; render(); };
   size.onchange=e=>{ state.showSize=e.target.checked; render(); };
   design.onchange=e=>{ state.showDesign=e.target.checked; render(); };
+  viewSeg.querySelectorAll('button').forEach(b=>b.onclick=()=>{ state.defaultView=b.dataset.v; state.viewBySquad={}; syncViewSeg(); render(); });   // apply to this session now
 })();
 // re-fit the timeline width when the window resizes
 document.getElementById('gantt').addEventListener('scroll', ()=>{ updateTodayMarkVis(); updateDesignReadyChips(); });
