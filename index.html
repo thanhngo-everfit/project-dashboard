@@ -793,7 +793,8 @@ async function jiraSync(){
       const t=targets[rec.id]; if(!t) return;
       if(rec.error){ errored++; return; }
       const end = rec.designEnd || rec.designStart;                   // ETA = range end (or a lone date)
-      const start = (rec.designEnd && rec.designStart) ? rec.designStart : '';  // start only for a real range
+      // only set a design start for a genuine range; Jira returns start===end when just the ETA is filled
+      const start = (rec.designStart && rec.designEnd && rec.designStart!==rec.designEnd) ? rec.designStart : '';
       if(end){ if(applyDesignDates(t.proj, start, end)) updated++; }
       else noEta++;
     });

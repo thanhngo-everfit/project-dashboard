@@ -44,13 +44,19 @@ function normalizeDate(v) {
   if (y < 2000 || y > 2100) return null;
   return s;
 }
-// Design ETA can be a plain date string OR a date-range object {start,end} (Jira Product Discovery).
+// Design ETA can be a plain date, a {start,end} object, OR a JSON *string* of that object
+// (Jira Product Discovery returns e.g. '{"start":"2026-07-15","end":"2026-07-15"}').
 // Return {start,end}: a range keeps both; a lone date is treated as the ETA (end).
 function extractRange(raw) {
-  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-    return { start: normalizeDate(raw.start), end: normalizeDate(raw.end) };
+  let v = raw;
+  if (typeof v === 'string') {
+    const s = v.trim();
+    if (s[0] === '{' || s[0] === '[') { try { v = JSON.parse(s); } catch (e) { /* leave as string */ } }
   }
-  return { start: null, end: normalizeDate(raw) };
+  if (v && typeof v === 'object' && !Array.isArray(v)) {
+    return { start: normalizeDate(v.start), end: normalizeDate(v.end) };
+  }
+  return { start: null, end: normalizeDate(v) };
 }
 
 export default async function handler(req, res) {
