@@ -679,7 +679,9 @@ function addMonths(d,n){return new Date(d.getFullYear(),d.getMonth()+n,1);}
 
 function load(){
   let s=null;
-  try{const raw=JSON.parse(localStorage.getItem(STORE_KEY)); if(raw&&raw.squads&&raw.squads.length) s=migrate(raw);}catch(e){}
+  // read the local cache for either the current (tribes) or legacy (squads) shape, so personal
+  // settings (default view, display toggles, collapse state, …) survive a refresh
+  try{const raw=JSON.parse(localStorage.getItem(STORE_KEY)); if(raw && ((Array.isArray(raw.tribes)&&raw.tribes.length) || (Array.isArray(raw.squads)&&raw.squads.length))) s=migrate(raw);}catch(e){}
   if(!s) s=migrate(seed());
   s.viewBySquad={};                 // Quarter/Month/Week is per-session only — reset to default on each page load (F5)
   s.zoomByView={...DEFAULT_ZOOM};   // zoom also resets to the per-view defaults each session
