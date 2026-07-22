@@ -873,7 +873,7 @@ async function jiraSync(){
       const startDiff = !!newStart && curStart!==newStart;
       const statusDiff = curStatus!==status;
       const changed = endDiff || startDiff || statusDiff || (!existing && !!end);
-      const label = designStatusLabel(status, end||curEnd, proj.start||'');
+      const label = designStatusLabel(status, end||curEnd, newStart||curStart||'');
       rows.push({proj, key:rec.key, name:proj.name, curStart, curEnd, newStart, newEnd:end, newStatus:status, label,
         action: (!existing&&end)?'Create':(changed?'Update':'No change'), changed});
     });
@@ -1714,9 +1714,10 @@ function phaseRow(cat,proj,units,tw){
   const designOn = showDesignOn();   // show design work (also in virtual views — they reference the real projects)
   const dStatus = designOn ? (proj.designStatus||'') : '';
   const dEndIso = designOn ? (designTasks.map(t=>t.end).filter(validISO).sort().pop()||'') : '';   // latest Design ETA
+  const dStartIso = designOn ? (designTasks.map(t=>t.start).filter(validISO).sort()[0]||'') : '';  // earliest Design start
   const hasDesignInfo = designOn && (designTasks.length>0 || dStatus);
   const showNoDesign = designOn && !hasDesignInfo && curSquadHasDesign;   // squad uses design but this project has none
-  const designLabel = hasDesignInfo ? designStatusLabel(dStatus, dEndIso, proj.start||'') : (showNoDesign?'No Design':'');
+  const designLabel = hasDesignInfo ? designStatusLabel(dStatus, dEndIso, dStartIso) : (showNoDesign?'No Design':'');
   if(designLabel) row.classList.add('has-design');   // room for the below-bar chip
   const {left,caret}=leftCell(1, hasWork?(isCollapsed(proj)?'closed':'open'):null, null,proj.name,acts);
   if(caret) caret.onclick=()=>{toggleCollapsed(proj);render();};
@@ -1806,6 +1807,7 @@ const DESIGN_LABEL_STYLE={
   'Design Pending':        {c:'#b54708',bg:'#fffaeb',bd:'#fedf89'},
   'Design Overdue':        {c:'#b42318',bg:'#fef3f2',bd:'#fecdca'},
   'Need L/J Review':       {c:'#3538cd',bg:'#eef4ff',bd:'#c7d7fe'},
+  'Waiting For Start':     {c:'#026aa2',bg:'#f0f9ff',bd:'#b9e6fe'},
 };
 function designStatusGroup(s){
   s=(s||'').toLowerCase().trim();
@@ -1815,17 +1817,17 @@ function designStatusGroup(s){
   if(s==='question'||s==='on hold') return 'pending';
   return 'estimation';   // '' (null), 'brainstorm', or anything unrecognised
 }
-// Map Jira design status + Design ETA end -> the label shown on the timeline. (3rd arg kept for callers; unused.)
-function designStatusLabel(status, endIso, _projStartIso){
+// Map Jira design status + Design ETA end + Design start -> the label shown on the timeline.
+function designStatusLabel(status, endIso, startIso){
   const s=(status||'').toLowerCase().trim();
-  if(s==='no need design') return 'No Design';          // Logic 1
-  if(s==='need l/j review') return 'Need L/J Review';   // Logic 4 (all cases)
+  if(s==='no need design') return 'No Design';           // no design needed
   const grp=designStatusGroup(s);
-  // Overdue: ETA filled and ends before TODAY (unless approved). No ETA / ETA today-or-later -> normal mapping.
-  const overdue = validISO(endIso) && parse(endIso)<parse(todayISO());
-  if(overdue) return grp==='approved' ? 'Design Ready' : 'Design Overdue';
-  // Logic 2 (ETA after project start) and Logic 5 (no ETA) share the same mapping
-  return {estimation:'Need Design Estimation',progress:'Design In Progress',review:'Design In Review',approved:'Design Ready',pending:'Design Pending'}[grp];
+  if(grp==='approved') return 'Design Ready';            // Team/Product/L-J Approved -> always Design Ready
+  if(s==='need l/j review') return 'Need L/J Review';    // all cases
+  if(validISO(startIso) && parse(startIso) > parse(todayISO())) return 'Waiting For Start';   // design hasn't started yet
+  // Overdue: ETA before today. Otherwise (ETA today-or-later, or no ETA) -> normal status mapping.
+  if(validISO(endIso) && parse(endIso) < parse(todayISO())) return 'Design Overdue';
+  return {estimation:'Need Design Estimation',progress:'Design In Progress',review:'Design In Review',pending:'Design Pending'}[grp];
 }
 
 function taskRow(p,ph,t,units,tw,last,projStartX,projStartDate){
