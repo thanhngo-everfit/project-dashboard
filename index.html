@@ -239,6 +239,10 @@
   .design-cap{position:absolute;top:calc(50% - 33px);font-size:9px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;white-space:nowrap;cursor:pointer;z-index:6;padding-left:3px;}
   .design-cap.r{padding-left:0;padding-right:3px;transform:translateX(-100%);}   /* right edge sits on the end tick */
   .row.phase.has-design{min-height:80px;}
+  /* pinned "design ready" chip shown when the design bar is scrolled off to the left */
+  .design-ready{position:absolute;top:calc(50% - 10px);height:20px;z-index:6;display:none;align-items:center;gap:4px;
+    font-size:10px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;color:#067647;background:#ecfdf3;
+    border:1px solid #abefc6;border-radius:999px;padding:0 10px;white-space:nowrap;box-shadow:0 1px 3px rgba(16,24,40,.14);pointer-events:none;}
 
   .today{position:absolute;top:0;bottom:0;width:0;border-left:2px dashed #f04438;z-index:7;pointer-events:none;transform:translateX(-1px);}
   /* Today marker (dot + label) pinned at the top of the timeline */
@@ -1361,6 +1365,7 @@ function renderGantt(){
   });
   g.appendChild(grid);
   updateTodayMarkVis();
+  updateDesignReadyChips();
   // Center the timeline on today whenever the active tab (squad) changes — including
   // reselecting a previous tab. Re-renders of the same tab (edits, polling) keep scroll.
   const jk=state.activeSquad||'';
@@ -1379,6 +1384,17 @@ function updateTodayMarkVis(){
   const boundary=g.getBoundingClientRect().left + leftW;
   const r=tm.getBoundingClientRect();
   tm.style.visibility = (r.left + r.width/2 < boundary) ? 'hidden' : 'visible';
+}
+// "DESIGN READY" chips: when a project's design finished to the LEFT of the visible area,
+// pin the chip to the left edge of the timeline so it's visible without scrolling back.
+function updateDesignReadyChips(){
+  const g=document.getElementById('gantt'); if(!g) return;
+  const sl=g.scrollLeft;
+  g.querySelectorAll('.design-ready').forEach(chip=>{
+    const endX=+chip.dataset.endx;
+    if(endX < sl){ chip.style.display='inline-flex'; chip.style.left=(sl+8)+'px'; }  // design bar is off-screen left -> pin chip
+    else chip.style.display='none';                                                  // design bar is in view -> hide chip
+  });
 }
 
 // Marketing list view: all projects across squads, grouped by end date.
@@ -1623,6 +1639,10 @@ function phaseRow(cat,proj,units,tw){
     };
     mkCap(dSpan.x,'Design Start',false);    // above the start tick
     mkCap(dSpan.xe,'Design End',true);      // above the end tick (right-aligned to it)
+    // "DESIGN READY" chip: shown (pinned to the left edge) when the whole design bar is scrolled off-left.
+    const chip=document.createElement('div'); chip.className='design-ready'; chip.dataset.endx=dSpan.xe;
+    chip.innerHTML='✓ Design ready'; chip.title='Design finished '+fmtShort(fmt(dSpan.e));
+    track.appendChild(chip);
   }
   row.appendChild(track);
   return row;
@@ -2128,7 +2148,7 @@ document.getElementById('jiraSyncBtn').onclick=(e)=>{
   tog.onchange=e=>{ setShowTags(e.target.checked); render(); };
 })();
 // re-fit the timeline width when the window resizes
-document.getElementById('gantt').addEventListener('scroll', updateTodayMarkVis);
+document.getElementById('gantt').addEventListener('scroll', ()=>{ updateTodayMarkVis(); updateDesignReadyChips(); });
 let _resizeTimer=null;
 window.addEventListener('resize',()=>{
   clearTimeout(_resizeTimer);
