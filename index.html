@@ -1650,12 +1650,16 @@ function phaseRow(cat,proj,units,tw){
     mkCap(dSpan.x,'Design Start',false,false);   // above the start tick
     const designDone = dSpan.e < parse(todayISO());   // design finished before today
     if(designDone){
-      // "DESIGN READY" chip: always shown when design is done. Home = design-end point (below bar);
-      // updateDesignReadyChips pins it to the left edge when that point scrolls off-screen.
+      // "DESIGN READY" chip (always shown when design is done). If design finished before the project
+      // even starts, anchor it at the project start (like "No design"); otherwise at the design-end tick.
+      const projStartDate=effStart(proj,units);
+      const beforeProject = dSpan.e < projStartDate;
+      const homeX = beforeProject ? dateToX(projStartDate,units) : dSpan.xe;
+      const align = beforeProject ? 'left' : 'right';
       const chip=document.createElement('div'); chip.className='design-ready';
-      chip.dataset.homex=dSpan.xe; chip.dataset.align='right';
+      chip.dataset.homex=homeX; chip.dataset.align=align;
       chip.innerHTML='✓ Design ready'; chip.title='Design finished '+fmtShort(fmt(dSpan.e));
-      chip.style.left=dSpan.xe+'px'; chip.style.transform='translateX(-100%)';   // right edge on the end tick
+      chip.style.left=homeX+'px'; chip.style.transform = align==='right'?'translateX(-100%)':'none';
       track.appendChild(chip);
     } else {
       mkCap(dSpan.xe,'Design End',true,true);    // below the bar, right-aligned to the end tick
