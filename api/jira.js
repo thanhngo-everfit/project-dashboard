@@ -34,12 +34,16 @@ async function verify(req) {
   }
 }
 
-// A Jira date custom field comes back as "YYYY-MM-DD" (or a datetime, or {value}). Normalize to YYYY-MM-DD.
+// A Jira date custom field comes back as "YYYY-MM-DD" (or a datetime, or {value}). Normalize to
+// a clean YYYY-MM-DD, or null if it isn't a plausible date (so bad values never reach the client).
 function normalizeDate(v) {
   if (!v) return null;
-  if (typeof v === 'string') return v.slice(0, 10);
-  if (typeof v === 'object' && v.value) return String(v.value).slice(0, 10);
-  return null;
+  let s = typeof v === 'string' ? v : (typeof v === 'object' && v.value) ? String(v.value) : '';
+  s = s.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const y = Number(s.slice(0, 4));
+  if (y < 2000 || y > 2100) return null;
+  return s;
 }
 
 export default async function handler(req, res) {

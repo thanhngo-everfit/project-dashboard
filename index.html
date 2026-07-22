@@ -611,6 +611,14 @@ function uid(){return Math.random().toString(36).slice(2,9);}
 function todayISO(){const d=new Date();return fmt(d);}
 function fmt(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function parse(s){const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d);}
+// A valid stored date is exactly YYYY-MM-DD, a real date, and in a sane year range.
+// Guards against bad values (e.g. from a Jira sync) that would otherwise make the
+// timeline range NaN and hang the day-column loop in buildUnits.
+function validISO(s){
+  if(typeof s!=='string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d=parse(s); if(isNaN(d.getTime())) return false;
+  const y=d.getFullYear(); return y>=2000 && y<=2100;
+}
 function addDays(d,n){return new Date(d.getFullYear(),d.getMonth(),d.getDate()+n);}
 function addMonths(d,n){return new Date(d.getFullYear(),d.getMonth()+n,1);}
 
@@ -648,6 +656,8 @@ function migrate(s){
       }
       if(typeof proj.start!=='string') proj.start='';
       if(typeof proj.end!=='string') proj.end='';
+      if(proj.start && !validISO(proj.start)) proj.start='';   // drop junk dates (e.g. bad Jira value)
+      if(proj.end && !validISO(proj.end)) proj.end='';
       if(!Array.isArray(proj.tags)) proj.tags = (typeof proj.tag==='string' && proj.tag) ? [proj.tag] : [];
       delete proj.tag;
       if(typeof proj.size!=='string') proj.size='';
@@ -658,6 +668,10 @@ function migrate(s){
       if(typeof proj.note!=='string') proj.note='';
       delete proj.color; delete proj.wip; delete proj.badge;   // color comes from the category now
       if(!Array.isArray(proj.tasks)) proj.tasks=[];
+      proj.tasks.forEach(t=>{   // drop junk task dates so they can't hang the timeline
+        if(typeof t.start!=='string' || (t.start && !validISO(t.start))) t.start = validISO(t.start)?t.start:'';
+        if(typeof t.end!=='string' || (t.end && !validISO(t.end))) t.end = validISO(t.end)?t.end:'';
+      });
       delete proj.collapsed;   // collapse is now personal (state.uiCollapsed), not shared data
     });
   })));
@@ -738,6 +752,7 @@ function jiraIssueKey(url){
 }
 // set the End date of a project's design work (create the design task if none exists)
 function setDesignEnd(proj, endIso){
+  if(!validISO(endIso)) return false;   // ignore anything that isn't a clean YYYY-MM-DD date
   if(!Array.isArray(proj.tasks)) proj.tasks=[];
   const d = proj.tasks.find(t=>t.type==='design');
   if(d){ if(d.end===endIso) return false; d.end=endIso; return true; }
@@ -904,9 +919,10 @@ function activeSquad(){
 /* ============================ Timeline math ============================ */
 function gatherDates(squad){
   const ds=[];
+  const add=s=>{ if(validISO(s)) ds.push(parse(s)); };   // only real dates -> never NaN in min/max
   squad.projects.forEach(cat=>cat.phases.forEach(proj=>{
-    if(proj.start)ds.push(parse(proj.start)); if(proj.end)ds.push(parse(proj.end));
-    (proj.tasks||[]).forEach(t=>{if(t.start)ds.push(parse(t.start)); if(t.end)ds.push(parse(t.end));});
+    add(proj.start); add(proj.end);
+    (proj.tasks||[]).forEach(t=>{ add(t.start); add(t.end); });
   }));
   return ds;
 }
@@ -916,26 +932,28 @@ function buildUnits(squad){
   let min,max;
   if(ds.length){min=new Date(Math.min(...ds));max=new Date(Math.max(...ds));}
   else{min=new Date();max=addMonths(new Date(),3);}
+  if(isNaN(min.getTime())||isNaN(max.getTime())){ min=new Date(); max=addMonths(new Date(),3); }   // safety: never NaN
   const today=new Date(); if(today<min)min=today; if(today>max)max=today;
 
   const view=curView();
   const base = view==='quarter'?200 : view==='month'?200 : 46;   // wider defaults so it reads without zooming
   // pass 1: build the unit list (no widths yet)
   const units=[];
+  let guard=6000;   // hard cap so a pathological range can never hang the loop
   if(view==='quarter'){
     let cur=quarterStart(min);const end=quarterStart(max);
-    while(cur<=end){ const next=addMonths(cur,3); const q=Math.floor(cur.getMonth()/3)+1;
+    while(cur<=end && guard-->0){ const next=addMonths(cur,3); const q=Math.floor(cur.getMonth()/3)+1;
       units.push({start:cur,end:next,label:'Q'+q,sub:String(cur.getFullYear())}); cur=next; }
   }else if(view==='month'){
     let cur=new Date(min.getFullYear(),min.getMonth(),1);const end=new Date(max.getFullYear(),max.getMonth(),1);
-    while(cur<=end){ const next=addMonths(cur,1);
+    while(cur<=end && guard-->0){ const next=addMonths(cur,1);
       units.push({start:cur,end:next,label:MONTHS[cur.getMonth()],sub:"'"+String(cur.getFullYear()).slice(2)}); cur=next; }
   }else{ // week = day-level columns
     let cur=new Date(min.getFullYear(),min.getMonth(),min.getDate());
     let end=new Date(max.getFullYear(),max.getMonth(),max.getDate());
     while(cur.getDay()!==1) cur=addDays(cur,-1);   // snap start back to Monday
     while(end.getDay()!==0) end=addDays(end,1);     // snap end forward to Sunday
-    while(cur<=end){ const next=addDays(cur,1);
+    while(cur<=end && guard-->0){ const next=addDays(cur,1);
       units.push({start:cur,end:next,day:cur.getDate(),dow:cur.getDay()}); cur=next; }
   }
   // pass 2: size columns — stretch to fill the viewport when the range is short
