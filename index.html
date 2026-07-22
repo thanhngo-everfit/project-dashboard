@@ -245,6 +245,7 @@
   .design-ready{position:absolute;top:calc(50% + 23px);height:18px;z-index:6;display:inline-flex;align-items:center;gap:4px;
     font-size:10px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;color:#067647;background:#ecfdf3;
     border:1px solid #abefc6;border-radius:999px;padding:0 9px;white-space:nowrap;box-shadow:0 1px 3px rgba(16,24,40,.14);pointer-events:none;}
+  .design-ready.design-none{color:var(--muted);background:#f2f4f7;border-color:#e4e7ec;}
 
   .today{position:absolute;top:0;bottom:0;width:0;border-left:2px dashed #f04438;z-index:7;pointer-events:none;transform:translateX(-1px);}
   /* Today marker (dot + label) pinned at the top of the timeline */
@@ -1393,12 +1394,14 @@ function updateDesignReadyChips(){
   const g=document.getElementById('gantt'); if(!g) return;
   const sl=g.scrollLeft;
   g.querySelectorAll('.design-ready').forEach(chip=>{
-    const endX=+chip.dataset.endx;
+    const homeX=+chip.dataset.homex;
+    const rightAligned = chip.dataset.align==='right';
     const w=chip.offsetWidth||90;
-    if(endX - w - 4 < sl){                 // home (right-aligned to end tick) would clip at the left edge -> pin left
+    const homeLeftEdge = homeX - (rightAligned?w:0);   // the chip's left edge at its home position
+    if(homeLeftEdge - 4 < sl){             // home position would clip at the left edge -> pin to the left
       chip.style.left=(sl+8)+'px'; chip.style.transform='none';
-    } else {                               // home position: right edge sits on the design-end tick
-      chip.style.left=endX+'px'; chip.style.transform='translateX(-100%)';
+    } else {
+      chip.style.left=homeX+'px'; chip.style.transform=rightAligned?'translateX(-100%)':'none';
     }
   });
 }
@@ -1584,7 +1587,8 @@ function phaseRow(cat,proj,units,tw){
   acts.push({icon:'🗑',title:'Delete',fn:()=>{if(confirm('Delete project "'+proj.name+'"?')){delHost.phases=delHost.phases.filter(x=>x!==proj);render();}}});
   const designTasks=(proj.tasks||[]).filter(t=>t.type==='design');   // design sticks to the project bar
   const hasWork=(proj.tasks||[]).some(t=>t.type!=='design');         // only dev work drives the collapse caret
-  if(!inVirtual() && designTasks.some(t=>t.start||t.end)) row.classList.add('has-design');
+  const noDesign = !inVirtual() && designTasks.length===0;           // no design work at all -> "No design" chip
+  if(!inVirtual() && (designTasks.some(t=>t.start||t.end) || noDesign)) row.classList.add('has-design');   // room for the below-bar chip
   const {left,caret}=leftCell(1, hasWork?(isCollapsed(proj)?'closed':'open'):null, null,proj.name,acts);
   if(caret) caret.onclick=()=>{toggleCollapsed(proj);render();};
   const q=(state.search||'').trim().toLowerCase();
@@ -1648,13 +1652,22 @@ function phaseRow(cat,proj,units,tw){
     if(designDone){
       // "DESIGN READY" chip: always shown when design is done. Home = design-end point (below bar);
       // updateDesignReadyChips pins it to the left edge when that point scrolls off-screen.
-      const chip=document.createElement('div'); chip.className='design-ready'; chip.dataset.endx=dSpan.xe;
+      const chip=document.createElement('div'); chip.className='design-ready';
+      chip.dataset.homex=dSpan.xe; chip.dataset.align='right';
       chip.innerHTML='✓ Design ready'; chip.title='Design finished '+fmtShort(fmt(dSpan.e));
       chip.style.left=dSpan.xe+'px'; chip.style.transform='translateX(-100%)';   // right edge on the end tick
       track.appendChild(chip);
     } else {
       mkCap(dSpan.xe,'Design End',true,true);    // below the bar, right-aligned to the end tick
     }
+  } else if(noDesign){
+    // no design work at all -> a muted "No design" chip below the bar at the project's start
+    const homeX=dateToX(effStart(proj,units),units);
+    const chip=document.createElement('div'); chip.className='design-ready design-none';
+    chip.dataset.homex=homeX; chip.dataset.align='left';
+    chip.textContent='No design'; chip.title='No design work added';
+    chip.style.left=homeX+'px';
+    track.appendChild(chip);
   }
   row.appendChild(track);
   return row;
