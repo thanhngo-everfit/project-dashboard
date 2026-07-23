@@ -1767,7 +1767,7 @@ function phaseRow(cat,proj,units,tw){
   track.appendChild(gridlinesEl(units,tw));
   const barColor=projBarColor(cat,proj);
   const projStartDate=effStart(proj,units);
-  const notNoDesign = designLabel && designLabel!=='No Design';
+  const notNoDesign = designOn && designLabel!=='No Design';   // draw the design span for dated designs (incl. null-status)
   const dTasks = designOn ? designTasks.filter(t=>t.start||t.end) : [];
   const dEndR = dTasks.map(t=>t.end).filter(validISO).sort().pop()||'';     // latest real end
   const dStartR = dTasks.map(t=>t.start).filter(validISO).sort()[0]||'';    // earliest real start
@@ -1861,6 +1861,7 @@ function designStatusGroup(s){
 // Map Jira design status + Design ETA end + Design start + project start -> the timeline label.
 function designStatusLabel(status, endIso, designStartIso, projStartIso){
   const s=(status||'').toLowerCase().trim();
+  if(!s) return '';                                      // null / not filled in Jira -> no design label
   if(s==='no need design') return 'No Design';           // no design needed
   const grp=designStatusGroup(s);
   if(grp==='approved') return 'Design Ready';            // Team/Product/L-J Approved -> always Design Ready
