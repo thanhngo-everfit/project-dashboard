@@ -1733,7 +1733,7 @@ function phaseRow(cat,proj,units,tw){
   const isNoNeed = dStatus.toLowerCase().trim()==='no need design';
   const hasDesignInfo = designOn && (designTasks.length>0 || isNoNeed);
   const designLabel = hasDesignInfo ? designStatusLabel(dStatus, dEndIso, dStartIso, proj.start||'') : '';
-  if(designLabel) row.classList.add('has-design');   // room for the below-bar chip
+  if(designLabel || proj.done) row.classList.add('has-design');   // room for the below-bar chip (design status or "Released")
   const {left,caret}=leftCell(1, hasWork?(isCollapsed(proj)?'closed':'open'):null, null,proj.name,acts);
   if(caret) caret.onclick=()=>{toggleCollapsed(proj);render();};
   const q=(state.search||'').trim().toLowerCase();
@@ -1797,8 +1797,9 @@ function phaseRow(cat,proj,units,tw){
     cap.onclick=()=>openTaskModal(proj,dTasks[0]);
     track.appendChild(cap);
   }
-  // design status chip (below the bar), colour-coded; pinned to the left edge when its anchor scrolls off
-  if(designLabel){
+  // design status chip (below the bar), colour-coded; pinned to the left edge when its anchor scrolls off.
+  // Hidden when the project is done — a "Released" chip (below the project end) is shown instead.
+  if(designLabel && !proj.done){
     const st=DESIGN_LABEL_STYLE[designLabel]||DESIGN_LABEL_STYLE['Need Design Estimation'];
     let homeX, align;
     if(dSpan){
@@ -1813,6 +1814,17 @@ function phaseRow(cat,proj,units,tw){
     chip.textContent=designLabel; chip.title='Design status: '+designLabel;
     chip.style.left=homeX+'px'; chip.style.transform = align==='right'?'translateX(-100%)':'none';
     if(designTasks.length){ chip.style.pointerEvents='auto'; chip.style.cursor='pointer'; chip.onclick=()=>openTaskModal(proj,designTasks[0]); }   // clickable even if the design work has no dates
+    track.appendChild(chip);
+  }
+  // "Released" chip for a done project — below the bar at the project end date (in all cases)
+  if(proj.done){
+    const st=DESIGN_LABEL_STYLE['Released'];
+    const endX=dateToX(addDays(effEnd(proj,units),1),units);
+    const chip=document.createElement('div'); chip.className='design-ready';
+    chip.dataset.homex=endX; chip.dataset.align='right';
+    chip.style.background=st.bg; chip.style.color=st.c; chip.style.borderColor=st.bd; chip.style.opacity='1';
+    chip.textContent='Released'; chip.title='Project marked as done';
+    chip.style.left=endX+'px'; chip.style.transform='translateX(-100%)';
     track.appendChild(chip);
   }
   row.appendChild(track);
@@ -1831,6 +1843,7 @@ const DESIGN_LABEL_STYLE={
   'Design Overdue':        {c:'#b42318',bg:'#fef3f2',bd:'#fecdca'},
   'Need L/J Review':       {c:'#3538cd',bg:'#eef4ff',bd:'#c7d7fe'},
   'Waiting For Start':     {c:'#026aa2',bg:'#f0f9ff',bd:'#b9e6fe'},
+  'Released':              {c:'#085d3a',bg:'#d3f8df',bd:'#75e0a7'},
 };
 function designStatusGroup(s){
   s=(s||'').toLowerCase().trim();
