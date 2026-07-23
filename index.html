@@ -288,6 +288,9 @@
   .mkt-row{display:grid;grid-template-columns:minmax(230px,2.4fr) minmax(170px,1.5fr) 108px 128px 150px 66px minmax(140px,1.5fr);gap:16px;align-items:center;padding:12px 18px;border-bottom:1px solid #f0f1f4;}
   .mkt-row:last-child{border-bottom:none;}
   .mkt-head{background:#f9fafb;font-size:10.5px;font-weight:800;color:#667085;text-transform:uppercase;letter-spacing:.5px;padding-top:10px;padding-bottom:10px;}
+  .mkt-datehead{display:block;padding:9px 18px;background:#fbfcfe;border-bottom:1px solid #eef0f3;border-top:1px solid #eef0f3;font-size:13px;font-weight:800;color:#344054;}
+  .mkt-datehead:first-of-type{border-top:none;}
+  .mkt-datehead .dcnt{font-size:10.5px;font-weight:700;color:var(--muted);background:#eef0f3;border-radius:999px;padding:1px 8px;margin-left:6px;}
   .mkt-body{cursor:pointer;transition:background .1s;}
   .mkt-body:hover{background:#f7f9fc;}
   .mkt-name{display:flex;align-items:center;gap:10px;min-width:0;font-weight:700;font-size:14px;color:var(--text);}
@@ -297,8 +300,8 @@
   .mkt-meta{font-size:12.5px;color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .mkt-meta .cat{font-weight:700;color:#475467;}
   .mkt-cell{min-width:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
-  .mkt-date{font-size:14px;font-weight:800;color:var(--text);display:flex;flex-direction:column;gap:1px;}
-  .mkt-date .rng{font-size:11px;font-weight:600;color:var(--muted);}
+  .mkt-date{display:flex;flex-direction:column;gap:1px;}
+  .mkt-date .rng{font-size:12.5px;font-weight:600;color:#475467;}
   .mkt-tags{display:flex;flex-wrap:wrap;gap:5px;min-width:0;}
   .mkt-dash{color:#cbd2dc;font-weight:600;}
   .mkt-body.done .txt{text-decoration:line-through;color:var(--muted);}
@@ -1633,26 +1636,36 @@ function renderListByEnd(g){
     sec.appendChild(h);
     const tbl=document.createElement('div'); tbl.className='mkt-table';
     const head=document.createElement('div'); head.className='mkt-row mkt-head';
-    head.innerHTML=`<span>Project</span><span>Initiative · Squad</span><span>Priority</span><span>Size</span><span>Release</span><span>Links</span><span>Tags</span>`;
+    head.innerHTML=`<span>Project</span><span>Initiative · Squad</span><span>Priority</span><span>Size</span><span>Timeline</span><span>Links</span><span>Tags</span>`;
     tbl.appendChild(head);
-    arr.forEach(({p,cat,squad})=>{
-      const row=document.createElement('div'); row.className='mkt-row mkt-body'+(p.done?' done':'');
-      const size = p.size?`<span class="sizechip s-${esc(p.size)}">${esc(p.size)}</span>`:'';
-      const promo = p.promo==='Yes'?'<span class="promochip">Promo</span>':'';
-      const tags = (p.tags&&p.tags.length&&showTagsOn())?p.tags.map(t=>tagChip(t)).join(''):'';
-      const done = p.done?'<span class="mkt-check" title="Released">✓</span>':'';
-      const released = p.done?'<span class="mkt-released">Released</span>':'';
-      const linksHtml=indicatorsHTML(p);
-      row.innerHTML=`
-        <span class="mkt-name">${done}<span class="dot" style="background:${cat.color||'#cdb4f6'}"></span><span class="txt">${esc(p.name)}</span>${released}</span>
-        <span class="mkt-meta"><span class="cat">${esc(cat.name)}</span> · ${esc(squad.name)}</span>
-        <span class="mkt-cell">${priorityChipHTML(p)||'<span class="mkt-dash">—</span>'}</span>
-        <span class="mkt-cell">${(size||promo)?size+promo:'<span class="mkt-dash">—</span>'}</span>
-        <span class="mkt-date">${fmtShort(p.end)}<span class="rng">${fmtShort(p.start)} → ${fmtShort(p.end)}</span></span>
-        <span class="mkt-cell mkt-links">${linksHtml||'<span class="mkt-dash">—</span>'}</span>
-        <span class="mkt-tags">${tags||'<span class="mkt-dash">—</span>'}</span>`;
-      row.onclick=()=>openPhaseModal(cat,p);
-      tbl.appendChild(row);
+    // within the month, sub-group by exact release (end) date
+    const byDate=new Map();
+    arr.forEach(x=>{ const d=x.p.end||''; if(!byDate.has(d))byDate.set(d,[]); byDate.get(d).push(x); });
+    const dates=[...byDate.keys()].sort((a,b)=> a===''?1 : b===''? -1 : a.localeCompare(b));
+    dates.forEach(d=>{
+      const grpItems=byDate.get(d);
+      const dh=document.createElement('div'); dh.className='mkt-datehead';
+      dh.innerHTML=`${d?esc(endLabel(d)):'No release date'} <span class="dcnt">${grpItems.length}</span>`;
+      tbl.appendChild(dh);
+      grpItems.forEach(({p,cat,squad})=>{
+        const row=document.createElement('div'); row.className='mkt-row mkt-body'+(p.done?' done':'');
+        const size = p.size?`<span class="sizechip s-${esc(p.size)}">${esc(p.size)}</span>`:'';
+        const promo = p.promo==='Yes'?'<span class="promochip">Promo</span>':'';
+        const tags = (p.tags&&p.tags.length&&showTagsOn())?p.tags.map(t=>tagChip(t)).join(''):'';
+        const done = p.done?'<span class="mkt-check" title="Released">✓</span>':'';
+        const released = p.done?'<span class="mkt-released">Released</span>':'';
+        const linksHtml=indicatorsHTML(p);
+        row.innerHTML=`
+          <span class="mkt-name">${done}<span class="dot" style="background:${cat.color||'#cdb4f6'}"></span><span class="txt">${esc(p.name)}</span>${released}</span>
+          <span class="mkt-meta"><span class="cat">${esc(cat.name)}</span> · ${esc(squad.name)}</span>
+          <span class="mkt-cell">${priorityChipHTML(p)||'<span class="mkt-dash">—</span>'}</span>
+          <span class="mkt-cell">${(size||promo)?size+promo:'<span class="mkt-dash">—</span>'}</span>
+          <span class="mkt-date"><span class="rng">${fmtShort(p.start)} → ${fmtShort(p.end)}</span></span>
+          <span class="mkt-cell mkt-links">${linksHtml||'<span class="mkt-dash">—</span>'}</span>
+          <span class="mkt-tags">${tags||'<span class="mkt-dash">—</span>'}</span>`;
+        row.onclick=()=>openPhaseModal(cat,p);
+        tbl.appendChild(row);
+      });
     });
     sec.appendChild(tbl);
     wrap.appendChild(sec);
