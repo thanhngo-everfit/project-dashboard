@@ -2212,16 +2212,16 @@ function openPhaseModal(category,proj){
       <div class="addrow" style="margin-top:6px;"><input id="m_tagnew" placeholder="Add custom tag…"><button type="button" class="btn" id="m_tagadd">Add</button></div>
     </div>
     <div class="field"><label>Priority (optional)</label><select id="m_priority">
-      <option value="" ${!def.priority?'selected':''}>— None —</option>
+      <option value="" ${!def.priority?'selected':''}>None</option>
       ${PRIORITIES.map(p=>`<option value="${p}" ${def.priority===p?'selected':''}>${p}</option>`).join('')}
     </select></div>
     <div class="field row2">
       <div><label>Feature size (optional)</label><select id="m_size">
-        <option value="" ${!def.size?'selected':''}>— None —</option>
+        <option value="" ${!def.size?'selected':''}>None</option>
         ${FEATURE_SIZES.map(s=>`<option value="${s}" ${def.size===s?'selected':''}>${s}</option>`).join('')}
       </select></div>
       <div><label>Promotion (optional)</label><select id="m_promo">
-        <option value="" ${!def.promo?'selected':''}>— None —</option>
+        <option value="" ${!def.promo?'selected':''}>None</option>
         <option value="Yes" ${def.promo==='Yes'?'selected':''}>Yes</option>
         <option value="No" ${def.promo==='No'?'selected':''}>No</option>
       </select></div>
