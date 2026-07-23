@@ -455,6 +455,11 @@
       <button id="tagFilterBtn" class="tagfilter">All tags</button>
       <div id="tagFilterMenu" class="tagfilter-menu" style="display:none"></div>
     </div>
+    <div class="tagfilter-wrap" style="margin-left:6px;">
+      <span style="font-size:12px;color:var(--muted);font-weight:600;">Design</span>
+      <button id="designFilterBtn" class="tagfilter">All statuses</button>
+      <div id="designFilterMenu" class="tagfilter-menu" style="display:none"></div>
+    </div>
     <button class="btn" id="jumpToday" title="Scroll the timeline to today"><span style="color:#f04438;">●</span> Jump to Today</button>
     <div class="spacer"></div>
     <div class="jira-sync" id="jiraSyncWrap" style="display:none;align-items:center;gap:8px;margin-right:8px;">
@@ -749,6 +754,7 @@ function migrate(s){
   if(!s.uiCollapsed || typeof s.uiCollapsed!=='object') s.uiCollapsed={};   // personal, projectId -> true(collapsed)/false
   if(!s.viewBySquad || typeof s.viewBySquad!=='object') s.viewBySquad={};   // personal, squadId -> 'quarter'|'month'|'week'
   if(!Array.isArray(s.tagFilters)) s.tagFilters = (typeof s.tagFilter==='string' && s.tagFilter)?[s.tagFilter]:[];   // personal, multi
+  if(!Array.isArray(s.designFilters)) s.designFilters=[];   // personal design-status filter
   delete s.tagFilter;
   if(!s.showTagsByTribe || typeof s.showTagsByTribe!=='object'){   // personal, per-tribe: show tag chip next to project name
     s.showTagsByTribe={};
@@ -1279,6 +1285,7 @@ function render(){
   document.getElementById('squadName').textContent=activeSquad().name;
   document.querySelectorAll('#viewToggle button').forEach(b=>b.classList.toggle('active',b.dataset.view===curView()));
   renderTagFilter();
+  renderDesignFilter();
   renderJiraSync();
   renderGantt();
   syncUrl();
@@ -1309,6 +1316,34 @@ function renderTagFilter(){
     row.appendChild(cb); row.appendChild(sp); menu.appendChild(row);
   });
   const clr=document.createElement('button'); clr.className='tf-clear'; clr.textContent='Clear all'; clr.onclick=()=>{ state.tagFilters=[]; render(); }; menu.appendChild(clr);
+}
+function renderDesignFilter(){
+  const btn=document.getElementById('designFilterBtn'), menu=document.getElementById('designFilterMenu'); if(!btn)return;
+  if(!Array.isArray(state.designFilters)) state.designFilters=[];
+  // which design labels actually occur in the current view (+ '(none)' for no label)
+  const present=new Set();
+  const scope = (activeVirtual()&&activeVirtual().listByEnd) ? allProjects().map(x=>x.p) : activeSquad().projects.flatMap(c=>c.phases||[]);
+  scope.forEach(p=>present.add(projectDesignLabel(p)||'(none)'));
+  const opts=[...DESIGN_STATUSES.filter(s=>present.has(s)), ...(present.has('(none)')?['(none)']:[])];
+  state.designFilters=state.designFilters.filter(s=>present.has(s));   // drop filters no longer present
+  const n=state.designFilters.length;
+  const label=(n===0?'All statuses':(n===1?(state.designFilters[0]==='(none)'?'No status':state.designFilters[0]):n+' statuses'));
+  btn.innerHTML=esc(label)+(n>0?' <span class="tf-x" title="Clear design filter">×</span>':'');
+  btn.classList.toggle('active-filter', n>0);
+  const x=btn.querySelector('.tf-x'); if(x) x.onclick=e=>{ e.stopPropagation(); state.designFilters=[]; render(); };
+  menu.innerHTML='';
+  if(!opts.length){ const e=document.createElement('div'); e.className='tf-empty'; e.textContent='No design statuses'; menu.appendChild(e); return; }
+  opts.forEach(s=>{
+    const row=document.createElement('label'); row.className='tf-row';
+    const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=state.designFilters.includes(s);
+    cb.onchange=()=>{ if(cb.checked){ if(!state.designFilters.includes(s))state.designFilters.push(s);} else state.designFilters=state.designFilters.filter(v=>v!==s); render(); };
+    const st=DESIGN_LABEL_STYLE[s]||{};
+    const sp=document.createElement('span');
+    sp.innerHTML = s==='(none)' ? '<span class="tagpick" style="color:var(--muted);background:#f2f4f7;border-color:#e4e7ec;">No status</span>'
+                                : `<span class="tagpick" style="color:${st.c||''};background:${st.bg||''};border-color:${st.bd||''};">${esc(s)}</span>`;
+    row.appendChild(cb); row.appendChild(sp); menu.appendChild(row);
+  });
+  const clr=document.createElement('button'); clr.className='tf-clear'; clr.textContent='Clear all'; clr.onclick=()=>{ state.designFilters=[]; render(); }; menu.appendChild(clr);
 }
 
 function clearTabMarks(keepDragging){
@@ -1447,7 +1482,7 @@ function renderGantt(){
   let projCount=0;
   squad.projects.forEach(p=>{
     const catMatch=q0 && p.name.toLowerCase().includes(q0);
-    let ps = (p.phases||[]).filter(x=>tagFilterMatch(x.tags) && (showCompletedOn()||!x.done));
+    let ps = (p.phases||[]).filter(x=>tagFilterMatch(x.tags) && designFilterMatch(x) && (showCompletedOn()||!x.done));
     if(q0 && !catMatch) ps=ps.filter(x=>x.name.toLowerCase().includes(q0));
     projCount+=ps.length;
   });
@@ -1482,11 +1517,12 @@ function renderGantt(){
 
   const q=(state.search||'').trim().toLowerCase();
   const anyTag=(state.tagFilters||[]).length>0;
+  const anyFilter = anyTag || q || !showCompletedOn() || (state.designFilters||[]).length>0;
   squad.projects.forEach(p=>{
     const catMatch = q && p.name.toLowerCase().includes(q);
-    let projs = p.phases.filter(x=>tagFilterMatch(x.tags) && (showCompletedOn()||!x.done));
+    let projs = p.phases.filter(x=>tagFilterMatch(x.tags) && designFilterMatch(x) && (showCompletedOn()||!x.done));
     if(q && !catMatch) projs = projs.filter(x=>x.name.toLowerCase().includes(q));
-    if((anyTag||q||!showCompletedOn()) && projs.length===0) return;   // hide categories with no matching/visible projects
+    if(anyFilter && projs.length===0) return;   // hide categories with no matching/visible projects
     grid.appendChild(projectRow(p,units,tw));
     projs.forEach(ph=>{
       grid.appendChild(phaseRow(p,ph,units,tw));
@@ -1544,7 +1580,7 @@ function updateDesignReadyChips(){
 // Marketing list view: all projects across squads, grouped by end date.
 function renderListByEnd(g){
   const q=(state.search||'').trim().toLowerCase();
-  let items=allProjects().filter(x=>tagFilterMatch(x.p.tags) && (showCompletedOn()||!x.p.done));
+  let items=allProjects().filter(x=>tagFilterMatch(x.p.tags) && designFilterMatch(x.p) && (showCompletedOn()||!x.p.done));
   if(q) items=items.filter(x=> x.p.name.toLowerCase().includes(q) || (x.cat.name||'').toLowerCase().includes(q) || (x.squad.name||'').toLowerCase().includes(q));
   // group by end date
   const map=new Map();
@@ -1683,7 +1719,7 @@ function projectRow(p,units,tw){
   const row=document.createElement('div'); row.className='row project';
   const q=(state.search||'').trim().toLowerCase();
   const catMatch=q && p.name.toLowerCase().includes(q);
-  let vis = (p.phases||[]).filter(x=>tagFilterMatch(x.tags) && (showCompletedOn()||!x.done));
+  let vis = (p.phases||[]).filter(x=>tagFilterMatch(x.tags) && designFilterMatch(x) && (showCompletedOn()||!x.done));
   if(q && !catMatch) vis = vis.filter(x=>x.name.toLowerCase().includes(q));
   const count=vis.length;
   const acts = inVirtual() ? [] : [
@@ -1873,6 +1909,20 @@ function designStatusLabel(status, endIso, designStartIso, projStartIso){
   const etaWithinProject = validISO(endIso) && (!validISO(projStartIso) || parse(endIso) >= parse(projStartIso));
   if(etaPast && etaWithinProject) return 'Design Overdue';
   return {estimation:'Need Design Estimation',progress:'Design In Progress',review:'Design In Review',pending:'Design Pending'}[grp];
+}
+// The effective design label shown for a project (incl. "Released" for done, '' for none).
+function projectDesignLabel(proj){
+  if(proj.done) return 'Released';
+  const dt=(proj.tasks||[]).filter(t=>t.type==='design');
+  const dEnd=dt.map(t=>t.end).filter(validISO).sort().pop()||'';
+  const dStart=dt.map(t=>t.start).filter(validISO).sort()[0]||'';
+  return designStatusLabel(proj.designStatus||'', dEnd, dStart, proj.start||'');
+}
+// Design-status filter (personal, multi). '(none)' matches projects with no design label.
+const DESIGN_STATUSES=['Waiting For Start','Need Design Estimation','Design In Progress','Design In Review','Design Pending','Design Overdue','Design Ready','Need L/J Review','No Design','Released'];
+function designFilterMatch(proj){
+  const df=state.designFilters||[]; if(!df.length) return true;
+  return df.includes(projectDesignLabel(proj) || '(none)');
 }
 
 function taskRow(p,ph,t,units,tw,last,projStartX,projStartDate){
@@ -2378,9 +2428,15 @@ function setAllCollapsed(v){
 document.getElementById('expandAll').onclick=()=>setAllCollapsed(false);
 document.getElementById('collapseAll').onclick=()=>setAllCollapsed(true);
 (function(){
-  const btn=document.getElementById('tagFilterBtn'), menu=document.getElementById('tagFilterMenu');
-  btn.onclick=e=>{ e.stopPropagation(); menu.style.display = menu.style.display==='none' ? 'block' : 'none'; };
-  document.addEventListener('click',e=>{ if(!e.target.closest('.tagfilter-wrap')) menu.style.display='none'; });
+  const tagBtn=document.getElementById('tagFilterBtn'), tagMenu=document.getElementById('tagFilterMenu');
+  const dBtn=document.getElementById('designFilterBtn'), dMenu=document.getElementById('designFilterMenu');
+  tagBtn.onclick=e=>{ e.stopPropagation(); dMenu.style.display='none'; tagMenu.style.display = tagMenu.style.display==='none'?'block':'none'; };
+  dBtn.onclick=e=>{ e.stopPropagation(); tagMenu.style.display='none'; dMenu.style.display = dMenu.style.display==='none'?'block':'none'; };
+  document.addEventListener('click',e=>{
+    const wrap=e.target.closest('.tagfilter-wrap');
+    if(!wrap || !wrap.contains(tagMenu)) tagMenu.style.display='none';
+    if(!wrap || !wrap.contains(dMenu)) dMenu.style.display='none';
+  });
 })();
 function jumpToday(instant){
   const g=document.getElementById('gantt'); if(!g) return;
