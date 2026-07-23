@@ -285,7 +285,7 @@
   .mkt-month-h{font-size:17px;font-weight:800;color:var(--text);letter-spacing:-.2px;margin:0 0 12px;display:flex;align-items:center;gap:10px;}
   .mkt-month-h .cnt{font-size:11px;font-weight:700;color:var(--muted);background:#f0f1f4;border-radius:999px;padding:2px 10px;}
   .mkt-table{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 1px 2px rgba(16,24,40,.05);}
-  .mkt-row{display:grid;grid-template-columns:minmax(230px,2.4fr) minmax(170px,1.5fr) 108px 128px 150px 66px minmax(140px,1.5fr);gap:16px;align-items:center;padding:12px 18px;border-bottom:1px solid #f0f1f4;}
+  .mkt-row{display:grid;grid-template-columns:minmax(220px,2.2fr) minmax(160px,1.4fr) 96px 96px 108px 150px 62px minmax(130px,1.4fr);gap:14px;align-items:center;padding:12px 18px;border-bottom:1px solid #f0f1f4;}
   .mkt-row:last-child{border-bottom:none;}
   .mkt-head{background:#f9fafb;font-size:10.5px;font-weight:800;color:#667085;text-transform:uppercase;letter-spacing:.5px;padding-top:10px;padding-bottom:10px;}
   .mkt-datehead{display:block;padding:9px 18px;background:#fbfcfe;border-bottom:1px solid #eef0f3;border-top:1px solid #eef0f3;font-size:13px;font-weight:800;color:#344054;}
@@ -1636,7 +1636,7 @@ function renderListByEnd(g){
     sec.appendChild(h);
     const tbl=document.createElement('div'); tbl.className='mkt-table';
     const head=document.createElement('div'); head.className='mkt-row mkt-head';
-    head.innerHTML=`<span>Project</span><span>Initiative · Squad</span><span>Priority</span><span>Size</span><span>Timeline</span><span>Links</span><span>Tags</span>`;
+    head.innerHTML=`<span>Project</span><span>Initiative · Squad</span><span>Priority</span><span>Size</span><span>Promotion</span><span>Timeline</span><span>Links</span><span>Tags</span>`;
     tbl.appendChild(head);
     // within the month, sub-group by exact release (end) date
     const byDate=new Map();
@@ -1649,8 +1649,8 @@ function renderListByEnd(g){
       tbl.appendChild(dh);
       grpItems.forEach(({p,cat,squad})=>{
         const row=document.createElement('div'); row.className='mkt-row mkt-body'+(p.done?' done':'');
-        const size = p.size?`<span class="sizechip s-${esc(p.size)}">${esc(p.size)}</span>`:'';
-        const promo = p.promo==='Yes'?'<span class="promochip">Promo</span>':'';
+        const size = p.size?`<span class="sizechip s-${esc(p.size)}">${esc(p.size)}</span>`:'<span class="mkt-dash">—</span>';
+        const promo = p.promo==='Yes'?'<span class="promochip">Promotion</span>':(p.promo==='No'?'<span class="mkt-dash">No</span>':'<span class="mkt-dash">—</span>');
         const tags = (p.tags&&p.tags.length&&showTagsOn())?p.tags.map(t=>tagChip(t)).join(''):'';
         const done = p.done?'<span class="mkt-check" title="Released">✓</span>':'';
         const released = p.done?'<span class="mkt-released">Released</span>':'';
@@ -1659,7 +1659,8 @@ function renderListByEnd(g){
           <span class="mkt-name">${done}<span class="dot" style="background:${cat.color||'#cdb4f6'}"></span><span class="txt">${esc(p.name)}</span>${released}</span>
           <span class="mkt-meta"><span class="cat">${esc(cat.name)}</span> · ${esc(squad.name)}</span>
           <span class="mkt-cell">${priorityChipHTML(p)||'<span class="mkt-dash">—</span>'}</span>
-          <span class="mkt-cell">${(size||promo)?size+promo:'<span class="mkt-dash">—</span>'}</span>
+          <span class="mkt-cell">${size}</span>
+          <span class="mkt-cell">${promo}</span>
           <span class="mkt-date"><span class="rng">${fmtShort(p.start)} → ${fmtShort(p.end)}</span></span>
           <span class="mkt-cell mkt-links">${linksHtml||'<span class="mkt-dash">—</span>'}</span>
           <span class="mkt-tags">${tags||'<span class="mkt-dash">—</span>'}</span>`;
