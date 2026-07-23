@@ -527,6 +527,11 @@
       <button id="designFilterBtn" class="tagfilter">All statuses</button>
       <div id="designFilterMenu" class="tagfilter-menu" style="display:none"></div>
     </div>
+    <div class="tagfilter-wrap" id="categoryFilterWrap" style="margin-left:6px;display:none;">
+      <span style="font-size:12px;color:var(--muted);font-weight:600;">Category</span>
+      <button id="categoryFilterBtn" class="tagfilter">All categories</button>
+      <div id="categoryFilterMenu" class="tagfilter-menu" style="display:none"></div>
+    </div>
     <div class="tagfilter-wrap" id="promoFilterWrap" style="margin-left:6px;display:none;">
       <span style="font-size:12px;color:var(--muted);font-weight:600;">Promotion</span>
       <button id="promoFilterBtn" class="tagfilter">All</button>
@@ -828,6 +833,7 @@ function migrate(s){
   if(!Array.isArray(s.tagFilters)) s.tagFilters = (typeof s.tagFilter==='string' && s.tagFilter)?[s.tagFilter]:[];   // personal, multi
   if(!Array.isArray(s.designFilters)) s.designFilters=[];   // personal design-status filter
   if(!Array.isArray(s.promoFilters)) s.promoFilters=[];     // personal promotion filter (Marketing view)
+  if(!Array.isArray(s.categoryFilters)) s.categoryFilters=[]; // personal category filter (Marketing view)
   delete s.tagFilter;
   if(!s.showTagsByTribe || typeof s.showTagsByTribe!=='object'){   // personal, per-tribe: show tag chip next to project name
     s.showTagsByTribe={};
@@ -1360,6 +1366,7 @@ function render(){
   renderTagFilter();
   renderDesignFilter();
   renderPromoFilter();
+  renderCategoryFilter();
   renderJiraSync();
   // Marketing (release calendar) view: hide controls that don't apply (timeline zoom/view, jump-to-today, settings);
   // swap the Design-status filter for a Promotion filter here.
@@ -1370,6 +1377,7 @@ function render(){
   setDisp('#viewToggle', !listView);
   setDisp('#designFilterWrap', !listView);
   setDisp('#promoFilterWrap', listView);
+  setDisp('#categoryFilterWrap', listView);
   renderGantt();
   syncUrl();
   save();
@@ -1456,6 +1464,29 @@ function renderPromoFilter(){
     row.appendChild(cb); row.appendChild(sp); menu.appendChild(row);
   });
   const clr=document.createElement('button'); clr.className='tf-clear'; clr.textContent='Clear all'; clr.onclick=()=>{ state.promoFilters=[]; render(); }; menu.appendChild(clr);
+}
+// Category filter (Marketing view) — filter by project category name.
+function categoryFilterMatch(catName){ const cf=state.categoryFilters||[]; if(!cf.length) return true; return cf.includes(catName); }
+function renderCategoryFilter(){
+  const btn=document.getElementById('categoryFilterBtn'), menu=document.getElementById('categoryFilterMenu'); if(!btn)return;
+  if(!Array.isArray(state.categoryFilters)) state.categoryFilters=[];
+  const cats=[...new Set(allProjects().map(x=>x.cat.name).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  state.categoryFilters=state.categoryFilters.filter(c=>cats.includes(c));
+  const n=state.categoryFilters.length;
+  const label=(n===0?'All categories':n+(n===1?' category':' categories'));
+  btn.innerHTML=esc(label)+(n>0?' <span class="tf-x" title="Clear category filter">×</span>':'');
+  btn.classList.toggle('active-filter', n>0);
+  const x=btn.querySelector('.tf-x'); if(x) x.onclick=e=>{ e.stopPropagation(); state.categoryFilters=[]; render(); };
+  menu.innerHTML='';
+  if(!cats.length){ const e=document.createElement('div'); e.className='tf-empty'; e.textContent='No categories'; menu.appendChild(e); return; }
+  cats.forEach(c=>{
+    const row=document.createElement('label'); row.className='tf-row';
+    const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=state.categoryFilters.includes(c);
+    cb.onchange=()=>{ if(cb.checked){ if(!state.categoryFilters.includes(c))state.categoryFilters.push(c);} else state.categoryFilters=state.categoryFilters.filter(v=>v!==c); render(); };
+    const sp=document.createElement('span'); sp.style.cssText='font-size:12.5px;font-weight:600;color:var(--text);'; sp.textContent=c;
+    row.appendChild(cb); row.appendChild(sp); menu.appendChild(row);
+  });
+  const clr=document.createElement('button'); clr.className='tf-clear'; clr.textContent='Clear all'; clr.onclick=()=>{ state.categoryFilters=[]; render(); }; menu.appendChild(clr);
 }
 
 function clearTabMarks(keepDragging){
@@ -1692,7 +1723,7 @@ function updateDesignReadyChips(){
 // Marketing view: all projects across squads as a release calendar, grouped by release month.
 function renderListByEnd(g){
   const q=(state.search||'').trim().toLowerCase();
-  let items=allProjects().filter(x=>tagFilterMatch(x.p.tags) && promoFilterMatch(x.p) && (showCompletedOn()||!x.p.done));
+  let items=allProjects().filter(x=>tagFilterMatch(x.p.tags) && promoFilterMatch(x.p) && categoryFilterMatch(x.cat.name) && (showCompletedOn()||!x.p.done));
   if(q) items=items.filter(x=> x.p.name.toLowerCase().includes(q) || (x.cat.name||'').toLowerCase().includes(q) || (x.squad.name||'').toLowerCase().includes(q));
   // group by release month (YYYY-MM of the end date)
   const map=new Map();
@@ -2565,11 +2596,13 @@ document.getElementById('collapseAll').onclick=()=>setAllCollapsed(true);
   const tagBtn=document.getElementById('tagFilterBtn'), tagMenu=document.getElementById('tagFilterMenu');
   const dBtn=document.getElementById('designFilterBtn'), dMenu=document.getElementById('designFilterMenu');
   const pBtn=document.getElementById('promoFilterBtn'), pMenu=document.getElementById('promoFilterMenu');
-  const menus=[tagMenu,dMenu,pMenu];
+  const cBtn=document.getElementById('categoryFilterBtn'), cMenu=document.getElementById('categoryFilterMenu');
+  const menus=[tagMenu,dMenu,pMenu,cMenu];
   const toggle=m=>{ menus.forEach(x=>{ if(x!==m) x.style.display='none'; }); m.style.display = m.style.display==='none'?'block':'none'; };
   tagBtn.onclick=e=>{ e.stopPropagation(); toggle(tagMenu); };
   dBtn.onclick=e=>{ e.stopPropagation(); toggle(dMenu); };
   pBtn.onclick=e=>{ e.stopPropagation(); toggle(pMenu); };
+  cBtn.onclick=e=>{ e.stopPropagation(); toggle(cMenu); };
   document.addEventListener('click',e=>{
     const wrap=e.target.closest('.tagfilter-wrap');
     menus.forEach(m=>{ if(!wrap || !wrap.contains(m)) m.style.display='none'; });
