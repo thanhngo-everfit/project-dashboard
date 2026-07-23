@@ -1728,11 +1728,9 @@ function phaseRow(cat,proj,units,tw){
   const dStatus = designOn ? (proj.designStatus||'') : '';
   const dEndIso = designOn ? (designTasks.map(t=>t.end).filter(validISO).sort().pop()||'') : '';   // latest Design ETA
   const dStartIso = designOn ? (designTasks.map(t=>t.start).filter(validISO).sort()[0]||'') : '';  // earliest Design start
-  // Show a design label only when the project has a design work item — except the Jira "No Need Design"
-  // status, which shows "No Design" on its own. No design work -> no label (removing the work hides it).
-  const isNoNeed = dStatus.toLowerCase().trim()==='no need design';
-  const hasDesignInfo = designOn && (designTasks.length>0 || isNoNeed);
-  const designLabel = hasDesignInfo ? designStatusLabel(dStatus, dEndIso, dStartIso, proj.start||'') : '';
+  // The design label is driven by the synced Jira status: non-null status -> its label; null -> no label.
+  // (Deleting the design work clears the status, so that hides the label.)
+  const designLabel = designOn ? designStatusLabel(dStatus, dEndIso, dStartIso, proj.start||'') : '';
   if(designLabel || proj.done) row.classList.add('has-design');   // room for the below-bar chip (design status or "Released")
   const {left,caret}=leftCell(1, hasWork?(isCollapsed(proj)?'closed':'open'):null, null,proj.name,acts);
   if(caret) caret.onclick=()=>{toggleCollapsed(proj);render();};
