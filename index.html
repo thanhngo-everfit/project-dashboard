@@ -297,7 +297,7 @@
   .mkt-name .dot{width:10px;height:10px;border-radius:50%;flex:none;}
   .mkt-name .txt{overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;word-break:break-word;line-height:1.3;}
   .mkt-name .lnk{margin-left:2px;}
-  .mkt-meta{font-size:12.5px;color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .mkt-meta{font-size:12.5px;color:var(--muted);min-width:0;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;word-break:break-word;line-height:1.3;}
   .mkt-meta .cat{font-weight:700;color:#475467;}
   .mkt-cell{min-width:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
   .mkt-date{display:flex;flex-direction:column;gap:1px;}
@@ -1636,7 +1636,7 @@ function renderListByEnd(g){
     sec.appendChild(h);
     const tbl=document.createElement('div'); tbl.className='mkt-table';
     const head=document.createElement('div'); head.className='mkt-row mkt-head';
-    head.innerHTML=`<span>Project</span><span>Initiative · Squad</span><span>Priority</span><span>Size</span><span>Promotion</span><span>Timeline</span><span>Links</span><span>Tags</span>`;
+    head.innerHTML=`<span>Project</span><span>Category</span><span>Priority</span><span>Size</span><span>Promotion</span><span>Timeline</span><span>Links</span><span>Tags</span>`;
     tbl.appendChild(head);
     // within the month, sub-group by exact release (end) date
     const byDate=new Map();
@@ -1657,7 +1657,7 @@ function renderListByEnd(g){
         const linksHtml=indicatorsHTML(p);
         row.innerHTML=`
           <span class="mkt-name">${done}<span class="dot" style="background:${cat.color||'#cdb4f6'}"></span><span class="txt">${esc(p.name)}</span>${released}</span>
-          <span class="mkt-meta"><span class="cat">${esc(cat.name)}</span> · ${esc(squad.name)}</span>
+          <span class="mkt-meta"><span class="cat">${esc(cat.name)}</span></span>
           <span class="mkt-cell">${priorityChipHTML(p)||'<span class="mkt-dash">—</span>'}</span>
           <span class="mkt-cell">${size}</span>
           <span class="mkt-cell">${promo}</span>
