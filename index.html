@@ -301,6 +301,9 @@
   .mkt-date .rng{font-size:11px;font-weight:600;color:var(--muted);}
   .mkt-tags{display:flex;flex-wrap:wrap;gap:5px;min-width:0;}
   .mkt-dash{color:#cbd2dc;font-weight:600;}
+  .mkt-body.done .txt{text-decoration:line-through;color:var(--muted);}
+  .mkt-check{color:#12b76a;font-weight:900;flex:none;}
+  .mkt-released{flex:none;font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.3px;color:#085d3a;background:#d3f8df;border:1px solid #75e0a7;border-radius:999px;padding:1px 8px;white-space:nowrap;}
   .sizechip{flex:none;font-size:10px;font-weight:800;border-radius:999px;padding:2px 8px;white-space:nowrap;}
   .sizechip.s-Small{background:#dcfce7;color:#166534;}
   .sizechip.s-Medium{background:#dbeafe;color:#1e40af;}
@@ -1633,12 +1636,14 @@ function renderListByEnd(g){
     head.innerHTML=`<span>Project</span><span>Initiative · Squad</span><span>Priority</span><span>Size</span><span>Release</span><span>Tags</span>`;
     tbl.appendChild(head);
     arr.forEach(({p,cat,squad})=>{
-      const row=document.createElement('div'); row.className='mkt-row mkt-body';
+      const row=document.createElement('div'); row.className='mkt-row mkt-body'+(p.done?' done':'');
       const size = p.size?`<span class="sizechip s-${esc(p.size)}">${esc(p.size)}</span>`:'';
       const promo = p.promo==='Yes'?'<span class="promochip">Promo</span>':'';
       const tags = (p.tags&&p.tags.length&&showTagsOn())?p.tags.map(t=>tagChip(t)).join(''):'';
+      const done = p.done?'<span class="mkt-check" title="Released">✓</span>':'';
+      const released = p.done?'<span class="mkt-released">Released</span>':'';
       row.innerHTML=`
-        <span class="mkt-name"><span class="dot" style="background:${cat.color||'#cdb4f6'}"></span><span class="txt">${esc(p.name)}</span>${indicatorsHTML(p)}</span>
+        <span class="mkt-name">${done}<span class="dot" style="background:${cat.color||'#cdb4f6'}"></span><span class="txt">${esc(p.name)}</span>${indicatorsHTML(p)}${released}</span>
         <span class="mkt-meta"><span class="cat">${esc(cat.name)}</span> · ${esc(squad.name)}</span>
         <span class="mkt-cell">${priorityChipHTML(p)||'<span class="mkt-dash">—</span>'}</span>
         <span class="mkt-cell">${(size||promo)?size+promo:'<span class="mkt-dash">—</span>'}</span>
