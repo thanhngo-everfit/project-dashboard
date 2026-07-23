@@ -1739,6 +1739,11 @@ function phaseRow(cat,proj,units,tw){
   const q=(state.search||'').trim().toLowerCase();
   const lab=left.querySelector('.label');
   if(q && lab) lab.innerHTML=highlight(proj.name,q);
+  if(proj.done && lab){   // green check before the name (inline-block so the strikethrough doesn't cross it)
+    const ck=document.createElement('span'); ck.textContent='✓'; ck.title='Completed';
+    ck.style.cssText='display:inline-block;color:#12b76a;font-weight:900;margin-right:5px;text-decoration:none;';
+    lab.insertBefore(ck, lab.firstChild);
+  }
   // below the project name: Size > Tags > Links, each on its own line (each toggle is personal)
   const size=showSizeOn()?sizeLineHTML(proj):'';
   const links=showLinksOn()?linksLineHTML(proj):'';
