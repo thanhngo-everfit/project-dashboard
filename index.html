@@ -488,10 +488,15 @@
       <button id="tagFilterBtn" class="tagfilter">All tags</button>
       <div id="tagFilterMenu" class="tagfilter-menu" style="display:none"></div>
     </div>
-    <div class="tagfilter-wrap" style="margin-left:6px;">
+    <div class="tagfilter-wrap" id="designFilterWrap" style="margin-left:6px;">
       <span style="font-size:12px;color:var(--muted);font-weight:600;">Design</span>
       <button id="designFilterBtn" class="tagfilter">All statuses</button>
       <div id="designFilterMenu" class="tagfilter-menu" style="display:none"></div>
+    </div>
+    <div class="tagfilter-wrap" id="promoFilterWrap" style="margin-left:6px;display:none;">
+      <span style="font-size:12px;color:var(--muted);font-weight:600;">Promotion</span>
+      <button id="promoFilterBtn" class="tagfilter">All</button>
+      <div id="promoFilterMenu" class="tagfilter-menu" style="display:none"></div>
     </div>
     <button class="btn" id="jumpToday" title="Scroll the timeline to today"><span style="color:#f04438;">●</span> Jump to Today</button>
     <div class="spacer"></div>
@@ -788,6 +793,7 @@ function migrate(s){
   if(!s.viewBySquad || typeof s.viewBySquad!=='object') s.viewBySquad={};   // personal, squadId -> 'quarter'|'month'|'week'
   if(!Array.isArray(s.tagFilters)) s.tagFilters = (typeof s.tagFilter==='string' && s.tagFilter)?[s.tagFilter]:[];   // personal, multi
   if(!Array.isArray(s.designFilters)) s.designFilters=[];   // personal design-status filter
+  if(!Array.isArray(s.promoFilters)) s.promoFilters=[];     // personal promotion filter (Marketing view)
   delete s.tagFilter;
   if(!s.showTagsByTribe || typeof s.showTagsByTribe!=='object'){   // personal, per-tribe: show tag chip next to project name
     s.showTagsByTribe={};
@@ -1319,13 +1325,17 @@ function render(){
   document.querySelectorAll('#viewToggle button').forEach(b=>b.classList.toggle('active',b.dataset.view===curView()));
   renderTagFilter();
   renderDesignFilter();
+  renderPromoFilter();
   renderJiraSync();
-  // Marketing (release calendar) view: hide controls that don't apply (timeline zoom/view, jump-to-today, settings)
+  // Marketing (release calendar) view: hide controls that don't apply (timeline zoom/view, jump-to-today, settings);
+  // swap the Design-status filter for a Promotion filter here.
   const listView = !!(activeVirtual() && activeVirtual().listByEnd);
   const setDisp=(sel,show)=>{ const el=document.querySelector(sel); if(el) el.style.display = show?'':'none'; };
   setDisp('#jumpToday', !listView);
   setDisp('.settings-wrap', !listView);
   setDisp('#viewToggle', !listView);
+  setDisp('#designFilterWrap', !listView);
+  setDisp('#promoFilterWrap', listView);
   renderGantt();
   syncUrl();
   save();
@@ -1383,6 +1393,35 @@ function renderDesignFilter(){
     row.appendChild(cb); row.appendChild(sp); menu.appendChild(row);
   });
   const clr=document.createElement('button'); clr.className='tf-clear'; clr.textContent='Clear all'; clr.onclick=()=>{ state.designFilters=[]; render(); }; menu.appendChild(clr);
+}
+// Promotion filter (Marketing view). Yes -> 'Promotion', No -> 'No', blank -> '(none)'.
+function promoVal(proj){ return proj.promo==='Yes'?'Promotion':(proj.promo==='No'?'No':'(none)'); }
+function promoFilterMatch(proj){ const pf=state.promoFilters||[]; if(!pf.length) return true; return pf.includes(promoVal(proj)); }
+function renderPromoFilter(){
+  const btn=document.getElementById('promoFilterBtn'), menu=document.getElementById('promoFilterMenu'); if(!btn)return;
+  if(!Array.isArray(state.promoFilters)) state.promoFilters=[];
+  const present=new Set(); allProjects().forEach(x=>present.add(promoVal(x.p)));
+  const opts=['Promotion','No','(none)'].filter(o=>present.has(o));
+  state.promoFilters=state.promoFilters.filter(s=>present.has(s));
+  const labelOf=s=> s==='(none)'?'No value':(s==='No'?'No promotion':'Promotion');
+  const n=state.promoFilters.length;
+  const label=(n===0?'All':(n===1?labelOf(state.promoFilters[0]):n+' selected'));
+  btn.innerHTML=esc(label)+(n>0?' <span class="tf-x" title="Clear promotion filter">×</span>':'');
+  btn.classList.toggle('active-filter', n>0);
+  const x=btn.querySelector('.tf-x'); if(x) x.onclick=e=>{ e.stopPropagation(); state.promoFilters=[]; render(); };
+  menu.innerHTML='';
+  if(!opts.length){ const e=document.createElement('div'); e.className='tf-empty'; e.textContent='No data'; menu.appendChild(e); return; }
+  opts.forEach(s=>{
+    const row=document.createElement('label'); row.className='tf-row';
+    const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=state.promoFilters.includes(s);
+    cb.onchange=()=>{ if(cb.checked){ if(!state.promoFilters.includes(s))state.promoFilters.push(s);} else state.promoFilters=state.promoFilters.filter(v=>v!==s); render(); };
+    const sp=document.createElement('span');
+    sp.innerHTML = s==='Promotion' ? '<span class="promochip">Promotion</span>'
+                 : s==='No' ? '<span class="tagpick" style="color:var(--muted);background:#f2f4f7;border-color:#e4e7ec;">No promotion</span>'
+                 : '<span class="tagpick" style="color:var(--muted);background:#f2f4f7;border-color:#e4e7ec;">No value</span>';
+    row.appendChild(cb); row.appendChild(sp); menu.appendChild(row);
+  });
+  const clr=document.createElement('button'); clr.className='tf-clear'; clr.textContent='Clear all'; clr.onclick=()=>{ state.promoFilters=[]; render(); }; menu.appendChild(clr);
 }
 
 function clearTabMarks(keepDragging){
@@ -1619,7 +1658,7 @@ function updateDesignReadyChips(){
 // Marketing view: all projects across squads as a release calendar, grouped by release month.
 function renderListByEnd(g){
   const q=(state.search||'').trim().toLowerCase();
-  let items=allProjects().filter(x=>tagFilterMatch(x.p.tags) && designFilterMatch(x.p) && (showCompletedOn()||!x.p.done));
+  let items=allProjects().filter(x=>tagFilterMatch(x.p.tags) && promoFilterMatch(x.p) && (showCompletedOn()||!x.p.done));
   if(q) items=items.filter(x=> x.p.name.toLowerCase().includes(q) || (x.cat.name||'').toLowerCase().includes(q) || (x.squad.name||'').toLowerCase().includes(q));
   // group by release month (YYYY-MM of the end date)
   const map=new Map();
@@ -2490,12 +2529,15 @@ document.getElementById('collapseAll').onclick=()=>setAllCollapsed(true);
 (function(){
   const tagBtn=document.getElementById('tagFilterBtn'), tagMenu=document.getElementById('tagFilterMenu');
   const dBtn=document.getElementById('designFilterBtn'), dMenu=document.getElementById('designFilterMenu');
-  tagBtn.onclick=e=>{ e.stopPropagation(); dMenu.style.display='none'; tagMenu.style.display = tagMenu.style.display==='none'?'block':'none'; };
-  dBtn.onclick=e=>{ e.stopPropagation(); tagMenu.style.display='none'; dMenu.style.display = dMenu.style.display==='none'?'block':'none'; };
+  const pBtn=document.getElementById('promoFilterBtn'), pMenu=document.getElementById('promoFilterMenu');
+  const menus=[tagMenu,dMenu,pMenu];
+  const toggle=m=>{ menus.forEach(x=>{ if(x!==m) x.style.display='none'; }); m.style.display = m.style.display==='none'?'block':'none'; };
+  tagBtn.onclick=e=>{ e.stopPropagation(); toggle(tagMenu); };
+  dBtn.onclick=e=>{ e.stopPropagation(); toggle(dMenu); };
+  pBtn.onclick=e=>{ e.stopPropagation(); toggle(pMenu); };
   document.addEventListener('click',e=>{
     const wrap=e.target.closest('.tagfilter-wrap');
-    if(!wrap || !wrap.contains(tagMenu)) tagMenu.style.display='none';
-    if(!wrap || !wrap.contains(dMenu)) dMenu.style.display='none';
+    menus.forEach(m=>{ if(!wrap || !wrap.contains(m)) m.style.display='none'; });
   });
 })();
 function jumpToday(instant){
