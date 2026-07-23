@@ -279,6 +279,28 @@
   .lv-item .lv-name{font-weight:700;font-size:14px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .lv-item .lv-meta{font-size:12px;color:var(--muted);flex:none;white-space:nowrap;}
   .lv-item .lv-dates{font-size:12px;color:#475467;font-weight:600;flex:none;white-space:nowrap;min-width:120px;text-align:right;}
+  /* Marketing (release calendar) table view */
+  .mkt{padding:16px 26px 56px;}
+  .mkt-month{margin-bottom:30px;}
+  .mkt-month-h{font-size:17px;font-weight:800;color:var(--text);letter-spacing:-.2px;margin:0 0 12px;display:flex;align-items:center;gap:10px;}
+  .mkt-month-h .cnt{font-size:11px;font-weight:700;color:var(--muted);background:#f0f1f4;border-radius:999px;padding:2px 10px;}
+  .mkt-table{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 1px 2px rgba(16,24,40,.05);}
+  .mkt-row{display:grid;grid-template-columns:minmax(240px,2.4fr) minmax(170px,1.5fr) 108px 128px 150px minmax(150px,1.6fr);gap:16px;align-items:center;padding:12px 18px;border-bottom:1px solid #f0f1f4;}
+  .mkt-row:last-child{border-bottom:none;}
+  .mkt-head{background:#f9fafb;font-size:10.5px;font-weight:800;color:#667085;text-transform:uppercase;letter-spacing:.5px;padding-top:10px;padding-bottom:10px;}
+  .mkt-body{cursor:pointer;transition:background .1s;}
+  .mkt-body:hover{background:#f7f9fc;}
+  .mkt-name{display:flex;align-items:center;gap:10px;min-width:0;font-weight:700;font-size:14px;color:var(--text);}
+  .mkt-name .dot{width:10px;height:10px;border-radius:50%;flex:none;}
+  .mkt-name .txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .mkt-name .lnk{margin-left:2px;}
+  .mkt-meta{font-size:12.5px;color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .mkt-meta .cat{font-weight:700;color:#475467;}
+  .mkt-cell{min-width:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .mkt-date{font-size:14px;font-weight:800;color:var(--text);display:flex;flex-direction:column;gap:1px;}
+  .mkt-date .rng{font-size:11px;font-weight:600;color:var(--muted);}
+  .mkt-tags{display:flex;flex-wrap:wrap;gap:5px;min-width:0;}
+  .mkt-dash{color:#cbd2dc;font-weight:600;}
   .sizechip{flex:none;font-size:10px;font-weight:800;border-radius:999px;padding:2px 8px;white-space:nowrap;}
   .sizechip.s-Small{background:#dcfce7;color:#166534;}
   .sizechip.s-Medium{background:#dbeafe;color:#1e40af;}
@@ -1292,6 +1314,12 @@ function render(){
   renderTagFilter();
   renderDesignFilter();
   renderJiraSync();
+  // Marketing (release calendar) view: hide controls that don't apply (timeline zoom/view, jump-to-today, settings)
+  const listView = !!(activeVirtual() && activeVirtual().listByEnd);
+  const setDisp=(sel,show)=>{ const el=document.querySelector(sel); if(el) el.style.display = show?'':'none'; };
+  setDisp('#jumpToday', !listView);
+  setDisp('.settings-wrap', !listView);
+  setDisp('#viewToggle', !listView);
   renderGantt();
   syncUrl();
   save();
@@ -1582,39 +1610,45 @@ function updateDesignReadyChips(){
   });
 }
 
-// Marketing list view: all projects across squads, grouped by end date.
+// Marketing view: all projects across squads as a release calendar, grouped by release month.
 function renderListByEnd(g){
   const q=(state.search||'').trim().toLowerCase();
   let items=allProjects().filter(x=>tagFilterMatch(x.p.tags) && designFilterMatch(x.p) && (showCompletedOn()||!x.p.done));
   if(q) items=items.filter(x=> x.p.name.toLowerCase().includes(q) || (x.cat.name||'').toLowerCase().includes(q) || (x.squad.name||'').toLowerCase().includes(q));
-  // group by end date
+  // group by release month (YYYY-MM of the end date)
   const map=new Map();
-  items.forEach(x=>{ const k=x.p.end||''; if(!map.has(k))map.set(k,[]); map.get(k).push(x); });
+  items.forEach(x=>{ const e=x.p.end; const k=validISO(e)?e.slice(0,7):''; if(!map.has(k))map.set(k,[]); map.get(k).push(x); });
   const keys=[...map.keys()].sort((a,b)=> a===''?1 : b===''? -1 : a.localeCompare(b));
-  const wrap=document.createElement('div'); wrap.className='listview';
-  if(!keys.length){ const e=document.createElement('div'); e.className='empty'; e.textContent='No projects yet.'; g.appendChild(e); return; }
+  const wrap=document.createElement('div'); wrap.className='mkt';
+  if(!keys.length){ const em=document.createElement('div'); em.className='empty'; em.textContent='No projects yet.'; g.appendChild(em); return; }
+  const monthLabel=k=>{ if(!k) return 'No release date'; const [y,m]=k.split('-').map(Number); return MONTHS[m-1]+' '+y; };
   keys.forEach(k=>{
-    const arr=map.get(k);
-    const grp=document.createElement('div'); grp.className='lv-group';
-    const head=document.createElement('div'); head.className='lv-head';
-    head.innerHTML=`<span>${k?endLabel(k):'No end date'}</span><span class="lv-count">${arr.length}</span>`;
-    grp.appendChild(head);
+    const arr=map.get(k).slice().sort((a,b)=>(a.p.end||'').localeCompare(b.p.end||''));
+    const sec=document.createElement('div'); sec.className='mkt-month';
+    const h=document.createElement('div'); h.className='mkt-month-h';
+    h.innerHTML=`${esc(monthLabel(k))} <span class="cnt">${arr.length} release${arr.length>1?'s':''}</span>`;
+    sec.appendChild(h);
+    const tbl=document.createElement('div'); tbl.className='mkt-table';
+    const head=document.createElement('div'); head.className='mkt-row mkt-head';
+    head.innerHTML=`<span>Project</span><span>Initiative · Squad</span><span>Priority</span><span>Size</span><span>Release</span><span>Tags</span>`;
+    tbl.appendChild(head);
     arr.forEach(({p,cat,squad})=>{
-      const row=document.createElement('div'); row.className='lv-item';
+      const row=document.createElement('div'); row.className='mkt-row mkt-body';
+      const size = p.size?`<span class="sizechip s-${esc(p.size)}">${esc(p.size)}</span>`:'';
+      const promo = p.promo==='Yes'?'<span class="promochip">Promo</span>':'';
+      const tags = (p.tags&&p.tags.length&&showTagsOn())?p.tags.map(t=>tagChip(t)).join(''):'';
       row.innerHTML=`
-        <span class="lv-dot" style="background:${cat.color||'#cdb4f6'}"></span>
-        <span class="lv-name">${esc(p.name)}</span>
-        <span class="lv-meta">${esc(cat.name)} · ${esc(squad.name)}</span>
-        ${priorityChipHTML(p)}
-        ${indicatorsHTML(p)}
-        ${p.promo==='Yes'?`<span class="promochip">Promotion</span>`:''}
-        ${p.size?`<span class="sizechip s-${p.size}">${esc(p.size)}</span>`:''}
-        <span class="lv-dates">${fmtShort(p.start)} → ${fmtShort(p.end)}</span>
-        ${(p.tags && p.tags.length && showTagsOn())?tagsLineHTML(p.tags):''}`;
+        <span class="mkt-name"><span class="dot" style="background:${cat.color||'#cdb4f6'}"></span><span class="txt">${esc(p.name)}</span>${indicatorsHTML(p)}</span>
+        <span class="mkt-meta"><span class="cat">${esc(cat.name)}</span> · ${esc(squad.name)}</span>
+        <span class="mkt-cell">${priorityChipHTML(p)||'<span class="mkt-dash">—</span>'}</span>
+        <span class="mkt-cell">${(size||promo)?size+promo:'<span class="mkt-dash">—</span>'}</span>
+        <span class="mkt-date">${fmtShort(p.end)}<span class="rng">${fmtShort(p.start)} → ${fmtShort(p.end)}</span></span>
+        <span class="mkt-tags">${tags||'<span class="mkt-dash">—</span>'}</span>`;
       row.onclick=()=>openPhaseModal(cat,p);
-      grp.appendChild(row);
+      tbl.appendChild(row);
     });
-    wrap.appendChild(grp);
+    sec.appendChild(tbl);
+    wrap.appendChild(sec);
   });
   g.appendChild(wrap);
 }
