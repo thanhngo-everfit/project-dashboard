@@ -1089,8 +1089,8 @@ async function jiraListFields(){
     const j = await r.json().catch(()=>({}));
     if(!r.ok){ setSync('Field list failed','bad'); console.warn('jira fields error:', j); return; }
     const all = j.fields||[];
-    const hits = all.filter(f=>/eta|design/i.test(f.name||''));
-    console.log('%c[Jira fields] matching eta/design:','font-weight:bold'); console.table(hits);
+    const hits = all.filter(f=>/eta|design|estimat|ios|android|web|api|landing/i.test(f.name||''));
+    console.log('%c[Jira fields] matching design/estimation:','font-weight:bold'); console.table(hits);
     console.log('[Jira fields] all '+all.length+' fields:'); console.table(all);
     setSync(hits.length+' field(s) match eta/design — see console','ok');
   }catch(e){ setSync('Field list error','bad'); console.warn(e); }
