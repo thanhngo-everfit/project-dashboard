@@ -57,6 +57,27 @@ function normalizeDate(v) {
   if (y < 2000 || y > 2100) return null;
   return s;
 }
+// Walk a Jira description (Atlassian Document Format, or a plain string) and pull out every figma.com URL.
+function collectDoc(node, acc) {
+  if (!node) return;
+  if (Array.isArray(node)) { node.forEach(n => collectDoc(n, acc)); return; }
+  if (typeof node === 'object') {
+    if (Array.isArray(node.marks)) node.marks.forEach(m => { if (m && m.type === 'link' && m.attrs && m.attrs.href) acc.hrefs.push(m.attrs.href); });
+    if (node.attrs && node.attrs.url) acc.hrefs.push(node.attrs.url);   // inlineCard / embedCard / blockCard
+    if (typeof node.text === 'string') acc.text += ' ' + node.text;
+    if (node.content) collectDoc(node.content, acc);
+  }
+}
+function extractFigmaLinks(desc) {
+  const acc = { hrefs: [], text: '' };
+  if (typeof desc === 'string') acc.text = desc;
+  else collectDoc(desc, acc);
+  const urls = new Set();
+  acc.hrefs.forEach(h => { if (/figma\.com/i.test(h)) urls.add(h.trim()); });
+  const re = /https?:\/\/[^\s)"'\]]*figma\.com[^\s)"'\]]*/ig; let m;
+  while ((m = re.exec(acc.text))) urls.add(m[0].trim());
+  return [...urls];
+}
 // A number custom field -> a finite number, or null.
 function extractNumber(v) {
   if (v === null || v === undefined || v === '') return null;
@@ -165,7 +186,7 @@ export default async function handler(req, res) {
         if (!key) { results[i] = { id: it && it.id, key, error: 'no_key' }; continue; }
         try {
           const estFieldIds = EST_FIELDS.map(f => estIds[f.key]).filter(Boolean);
-          const fieldsParam = [fieldId, startFieldId, statusFieldId, ...estFieldIds].filter(Boolean).join(',');
+          const fieldsParam = [fieldId, startFieldId, statusFieldId, 'description', ...estFieldIds].filter(Boolean).join(',');
           const r = await fetch(base + '/rest/api/3/issue/' + encodeURIComponent(key) + '?fields=' + encodeURIComponent(fieldsParam), { headers: jheaders });
           if (!r.ok) { results[i] = { id: it.id, key, error: 'http_' + r.status }; continue; }
           const j = await r.json();
@@ -180,6 +201,7 @@ export default async function handler(req, res) {
             designEnd: endR.end || endR.start,
             designStatus: statusFieldId ? extractStatus(f[statusFieldId]) : '',   // customfield_10139
             est,
+            figma: extractFigmaLinks(f.description),             // Figma URLs found in the card description
             raw: { start: startFieldId ? f[startFieldId] ?? null : '(no start field)', end: f[fieldId] ?? null, status: statusFieldId ? f[statusFieldId] ?? null : null },
           };
         } catch (e) {

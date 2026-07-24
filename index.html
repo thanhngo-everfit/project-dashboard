@@ -923,12 +923,17 @@ function jiraIssueKey(url){
   return m ? m[1].toUpperCase() : '';
 }
 // Apply a synced Jira row: set design status, and the design work start/end (create the task if either date exists).
-function applyDesignSync(proj, startIso, endIso, status, est){
+function applyDesignSync(proj, startIso, endIso, status, est, figma){
   let changed=false;
   const st=status||'';
   if((proj.designStatus||'')!==st){ proj.designStatus=st; changed=true; }
   const e = est||{};
   if(JSON.stringify(proj.estimation||{})!==JSON.stringify(e)){ proj.estimation=e; changed=true; }
+  // merge Figma links from the Jira description into the project's documentation links (dedup)
+  if(Array.isArray(figma) && figma.length){
+    if(!Array.isArray(proj.docs)) proj.docs=[];
+    figma.forEach(u=>{ const n=normalizeUrl(u); if(n && !proj.docs.includes(n)){ proj.docs.push(n); changed=true; } });
+  }
   const start = validISO(startIso) ? startIso : '';
   const end = validISO(endIso) ? endIso : '';
   if(start || end){
@@ -977,7 +982,9 @@ async function jiraSync(){
       const status = rec.designStatus || '';
       const est = rec.est || {};
       const hasEst = Object.keys(est).length>0;
-      if(!newStart && !end && !status && !hasEst){ noData++; return; }   // nothing to sync for this project
+      const figma = Array.isArray(rec.figma)?rec.figma:[];
+      const newFigma = figma.map(u=>normalizeUrl(u)).filter(u=>u && !(proj.docs||[]).includes(u));   // Figma links not already added
+      if(!newStart && !end && !status && !hasEst && !newFigma.length){ noData++; return; }   // nothing to sync for this project
       const existing=(proj.tasks||[]).find(x=>x.type==='design');
       const curStart=existing?(existing.start||''):'';
       const curEnd=existing?(existing.end||''):'';
@@ -986,9 +993,9 @@ async function jiraSync(){
       const startDiff = !!newStart && curStart!==newStart;
       const statusDiff = curStatus!==status;
       const estDiff = JSON.stringify(proj.estimation||{})!==JSON.stringify(est);
-      const changed = endDiff || startDiff || statusDiff || estDiff || (!existing && (newStart||end));
+      const changed = endDiff || startDiff || statusDiff || estDiff || newFigma.length>0 || (!existing && (newStart||end));
       const label = designStatusLabel(status, end||curEnd, newStart||curStart||'', proj.start||'');
-      rows.push({proj, key:rec.key, name:proj.name, curStart, curEnd, newStart, newEnd:end, newStatus:status, est, label,
+      rows.push({proj, key:rec.key, name:proj.name, curStart, curEnd, newStart, newEnd:end, newStatus:status, est, figma, newFigma, label,
         action: (!existing&&(newStart||end))?'Create':(changed?'Update':'No change'), changed});
     });
     // Diagnostics (console)
@@ -1020,12 +1027,13 @@ function openJiraReview(rows, syncedAt, stats){
     const statusLine = `<div class="jr-dates">Status: <b>${esc(r.newStatus||'—')}</b> → <span class="jr-lbl" style="color:${st.c||''};background:${st.bg||''};border-color:${st.bd||''}">${esc(r.label||'')}</span></div>`;
     const estParts=EST_LABELS.filter(([k])=>r.est&&r.est[k]!=null).map(([k,lbl])=>lbl+' '+r.est[k]+'p');
     const estLine = estParts.length?`<div class="jr-dates">Estimation: <b>${esc(estParts.join(' · '))}</b></div>`:'';
+    const figmaLine = (r.newFigma&&r.newFigma.length)?`<div class="jr-dates">+ ${r.newFigma.length} Figma link${r.newFigma.length>1?'s':''}</div>`:'';
     const badgeCls = r.action==='Create'?'create':r.action==='Update'?'update':'nochange';
     return `<label class="jr-row ${r.changed?'':'nochange'}">
       <input type="checkbox" class="jr-cb" data-i="${i}" ${r.changed?'checked':''}>
       <span class="jr-main">
         <div><span class="jr-name">${esc(r.name)}</span> <span class="jr-key">${esc(r.key)}</span></div>
-        ${dateLine}${statusLine}${estLine}
+        ${dateLine}${statusLine}${estLine}${figmaLine}
       </span>
       <span class="jr-badge ${badgeCls}">${r.action}</span>
     </label>`;
@@ -1049,7 +1057,7 @@ function openJiraReview(rows, syncedAt, stats){
   modal.querySelector('#jr-cancel').onclick=closeModal;
   saveBtn.onclick=()=>{
     let applied=0;
-    cbs.forEach(c=>{ if(c.checked){ const r=rows[+c.dataset.i]; if(applyDesignSync(r.proj, r.newStart, r.newEnd, r.newStatus, r.est)) applied++; } });
+    cbs.forEach(c=>{ if(c.checked){ const r=rows[+c.dataset.i]; if(applyDesignSync(r.proj, r.newStart, r.newEnd, r.newStatus, r.est, r.figma)) applied++; } });
     state.lastJiraSync = syncedAt || Date.now();
     lastSyncedJSON=null;   // force a save even if only the timestamp changed
     closeModal(); save(); renderJiraSync(); render();
