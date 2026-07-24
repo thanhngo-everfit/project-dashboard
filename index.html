@@ -134,8 +134,12 @@
   .size-chip.s-Medium{color:#854d0e;background:#fef9c3;border-color:#fde68a;}
   .size-chip.s-Big{color:#9a3412;background:#ffedd5;border-color:#fed7aa;}
   .size-chip.s-Huge{color:#991b1b;background:#fee2e2;border-color:#fecaca;}
-  .est-line{display:flex;flex-direction:column;align-items:flex-start;gap:2px;}
-  .est-item{font-size:9.5px;white-space:nowrap;padding-left:2px;}
+  .est-line{display:flex;flex-direction:column;align-items:flex-start;gap:3px;}
+  .est-children{position:relative;display:flex;flex-direction:column;align-items:flex-start;margin-left:2px;}
+  .est-item{position:relative;padding:2px 0 2px 18px;font-size:11px;white-space:nowrap;}
+  .est-item::before{content:'';position:absolute;left:5px;top:0;bottom:0;border-left:2px dashed #ccd2dc;}   /* vertical thread */
+  .est-item:last-child::before{bottom:auto;height:50%;}                                                     /* last: stop at the elbow */
+  .est-item::after{content:'';position:absolute;left:5px;top:50%;width:9px;border-top:2px dashed #ccd2dc;border-bottom-left-radius:8px;}  /* elbow */
   .est-item .est-k{color:#344054;font-weight:700;}
   .est-item .est-v{color:#3538cd;font-weight:800;}
   .ll-title{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
@@ -2502,7 +2506,7 @@ const EST_LABELS=[['api','API'],['web','Web'],['android','Android'],['ios','iOS'
 function estimationLineHTML(proj){
   const e=proj.estimation||{};
   const parts=EST_LABELS.filter(([k])=>e[k]!=null && e[k]!=='').map(([k,lbl])=>`<span class="est-item"><span class="est-k">${lbl}</span> <span class="est-v">${esc(String(e[k]))}p</span></span>`);
-  return parts.length?`<span class="est-line"><span class="ll-title">Estimation:</span>${parts.join('')}</span>`:'';
+  return parts.length?`<span class="est-line"><span class="ll-title">Estimation:</span><span class="est-children">${parts.join('')}</span></span>`:'';
 }
 // "Links:" label followed by any Jira / document icons (empty if none).
 function linksLineHTML(proj){
