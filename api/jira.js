@@ -21,6 +21,14 @@ const START_FIELD_NAME = 'design start';     // -> design work START
 const END_FIELD_DEFAULT = 'customfield_10666';
 const START_FIELD_DEFAULT = 'customfield_12752';
 const STATUS_FIELD_DEFAULT = 'customfield_10139';   // design status (select/status)
+// Per-discipline effort estimation (number fields). Auto-detected by name; override via env.
+const EST_FIELDS = [
+  { key: 'api',     name: 'api estimation',     env: 'JIRA_EST_API_FIELD' },
+  { key: 'web',     name: 'web estimation',     env: 'JIRA_EST_WEB_FIELD' },
+  { key: 'android', name: 'android estimation', env: 'JIRA_EST_ANDROID_FIELD' },
+  { key: 'ios',     name: 'ios estimation',     env: 'JIRA_EST_IOS_FIELD' },
+  { key: 'landing', name: 'landing estimation', env: 'JIRA_EST_LANDING_FIELD' },
+];
 
 const oauth = new OAuth2Client(CLIENT_ID);
 
@@ -48,6 +56,13 @@ function normalizeDate(v) {
   const y = Number(s.slice(0, 4));
   if (y < 2000 || y > 2100) return null;
   return s;
+}
+// A number custom field -> a finite number, or null.
+function extractNumber(v) {
+  if (v === null || v === undefined || v === '') return null;
+  if (typeof v === 'object') v = v.value ?? v.number ?? null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
 }
 // Design ETA can be a plain date, a {start,end} object, OR a JSON *string* of that object
 // (Jira Product Discovery returns e.g. '{"start":"2026-07-15","end":"2026-07-15"}').
@@ -106,14 +121,18 @@ export default async function handler(req, res) {
     let fieldId = process.env.JIRA_DESIGN_ETA_FIELD || END_FIELD_DEFAULT || '';        // design work END
     let startFieldId = process.env.JIRA_DESIGN_START_FIELD || START_FIELD_DEFAULT || ''; // design work START
     let statusFieldId = process.env.JIRA_DESIGN_STATUS_FIELD || STATUS_FIELD_DEFAULT || ''; // design status
-    if (!fieldId || !startFieldId) {
+    const estIds = {};   // discipline key -> field id (env override or auto-detected)
+    EST_FIELDS.forEach(f => { const v = process.env[f.env]; if (v) estIds[f.key] = v; });
+    const needList = !fieldId || !startFieldId || EST_FIELDS.some(f => !estIds[f.key]);
+    if (needList) {
       const r = await fetch(base + '/rest/api/3/field', { headers: jheaders });
-      if (!r.ok) { res.status(502).json({ error: 'jira_http_' + r.status, detail: 'could not list fields to auto-detect Design fields' }); return; }
+      if (!r.ok) { res.status(502).json({ error: 'jira_http_' + r.status, detail: 'could not list fields to auto-detect fields' }); return; }
       const all = await r.json();
       const list = Array.isArray(all) ? all : [];
       const findBy = name => { const n = name.toLowerCase(); return list.find(f => (f.name || '').toLowerCase() === n) || list.find(f => (f.name || '').toLowerCase().includes(n)); };
       if (!fieldId) { const h = findBy(END_FIELD_NAME); if (h) fieldId = h.id; }
       if (!startFieldId) { const h = findBy(START_FIELD_NAME); if (h) startFieldId = h.id; }
+      EST_FIELDS.forEach(f => { if (!estIds[f.key]) { const h = findBy(f.name); if (h) estIds[f.key] = h.id; } });
     }
     if (!fieldId) { res.status(500).json({ error: 'design_eta_field_not_found', hint: 'Set JIRA_DESIGN_ETA_FIELD, or rename the Jira field to "Design ETA".' }); return; }
 
@@ -145,18 +164,22 @@ export default async function handler(req, res) {
         const key = String((it && it.key) || '').trim();
         if (!key) { results[i] = { id: it && it.id, key, error: 'no_key' }; continue; }
         try {
-          const fieldsParam = [fieldId, startFieldId, statusFieldId].filter(Boolean).join(',');
+          const estFieldIds = EST_FIELDS.map(f => estIds[f.key]).filter(Boolean);
+          const fieldsParam = [fieldId, startFieldId, statusFieldId, ...estFieldIds].filter(Boolean).join(',');
           const r = await fetch(base + '/rest/api/3/issue/' + encodeURIComponent(key) + '?fields=' + encodeURIComponent(fieldsParam), { headers: jheaders });
           if (!r.ok) { results[i] = { id: it.id, key, error: 'http_' + r.status }; continue; }
           const j = await r.json();
           const f = (j && j.fields) || {};
           const endR = extractRange(f[fieldId]);                 // Design ETA -> end
           const startR = startFieldId ? extractRange(f[startFieldId]) : { start: null, end: null };  // Design Start
+          const est = {};   // per-discipline estimation numbers
+          EST_FIELDS.forEach(fd => { if (estIds[fd.key]) { const n = extractNumber(f[estIds[fd.key]]); if (n !== null) est[fd.key] = n; } });
           results[i] = {
             id: it.id, key,
             designStart: startR.start || startR.end,             // each field is a single date (start===end)
             designEnd: endR.end || endR.start,
             designStatus: statusFieldId ? extractStatus(f[statusFieldId]) : '',   // customfield_10139
+            est,
             raw: { start: startFieldId ? f[startFieldId] ?? null : '(no start field)', end: f[fieldId] ?? null, status: statusFieldId ? f[statusFieldId] ?? null : null },
           };
         } catch (e) {
@@ -165,7 +188,7 @@ export default async function handler(req, res) {
       }
     }
     await Promise.all(Array.from({ length: Math.min(CONCURRENCY, issues.length) }, worker));
-    res.status(200).json({ results, syncedAt: Date.now(), fieldId, startFieldId, statusFieldId });
+    res.status(200).json({ results, syncedAt: Date.now(), fieldId, startFieldId, statusFieldId, estIds });
   } catch (e) {
     res.status(500).json({ error: 'server_error', detail: String((e && e.message) || e) });
   }

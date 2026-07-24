@@ -134,6 +134,8 @@
   .size-chip.s-Medium{color:#854d0e;background:#fef9c3;border-color:#fde68a;}
   .size-chip.s-Big{color:#9a3412;background:#ffedd5;border-color:#fed7aa;}
   .size-chip.s-Huge{color:#991b1b;background:#fee2e2;border-color:#fecaca;}
+  .est-line{display:flex;align-items:center;gap:5px;flex-wrap:wrap;}
+  .est-chip{font-size:10px;font-weight:700;color:#3538cd;background:#eef4ff;border:1px solid #c7d7fe;border-radius:999px;padding:1px 7px;white-space:nowrap;}
   .ll-title{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
   .tag-line{display:inline-flex;align-items:center;gap:5px;flex-wrap:wrap;}
   .tag-title{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
@@ -812,6 +814,7 @@ function migrate(s){
       if(typeof proj.jira!=='string') proj.jira='';
       if(typeof proj.designStatus!=='string') proj.designStatus='';   // synced from Jira (customfield_10139)
       if(typeof proj.done!=='boolean') proj.done=false;   // manually marked complete (shared)
+      if(!proj.estimation || typeof proj.estimation!=='object') proj.estimation={};   // per-discipline estimation from Jira
       if(!Array.isArray(proj.docs)) proj.docs=[];
       if(typeof proj.note!=='string') proj.note='';
       delete proj.color; delete proj.wip; delete proj.badge;   // color comes from the category now
@@ -910,10 +913,12 @@ function jiraIssueKey(url){
   return m ? m[1].toUpperCase() : '';
 }
 // Apply a synced Jira row: set design status, and the design work start/end (create the task if either date exists).
-function applyDesignSync(proj, startIso, endIso, status){
+function applyDesignSync(proj, startIso, endIso, status, est){
   let changed=false;
   const st=status||'';
   if((proj.designStatus||'')!==st){ proj.designStatus=st; changed=true; }
+  const e = est||{};
+  if(JSON.stringify(proj.estimation||{})!==JSON.stringify(e)){ proj.estimation=e; changed=true; }
   const start = validISO(startIso) ? startIso : '';
   const end = validISO(endIso) ? endIso : '';
   if(start || end){
@@ -960,7 +965,9 @@ async function jiraSync(){
       const newStart = (rec.designStart && validISO(rec.designStart)) ? rec.designStart : '';
       const end = (rec.designEnd && validISO(rec.designEnd)) ? rec.designEnd : '';
       const status = rec.designStatus || '';
-      if(!newStart && !end && !status){ noData++; return; }   // nothing to sync for this project
+      const est = rec.est || {};
+      const hasEst = Object.keys(est).length>0;
+      if(!newStart && !end && !status && !hasEst){ noData++; return; }   // nothing to sync for this project
       const existing=(proj.tasks||[]).find(x=>x.type==='design');
       const curStart=existing?(existing.start||''):'';
       const curEnd=existing?(existing.end||''):'';
@@ -968,15 +975,16 @@ async function jiraSync(){
       const endDiff = !!end && curEnd!==end;
       const startDiff = !!newStart && curStart!==newStart;
       const statusDiff = curStatus!==status;
-      const changed = endDiff || startDiff || statusDiff || (!existing && (newStart||end));
+      const estDiff = JSON.stringify(proj.estimation||{})!==JSON.stringify(est);
+      const changed = endDiff || startDiff || statusDiff || estDiff || (!existing && (newStart||end));
       const label = designStatusLabel(status, end||curEnd, newStart||curStart||'', proj.start||'');
-      rows.push({proj, key:rec.key, name:proj.name, curStart, curEnd, newStart, newEnd:end, newStatus:status, label,
+      rows.push({proj, key:rec.key, name:proj.name, curStart, curEnd, newStart, newEnd:end, newStatus:status, est, label,
         action: (!existing&&(newStart||end))?'Create':(changed?'Update':'No change'), changed});
     });
     // Diagnostics (console)
-    console.log('%c[Jira sync]','font-weight:bold','ETA:', j.fieldId, 'Start:', j.startFieldId, 'Status:', j.statusFieldId);
+    console.log('%c[Jira sync]','font-weight:bold','ETA:', j.fieldId, 'Start:', j.startFieldId, 'Status:', j.statusFieldId, 'Estimation:', j.estIds);
     console.table((j.results||[]).map(rec=>({ project:(targets[rec.id]&&targets[rec.id].proj.name)||'', key:rec.key,
-      designStart:rec.designStart||'', designEnd:rec.designEnd||'', designStatus:rec.designStatus||'', error:rec.error||'' })));
+      designStart:rec.designStart||'', designEnd:rec.designEnd||'', designStatus:rec.designStatus||'', estimation:JSON.stringify(rec.est||{}), error:rec.error||'' })));
     openJiraReview(rows, j.syncedAt, {noData, errored});
     const changedN=rows.filter(r=>r.changed).length;
     setSync('Jira: review '+changedN+' change(s)', 'ok');
@@ -1000,12 +1008,14 @@ function openJiraReview(rows, syncedAt, stats){
     const dateLine = (startLine||endLine) ? `<div class="jr-dates">${startLine}${(startLine&&endLine)?' &nbsp;·&nbsp; ':''}${endLine}</div>` : '';
     const st=DESIGN_LABEL_STYLE[r.label]||{};
     const statusLine = `<div class="jr-dates">Status: <b>${esc(r.newStatus||'—')}</b> → <span class="jr-lbl" style="color:${st.c||''};background:${st.bg||''};border-color:${st.bd||''}">${esc(r.label||'')}</span></div>`;
+    const estParts=EST_LABELS.filter(([k])=>r.est&&r.est[k]!=null).map(([k,lbl])=>lbl+' '+r.est[k]);
+    const estLine = estParts.length?`<div class="jr-dates">Estimation: <b>${esc(estParts.join(' · '))}</b></div>`:'';
     const badgeCls = r.action==='Create'?'create':r.action==='Update'?'update':'nochange';
     return `<label class="jr-row ${r.changed?'':'nochange'}">
       <input type="checkbox" class="jr-cb" data-i="${i}" ${r.changed?'checked':''}>
       <span class="jr-main">
         <div><span class="jr-name">${esc(r.name)}</span> <span class="jr-key">${esc(r.key)}</span></div>
-        ${dateLine}${statusLine}
+        ${dateLine}${statusLine}${estLine}
       </span>
       <span class="jr-badge ${badgeCls}">${r.action}</span>
     </label>`;
@@ -1029,7 +1039,7 @@ function openJiraReview(rows, syncedAt, stats){
   modal.querySelector('#jr-cancel').onclick=closeModal;
   saveBtn.onclick=()=>{
     let applied=0;
-    cbs.forEach(c=>{ if(c.checked){ const r=rows[+c.dataset.i]; if(applyDesignSync(r.proj, r.newStart, r.newEnd, r.newStatus)) applied++; } });
+    cbs.forEach(c=>{ if(c.checked){ const r=rows[+c.dataset.i]; if(applyDesignSync(r.proj, r.newStart, r.newEnd, r.newStatus, r.est)) applied++; } });
     state.lastJiraSync = syncedAt || Date.now();
     lastSyncedJSON=null;   // force a save even if only the timestamp changed
     closeModal(); save(); renderJiraSync(); render();
@@ -1946,17 +1956,19 @@ function phaseRow(cat,proj,units,tw){
   // below the project name: Size > Tags > Links, each on its own line (each toggle is personal)
   const size=showSizeOn()?sizeLineHTML(proj):'';
   const links=showLinksOn()?linksLineHTML(proj):'';
+  const est=estimationLineHTML(proj);
   const showTagChips = proj.tags && proj.tags.length && showTagsOn();
-  if((size || links || showTagChips) && lab){
+  if((size || links || est || showTagChips) && lab){
     const col=document.createElement('div'); col.className='namecol';
     left.insertBefore(col, lab); col.appendChild(lab);
     if(size){ const s=document.createElement('div'); s.innerHTML=size; col.appendChild(s.firstChild); }
     if(showTagChips){ const wrap=document.createElement('span'); wrap.innerHTML=tagsLineHTML(proj.tags); col.appendChild(wrap.firstChild); }
     if(links){ const l=document.createElement('div'); l.innerHTML=links; col.appendChild(l.firstChild); }
+    if(est){ const el=document.createElement('div'); el.innerHTML=est; col.appendChild(el.firstChild); }
   }
-  // priority chip: top-right when there are extra lines (size/links/tags), centered when it's just the name
+  // priority chip: top-right when there are extra lines (size/links/tags/est), centered when it's just the name
   const prio=priorityChipHTML(proj);
-  if(prio){ const span=document.createElement('span'); span.style.cssText='flex:none;align-self:'+((size||links||showTagChips)?'flex-start':'center')+';'; span.innerHTML=prio; left.insertBefore(span, left.querySelector('.acts')); }
+  if(prio){ const span=document.createElement('span'); span.style.cssText='flex:none;align-self:'+((size||links||est||showTagChips)?'flex-start':'center')+';'; span.innerHTML=prio; left.insertBefore(span, left.querySelector('.acts')); }
   if(!inVirtual()){
     makePhaseDraggable(left, row, cat.id, proj.id);  // drag label to move/reorder between categories
     wireDropTarget(row, cat.id, proj.id);
@@ -2479,6 +2491,13 @@ function indicatorsHTML(proj){
 // "Size:" label followed by the feature-size chip (empty if none).
 function sizeLineHTML(proj){
   return proj.size?`<span class="size-line"><span class="ll-title">Size:</span><span class="size-chip s-${esc(proj.size)}">${esc(proj.size)}</span></span>`:'';
+}
+// "Estimation:" per-discipline effort synced from Jira (empty if none).
+const EST_LABELS=[['api','API'],['web','Web'],['android','Android'],['ios','iOS'],['landing','Landing']];
+function estimationLineHTML(proj){
+  const e=proj.estimation||{};
+  const parts=EST_LABELS.filter(([k])=>e[k]!=null && e[k]!=='').map(([k,lbl])=>`<span class="est-chip">${lbl} ${esc(String(e[k]))}</span>`);
+  return parts.length?`<span class="est-line"><span class="ll-title">Estimation:</span>${parts.join('')}</span>`:'';
 }
 // "Links:" label followed by any Jira / document icons (empty if none).
 function linksLineHTML(proj){
