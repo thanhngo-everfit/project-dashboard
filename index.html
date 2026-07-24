@@ -1959,7 +1959,9 @@ function phaseRow(cat,proj,units,tw){
   const dStartIso = designOn ? (designTasks.map(t=>t.start).filter(validISO).sort()[0]||'') : '';  // earliest Design start
   // The design label is driven by the synced Jira status: non-null status -> its label; null -> no label.
   // (Deleting the design work clears the status, so that hides the label.)
-  const designLabel = designOn ? designStatusLabel(dStatus, dEndIso, dStartIso, proj.start||'') : '';
+  // design status comes from Jira, so only show it when the project has a Jira link (else it's stale)
+  const hasJira = !!(proj.jira && proj.jira.trim());
+  const designLabel = (designOn && hasJira) ? designStatusLabel(dStatus, dEndIso, dStartIso, proj.start||'') : '';
   if(designLabel || proj.done) row.classList.add('has-design');   // room for the below-bar chip (design status or "Released")
   const {left,caret}=leftCell(1, hasWork?(isCollapsed(proj)?'closed':'open'):null, null,proj.name,acts);
   if(caret) caret.onclick=()=>{toggleCollapsed(proj);render();};
