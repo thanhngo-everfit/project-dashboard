@@ -150,7 +150,8 @@ export default async function handler(req, res) {
       if (!r.ok) { res.status(502).json({ error: 'jira_http_' + r.status, detail: 'could not list fields to auto-detect fields' }); return; }
       const all = await r.json();
       const list = Array.isArray(all) ? all : [];
-      const findBy = name => { const n = name.toLowerCase(); return list.find(f => (f.name || '').toLowerCase() === n) || list.find(f => (f.name || '').toLowerCase().includes(n)); };
+      const norm = s => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();   // tolerate casing / double / trailing spaces
+      const findBy = name => { const n = norm(name); return list.find(f => norm(f.name) === n) || list.find(f => norm(f.name).includes(n)); };
       if (!fieldId) { const h = findBy(END_FIELD_NAME); if (h) fieldId = h.id; }
       if (!startFieldId) { const h = findBy(START_FIELD_NAME); if (h) startFieldId = h.id; }
       EST_FIELDS.forEach(f => { if (!estIds[f.key]) { const h = findBy(f.name); if (h) estIds[f.key] = h.id; } });
