@@ -642,6 +642,7 @@ const STORE_KEY = 'roadmapDashboardV2';
 const LEFTPAD = 20;   // left gutter (px) before the first date column, room for the connector thread
 const NOTE_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5h14M5 10h14M5 15h9"/></svg>';
 const LINK_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#475467" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
+const FIGMA_ICON = '<svg width="14" height="14" viewBox="0 0 512 512" style="vertical-align:middle" xmlns="http://www.w3.org/2000/svg"><path fill="#1abcfe" d="M256 256a64 64 0 1 1 128 0 64 64 0 0 1-128 0z"/><path fill="#0acf83" d="M128 448a64 64 0 0 1 64-64h64v64a64 64 0 1 1-128 0z"/><path fill="#ff7262" d="M256 0h64a64 64 0 1 1 0 128h-64V0z"/><path fill="#f24e1e" d="M128 64a64 64 0 0 0 64 64h64V0h-64a64 64 0 0 0-64 64z"/><path fill="#a259ff" d="M128 256a64 64 0 0 0 64 64h64V192h-64a64 64 0 0 0-64 64z"/></svg>';
 const JIRA_ICON = '<svg width="15" height="15" viewBox="0 0 256 256" style="vertical-align:middle" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="jgA" x1="98.031%" x2="58.888%" y1="0.161%" y2="40.766%"><stop offset="18%" stop-color="#0052CC"/><stop offset="100%" stop-color="#2684FF"/></linearGradient><linearGradient id="jgB" x1="100.665%" x2="55.402%" y1="0.455%" y2="44.727%"><stop offset="18%" stop-color="#0052CC"/><stop offset="100%" stop-color="#2684FF"/></linearGradient></defs><path fill="#2684FF" d="M244.658 0H121.707a55.502 55.502 0 0 0 55.502 55.502h22.649V77.37c.02 30.625 24.841 55.447 55.466 55.467V10.666C255.324 4.777 250.55 0 244.658 0z"/><path fill="url(#jgA)" d="M183.822 61.262H60.872c.019 30.625 24.84 55.447 55.466 55.467h22.649v21.938c.039 30.625 24.877 55.43 55.502 55.43V71.93c0-5.891-4.776-10.668-10.667-10.668z"/><path fill="url(#jgB)" d="M122.951 122.489H0c0 30.653 24.849 55.502 55.502 55.502h22.72v21.867c.02 30.597 24.798 55.409 55.396 55.467V133.156c0-5.891-4.777-10.667-10.667-10.667z"/></svg>';
 const PREDEFINED_TAGS = ["Jon's request","Long's request","Coach","Client"];
 function shortTag(t){ return t.replace(/'s request$/i,''); }
@@ -2488,7 +2489,7 @@ function normalizeUrl(u){ if(!u)return ''; return /^https?:\/\//i.test(u)?u:'htt
 function linkIconsHTML(proj){
   let h='';
   if(proj.jira) h+=`<a class="lnk" href="${esc(proj.jira)}" target="_blank" rel="noopener" title="Open Jira" onclick="event.stopPropagation()">${JIRA_ICON}</a>`;
-  (proj.docs||[]).forEach(d=>{ if(d) h+=`<a class="lnk" href="${esc(d)}" target="_blank" rel="noopener" title="${esc(d)}" onclick="event.stopPropagation()">${LINK_ICON}</a>`; });
+  (proj.docs||[]).forEach(d=>{ if(d){ const figma=/figma\.com/i.test(d); h+=`<a class="lnk" href="${esc(d)}" target="_blank" rel="noopener" title="${figma?'Open Figma':esc(d)}" onclick="event.stopPropagation()">${figma?FIGMA_ICON:LINK_ICON}</a>`; } });
   return h;
 }
 function priorityChipHTML(proj){
