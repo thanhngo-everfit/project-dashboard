@@ -134,8 +134,10 @@
   .size-chip.s-Medium{color:#854d0e;background:#fef9c3;border-color:#fde68a;}
   .size-chip.s-Big{color:#9a3412;background:#ffedd5;border-color:#fed7aa;}
   .size-chip.s-Huge{color:#991b1b;background:#fee2e2;border-color:#fecaca;}
-  .est-line{display:flex;align-items:center;gap:5px;flex-wrap:wrap;}
-  .est-chip{font-size:10px;font-weight:700;color:#3538cd;background:#eef4ff;border:1px solid #c7d7fe;border-radius:999px;padding:1px 7px;white-space:nowrap;}
+  .est-line{display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
+  .est-item{font-size:11px;white-space:nowrap;}
+  .est-item .est-k{color:var(--muted);font-weight:600;}
+  .est-item .est-v{color:#3538cd;font-weight:800;}
   .ll-title{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
   .tag-line{display:inline-flex;align-items:center;gap:5px;flex-wrap:wrap;}
   .tag-title{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
@@ -578,6 +580,7 @@
           <label class="sm-switch" style="margin-bottom:12px;"><span>Show links</span><input type="checkbox" id="showLinks"><span class="track"></span></label>
           <label class="sm-switch" style="margin-bottom:12px;"><span>Show size</span><input type="checkbox" id="showSize"><span class="track"></span></label>
           <label class="sm-switch" style="margin-bottom:12px;"><span>Show design work</span><input type="checkbox" id="showDesign"><span class="track"></span></label>
+          <label class="sm-switch" style="margin-bottom:12px;"><span>Show estimation</span><input type="checkbox" id="showEstimation"><span class="track"></span></label>
           <label class="sm-switch"><span>Show completed projects</span><input type="checkbox" id="showCompleted"><span class="track"></span></label>
         </div>
       </div>
@@ -628,6 +631,7 @@ function showLinksOn(){ return state.showLinks !== false; }
 function showSizeOn(){ return state.showSize !== false; }
 function showDesignOn(){ return state.showDesign !== false; }
 function showCompletedOn(){ return state.showCompleted !== false; }
+function showEstimationOn(){ return state.showEstimation !== false; }
 
 /* ============================ State ============================ */
 const STORE_KEY = 'roadmapDashboardV2';
@@ -847,6 +851,7 @@ function migrate(s){
   if(typeof s.showSize!=='boolean') s.showSize=true;
   if(typeof s.showDesign!=='boolean') s.showDesign=true;
   if(typeof s.showCompleted!=='boolean') s.showCompleted=true;   // personal: show projects marked done
+  if(typeof s.showEstimation!=='boolean') s.showEstimation=true; // personal: show estimation line
   if(!['week','month','quarter'].includes(s.defaultView)) s.defaultView='week';   // personal: fallback view mode
   if(typeof s.search!=='string') s.search='';   // personal search query
   if(!s.activeTribe && Array.isArray(s.tribes) && s.tribes[0]) s.activeTribe=s.tribes[0].id;   // personal
@@ -1008,7 +1013,7 @@ function openJiraReview(rows, syncedAt, stats){
     const dateLine = (startLine||endLine) ? `<div class="jr-dates">${startLine}${(startLine&&endLine)?' &nbsp;·&nbsp; ':''}${endLine}</div>` : '';
     const st=DESIGN_LABEL_STYLE[r.label]||{};
     const statusLine = `<div class="jr-dates">Status: <b>${esc(r.newStatus||'—')}</b> → <span class="jr-lbl" style="color:${st.c||''};background:${st.bg||''};border-color:${st.bd||''}">${esc(r.label||'')}</span></div>`;
-    const estParts=EST_LABELS.filter(([k])=>r.est&&r.est[k]!=null).map(([k,lbl])=>lbl+' '+r.est[k]);
+    const estParts=EST_LABELS.filter(([k])=>r.est&&r.est[k]!=null).map(([k,lbl])=>lbl+' '+r.est[k]+'p');
     const estLine = estParts.length?`<div class="jr-dates">Estimation: <b>${esc(estParts.join(' · '))}</b></div>`:'';
     const badgeCls = r.action==='Create'?'create':r.action==='Update'?'update':'nochange';
     return `<label class="jr-row ${r.changed?'':'nochange'}">
@@ -1956,7 +1961,7 @@ function phaseRow(cat,proj,units,tw){
   // below the project name: Size > Tags > Links, each on its own line (each toggle is personal)
   const size=showSizeOn()?sizeLineHTML(proj):'';
   const links=showLinksOn()?linksLineHTML(proj):'';
-  const est=estimationLineHTML(proj);
+  const est=showEstimationOn()?estimationLineHTML(proj):'';
   const showTagChips = proj.tags && proj.tags.length && showTagsOn();
   if((size || links || est || showTagChips) && lab){
     const col=document.createElement('div'); col.className='namecol';
@@ -2496,7 +2501,7 @@ function sizeLineHTML(proj){
 const EST_LABELS=[['api','API'],['web','Web'],['android','Android'],['ios','iOS'],['landing','Landing']];
 function estimationLineHTML(proj){
   const e=proj.estimation||{};
-  const parts=EST_LABELS.filter(([k])=>e[k]!=null && e[k]!=='').map(([k,lbl])=>`<span class="est-chip">${lbl} ${esc(String(e[k]))}</span>`);
+  const parts=EST_LABELS.filter(([k])=>e[k]!=null && e[k]!=='').map(([k,lbl])=>`<span class="est-item"><span class="est-k">${lbl}</span> <span class="est-v">${esc(String(e[k]))}p</span></span>`);
   return parts.length?`<span class="est-line"><span class="ll-title">Estimation:</span>${parts.join('')}</span>`:'';
 }
 // "Links:" label followed by any Jira / document icons (empty if none).
@@ -2646,15 +2651,17 @@ document.getElementById('historyBtn').onclick=()=>openVersionHistory();
   const btn=document.getElementById('settingsBtn'), menu=document.getElementById('settingsMenu'), tog=document.getElementById('showTags');
   const links=document.getElementById('showLinks'), size=document.getElementById('showSize'), design=document.getElementById('showDesign');
   const completed=document.getElementById('showCompleted');
+  const estimation=document.getElementById('showEstimation');
   const viewSeg=document.getElementById('defaultViewSeg');
   const syncViewSeg=()=>viewSeg.querySelectorAll('button').forEach(b=>b.classList.toggle('active', b.dataset.v===(state.defaultView||'week')));
   btn.onclick=e=>{ e.stopPropagation(); const open=menu.style.display==='none'; menu.style.display=open?'block':'none';
-    if(open){ tog.checked=showTagsOn(); links.checked=showLinksOn(); size.checked=showSizeOn(); design.checked=showDesignOn(); completed.checked=showCompletedOn(); syncViewSeg(); updateZoomLabel(); document.getElementById('smRows').style.display=isAdmin()?'':'none'; } };
+    if(open){ tog.checked=showTagsOn(); links.checked=showLinksOn(); size.checked=showSizeOn(); design.checked=showDesignOn(); estimation.checked=showEstimationOn(); completed.checked=showCompletedOn(); syncViewSeg(); updateZoomLabel(); document.getElementById('smRows').style.display=isAdmin()?'':'none'; } };
   document.addEventListener('click',e=>{ if(!e.target.closest('.settings-wrap')) menu.style.display='none'; });
   tog.onchange=e=>{ setShowTags(e.target.checked); render(); };
   links.onchange=e=>{ state.showLinks=e.target.checked; render(); };
   size.onchange=e=>{ state.showSize=e.target.checked; render(); };
   design.onchange=e=>{ state.showDesign=e.target.checked; render(); };
+  estimation.onchange=e=>{ state.showEstimation=e.target.checked; render(); };
   completed.onchange=e=>{ state.showCompleted=e.target.checked; render(); };
   viewSeg.querySelectorAll('button').forEach(b=>b.onclick=()=>{ state.defaultView=b.dataset.v; state.viewBySquad={}; syncViewSeg(); render(); });   // apply to this session now
 })();
