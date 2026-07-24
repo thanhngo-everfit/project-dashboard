@@ -1946,7 +1946,7 @@ function phaseRow(cat,proj,units,tw){
   const row=document.createElement('div'); row.className='row phase';
   const delHost=(cat._srcCatByProj&&cat._srcCatByProj[proj.id])||cat._srcCat||cat;   // in virtual view, delete from the real category
   const acts=[];
-  if(!inVirtual()) acts.push({icon:'＋',title:'Add work',fn:()=>openTaskModal(proj)});   // no add-work in Jon/Long views
+  acts.push({icon:'＋',title:'Add work',fn:()=>openTaskModal(proj)});   // works in virtual views too (references the real project)
   acts.push({icon: proj.done?'↩':'✓', title: proj.done?'Mark as not done':'Mark as done', fn:()=>{ proj.done=!proj.done; render(); }});
   acts.push({icon:'✎',title:'Edit project',fn:()=>openPhaseModal(cat,proj)});
   acts.push({icon:'🗑',title:'Delete',fn:()=>{if(confirm('Delete project "'+proj.name+'"?')){delHost.phases=delHost.phases.filter(x=>x!==proj);render();}}});
