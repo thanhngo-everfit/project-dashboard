@@ -26,7 +26,7 @@ const EST_FIELDS = [
   { key: 'api',     name: 'api estimation',     env: 'JIRA_EST_API_FIELD' },
   { key: 'web',     name: 'web estimation',     env: 'JIRA_EST_WEB_FIELD' },
   { key: 'android', name: 'android estimation', env: 'JIRA_EST_ANDROID_FIELD' },
-  { key: 'ios',     name: 'ios estimation',     env: 'JIRA_EST_IOS_FIELD' },
+  { key: 'ios',     name: 'ios estimation',     env: 'JIRA_EST_IOS_FIELD', def: 'customfield_10236' },   // name auto-detect misses it
   { key: 'landing', name: 'landing estimation', env: 'JIRA_EST_LANDING_FIELD' },
 ];
 
@@ -143,7 +143,7 @@ export default async function handler(req, res) {
     let startFieldId = process.env.JIRA_DESIGN_START_FIELD || START_FIELD_DEFAULT || ''; // design work START
     let statusFieldId = process.env.JIRA_DESIGN_STATUS_FIELD || STATUS_FIELD_DEFAULT || ''; // design status
     const estIds = {};   // discipline key -> field id (env override or auto-detected)
-    EST_FIELDS.forEach(f => { const v = process.env[f.env]; if (v) estIds[f.key] = v; });
+    EST_FIELDS.forEach(f => { const v = process.env[f.env] || f.def; if (v) estIds[f.key] = v; });
     const needList = !fieldId || !startFieldId || EST_FIELDS.some(f => !estIds[f.key]);
     if (needList) {
       const r = await fetch(base + '/rest/api/3/field', { headers: jheaders });
