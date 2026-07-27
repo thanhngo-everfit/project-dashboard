@@ -2108,10 +2108,10 @@ const DESIGN_LABEL_STYLE={
   'Need L/J Review':       {c:'#3538cd',bg:'#eef4ff',bd:'#c7d7fe'},
   'Waiting For Start':     {c:'#026aa2',bg:'#f0f9ff',bd:'#b9e6fe'},
   'Released':              {c:'#085d3a',bg:'#d3f8df',bd:'#75e0a7'},
-  'Completed':             {c:'#344054',bg:'#eaecf0',bd:'#d0d5dd'},
+  'Completed (no release)':{c:'#085d3a',bg:'#d3f8df',bd:'#75e0a7'},
 };
-// The chip shown for a done project: "Released" or "Completed" (done without a release).
-function releaseLabel(p){ return p.done ? (p.release==='completed' ? 'Completed' : 'Released') : ''; }
+// The chip shown for a done project: "Released" or "Completed (no release)".
+function releaseLabel(p){ return p.done ? (p.release==='completed' ? 'Completed (no release)' : 'Released') : ''; }
 function designStatusGroup(s){
   s=(s||'').toLowerCase().trim();
   if(s==='design in progress'||s==='need to fix') return 'progress';
@@ -2147,7 +2147,7 @@ function projectDesignLabel(proj){
   return designStatusLabel(proj.designStatus||'', dEnd, dStart, proj.start||'');
 }
 // Design-status filter (personal, multi). '(none)' matches projects with no design label.
-const DESIGN_STATUSES=['Waiting For Start','Need Design Estimation','Design In Progress','Design In Review','Design Pending','Design Overdue','Design Ready','Need L/J Review','No Design','Released','Completed'];
+const DESIGN_STATUSES=['Waiting For Start','Need Design Estimation','Design In Progress','Design In Review','Design Pending','Design Overdue','Design Ready','Need L/J Review','No Design','Released','Completed (no release)'];
 function designFilterMatch(proj){
   const df=state.designFilters||[]; if(!df.length) return true;
   return df.includes(projectDesignLabel(proj) || '(none)');
