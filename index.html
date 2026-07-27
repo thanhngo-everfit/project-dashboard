@@ -2027,7 +2027,10 @@ function phaseRow(cat,proj,units,tw){
   // design status comes from Jira, so only show it when the project has a Jira link (else it's stale)
   const hasJira = !!(proj.jira && proj.jira.trim());
   const designLabel = (designOn && hasJira) ? designStatusLabel(dStatus, dEndIso, dStartIso, proj.start||'') : '';
-  if(designLabel || proj.done) row.classList.add('has-design');   // room for the below-bar chip (design status or "Released")
+  // Release overdue: planned end date has passed and it isn't released yet. This replaces the design
+  // label on the timeline (shown as a red chip at the project end), regardless of design status / Jira.
+  const overdue = !proj.done && validISO(proj.end) && parse(proj.end) < parse(todayISO());
+  if(designLabel || proj.done || overdue) row.classList.add('has-design');   // room for the below-bar chip
   const {left,caret}=leftCell(1, hasWork?(isCollapsed(proj)?'closed':'open'):null, null,proj.name,acts);
   if(caret) caret.onclick=()=>{toggleCollapsed(proj);render();};
   const q=(state.search||'').trim().toLowerCase();
@@ -2100,7 +2103,7 @@ function phaseRow(cat,proj,units,tw){
   }
   // design status chip (below the bar), colour-coded; pinned to the left edge when its anchor scrolls off.
   // Hidden when the project is done — a "Released" chip (below the project end) is shown instead.
-  if(designLabel && !proj.done){
+  if(designLabel && !proj.done && !overdue){
     const st=DESIGN_LABEL_STYLE[designLabel]||DESIGN_LABEL_STYLE['Need Design Estimation'];
     let homeX, align;
     if(dSpan){
@@ -2115,6 +2118,18 @@ function phaseRow(cat,proj,units,tw){
     chip.textContent=designLabel; chip.title='Design status: '+designLabel;
     chip.style.left=homeX+'px'; chip.style.transform = align==='right'?'translateX(-100%)':'none';
     if(designTasks.length){ chip.style.pointerEvents='auto'; chip.style.cursor='pointer'; chip.onclick=()=>openTaskModal(proj,designTasks[0]); }   // clickable even if the design work has no dates
+    track.appendChild(chip);
+  }
+  // "Release Overdue" chip — below the bar at the project end date; replaces the design status chip.
+  if(overdue){
+    const st=DESIGN_LABEL_STYLE['Release Overdue'];
+    const endX=dateToX(addDays(effEnd(proj,units),1),units);
+    const chip=document.createElement('div'); chip.className='design-ready';
+    chip.dataset.homex=endX; chip.dataset.align='right';
+    chip.style.background=st.bg; chip.style.color=st.c; chip.style.borderColor=st.bd; chip.style.opacity='1';
+    chip.textContent='Release Overdue'; chip.title='Release overdue — planned end date has passed';
+    chip.style.left=endX+'px'; chip.style.transform='translateX(-100%)';
+    if(designTasks.length){ chip.style.pointerEvents='auto'; chip.style.cursor='pointer'; chip.onclick=()=>openTaskModal(proj,designTasks[0]); }
     track.appendChild(chip);
   }
   // Done chip ("Released" / "Completed") — below the bar at the project end date (in all cases)
