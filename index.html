@@ -2109,6 +2109,7 @@ const DESIGN_LABEL_STYLE={
   'Waiting For Start':     {c:'#026aa2',bg:'#f0f9ff',bd:'#b9e6fe'},
   'Released':              {c:'#085d3a',bg:'#d3f8df',bd:'#75e0a7'},
   'Completed (no release)':{c:'#085d3a',bg:'#d3f8df',bd:'#75e0a7'},
+  'Release Overdue':       {c:'#b42318',bg:'#fef3f2',bd:'#fda29b'},
 };
 // The chip shown for a done project: "Released" or "Completed (no release)".
 function releaseLabel(p){ return p.done ? (p.release==='completed' ? 'Completed (no release)' : 'Released') : ''; }
@@ -2144,10 +2145,14 @@ function projectDesignLabel(proj){
   const dt=(proj.tasks||[]).filter(t=>t.type==='design');
   const dEnd=dt.map(t=>t.end).filter(validISO).sort().pop()||'';
   const dStart=dt.map(t=>t.start).filter(validISO).sort()[0]||'';
-  return designStatusLabel(proj.designStatus||'', dEnd, dStart, proj.start||'');
+  const label=designStatusLabel(proj.designStatus||'', dEnd, dStart, proj.start||'');
+  // The project's planned release (end) date has passed but it isn't released yet -> Release Overdue,
+  // regardless of the underlying design status.
+  if(validISO(proj.end) && parse(proj.end) < parse(todayISO())) return 'Release Overdue';
+  return label;
 }
 // Design-status filter (personal, multi). '(none)' matches projects with no design label.
-const DESIGN_STATUSES=['Waiting For Start','Need Design Estimation','Design In Progress','Design In Review','Design Pending','Design Overdue','Design Ready','Need L/J Review','No Design','Released','Completed (no release)'];
+const DESIGN_STATUSES=['Waiting For Start','Need Design Estimation','Design In Progress','Design In Review','Design Pending','Design Overdue','Design Ready','Need L/J Review','No Design','Released','Completed (no release)','Release Overdue'];
 function designFilterMatch(proj){
   const df=state.designFilters||[]; if(!df.length) return true;
   return df.includes(projectDesignLabel(proj) || '(none)');
