@@ -2697,13 +2697,14 @@ function openPhaseModal(category,proj){
   const teamWrap=modal.querySelector('#m_teams');
   function renderTeamPicker(){
     teamWrap.innerHTML='';
+    const row=document.createElement('div'); row.className='tp-row'; teamWrap.appendChild(row);   // flex-wrap so chips never overflow
     teamOptions.forEach(name=>{
       const i=teams.indexOf(name); const chip=document.createElement('span');
       if(i>=0){ chip.className='tagpick sel'; chip.style.cssText='background:#eef4ff;color:#3538cd;border-color:#c7d7fe'; chip.innerHTML=esc(name)+' <b>×</b>'; chip.onclick=()=>{teams.splice(i,1);renderTeamPicker();}; }
       else { chip.className='tagpick add'; chip.textContent='+ '+name; chip.onclick=()=>{teams.push(name);renderTeamPicker();}; }
-      teamWrap.appendChild(chip);
+      row.appendChild(chip);
     });
-    if(!teamOptions.length){ const e=document.createElement('span'); e.style.cssText='font-size:12px;color:var(--muted);'; e.textContent='No squads yet'; teamWrap.appendChild(e); }
+    if(!teamOptions.length){ const e=document.createElement('span'); e.style.cssText='font-size:12px;color:var(--muted);'; e.textContent='No squads yet'; row.appendChild(e); }
   }
   renderTeamPicker();
   wireNoteDock(def.note);   // floating Note button + side popup
