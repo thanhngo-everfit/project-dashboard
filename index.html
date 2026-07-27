@@ -2560,7 +2560,7 @@ function openPhaseModal(category,proj){
         <option value="" ${!def.priority?'selected':''}>None</option>
         ${PRIORITIES.map(p=>`<option value="${p}" ${def.priority===p?'selected':''}>${p}</option>`).join('')}
       </select></div>
-      <div><label>Status (optional)</label><select id="m_release">
+      <div><label>Status</label><select id="m_release">
         <option value="" ${!def.release?'selected':''}>Active</option>
         <option value="released" ${def.release==='released'?'selected':''}>Released</option>
         <option value="completed" ${def.release==='completed'?'selected':''}>Completed (no release)</option>
