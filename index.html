@@ -546,6 +546,11 @@
       <button id="designFilterBtn" class="tagfilter">All statuses</button>
       <div id="designFilterMenu" class="tagfilter-menu" style="display:none"></div>
     </div>
+    <div class="tagfilter-wrap" id="releaseFilterWrap" style="margin-left:6px;">
+      <span style="font-size:12px;color:var(--muted);font-weight:600;">Release</span>
+      <button id="releaseFilterBtn" class="tagfilter">All</button>
+      <div id="releaseFilterMenu" class="tagfilter-menu" style="display:none"></div>
+    </div>
     <div class="tagfilter-wrap" id="categoryFilterWrap" style="margin-left:6px;display:none;">
       <span style="font-size:12px;color:var(--muted);font-weight:600;">Category</span>
       <button id="categoryFilterBtn" class="tagfilter">All categories</button>
@@ -867,6 +872,7 @@ function migrate(s){
   if(!s.viewBySquad || typeof s.viewBySquad!=='object') s.viewBySquad={};   // personal, squadId -> 'quarter'|'month'|'week'
   if(!Array.isArray(s.tagFilters)) s.tagFilters = (typeof s.tagFilter==='string' && s.tagFilter)?[s.tagFilter]:[];   // personal, multi
   if(!Array.isArray(s.designFilters)) s.designFilters=[];   // personal design-status filter
+  if(!Array.isArray(s.releaseFilters)) s.releaseFilters=[];   // personal release-status filter
   if(!Array.isArray(s.promoFilters)) s.promoFilters=[];     // personal promotion filter (Marketing view)
   if(!Array.isArray(s.categoryFilters)) s.categoryFilters=[]; // personal category filter (Marketing view)
   delete s.tagFilter;
@@ -1416,6 +1422,7 @@ function render(){
   document.querySelectorAll('#viewToggle button').forEach(b=>b.classList.toggle('active',b.dataset.view===curView()));
   renderTagFilter();
   renderDesignFilter();
+  renderReleaseFilter();
   renderPromoFilter();
   renderCategoryFilter();
   renderJiraSync();
@@ -1427,6 +1434,7 @@ function render(){
   setDisp('.settings-wrap', !listView);
   setDisp('#viewToggle', !listView);
   setDisp('#designFilterWrap', !listView);
+  setDisp('#releaseFilterWrap', !listView);
   setDisp('#promoFilterWrap', listView);
   setDisp('#categoryFilterWrap', listView);
   renderGantt();
@@ -1465,7 +1473,7 @@ function renderDesignFilter(){
   // which design labels actually occur in the current view (+ '(none)' for no label)
   const present=new Set();
   const scope = (activeVirtual()&&activeVirtual().listByEnd) ? allProjects().map(x=>x.p) : activeSquad().projects.flatMap(c=>c.phases||[]);
-  scope.forEach(p=>present.add(projectDesignLabel(p)||'(none)'));
+  scope.forEach(p=>present.add(projectDesignStatus(p)||'(none)'));
   const opts=[...DESIGN_STATUSES.filter(s=>present.has(s)), ...(present.has('(none)')?['(none)']:[])];
   state.designFilters=state.designFilters.filter(s=>present.has(s));   // drop filters no longer present
   const n=state.designFilters.length;
@@ -1486,6 +1494,33 @@ function renderDesignFilter(){
     row.appendChild(cb); row.appendChild(sp); menu.appendChild(row);
   });
   const clr=document.createElement('button'); clr.className='tf-clear'; clr.textContent='Clear all'; clr.onclick=()=>{ state.designFilters=[]; render(); }; menu.appendChild(clr);
+}
+function renderReleaseFilter(){
+  const btn=document.getElementById('releaseFilterBtn'), menu=document.getElementById('releaseFilterMenu'); if(!btn)return;
+  if(!Array.isArray(state.releaseFilters)) state.releaseFilters=[];
+  const present=new Set();
+  const scope = (activeVirtual()&&activeVirtual().listByEnd) ? allProjects().map(x=>x.p) : activeSquad().projects.flatMap(c=>c.phases||[]);
+  scope.forEach(p=>present.add(projectReleaseLabel(p)||'(none)'));
+  const opts=[...RELEASE_STATUSES.filter(s=>present.has(s)), ...(present.has('(none)')?['(none)']:[])];
+  state.releaseFilters=state.releaseFilters.filter(s=>present.has(s));   // drop filters no longer present
+  const n=state.releaseFilters.length;
+  const label=(n===0?'All':(n===1?(state.releaseFilters[0]==='(none)'?'Not released':state.releaseFilters[0]):n+' selected'));
+  btn.innerHTML=esc(label)+(n>0?' <span class="tf-x" title="Clear release filter">×</span>':'');
+  btn.classList.toggle('active-filter', n>0);
+  const x=btn.querySelector('.tf-x'); if(x) x.onclick=e=>{ e.stopPropagation(); state.releaseFilters=[]; render(); };
+  menu.innerHTML='';
+  if(!opts.length){ const e=document.createElement('div'); e.className='tf-empty'; e.textContent='No data'; menu.appendChild(e); return; }
+  opts.forEach(s=>{
+    const row=document.createElement('label'); row.className='tf-row';
+    const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=state.releaseFilters.includes(s);
+    cb.onchange=()=>{ if(cb.checked){ if(!state.releaseFilters.includes(s))state.releaseFilters.push(s);} else state.releaseFilters=state.releaseFilters.filter(v=>v!==s); render(); };
+    const st=DESIGN_LABEL_STYLE[s]||{};
+    const sp=document.createElement('span');
+    sp.innerHTML = s==='(none)' ? '<span class="tagpick" style="color:var(--muted);background:#f2f4f7;border-color:#e4e7ec;">Not released</span>'
+                                : `<span class="tagpick" style="color:${st.c||''};background:${st.bg||''};border-color:${st.bd||''};">${esc(s)}</span>`;
+    row.appendChild(cb); row.appendChild(sp); menu.appendChild(row);
+  });
+  const clr=document.createElement('button'); clr.className='tf-clear'; clr.textContent='Clear all'; clr.onclick=()=>{ state.releaseFilters=[]; render(); }; menu.appendChild(clr);
 }
 // Promotion filter (Marketing view). Yes -> 'Promotion', No -> 'No', blank -> '(none)'.
 function promoVal(proj){ return proj.promo==='Yes'?'Promotion':(proj.promo==='No'?'No':'(none)'); }
@@ -1676,7 +1711,7 @@ function renderGantt(){
   let projCount=0;
   squad.projects.forEach(p=>{
     const catMatch=q0 && p.name.toLowerCase().includes(q0);
-    let ps = (p.phases||[]).filter(x=>tagFilterMatch(x.tags) && designFilterMatch(x) && (showCompletedOn()||!x.done));
+    let ps = (p.phases||[]).filter(x=>tagFilterMatch(x.tags) && designFilterMatch(x) && releaseFilterMatch(x) && (showCompletedOn()||!x.done));
     if(q0 && !catMatch) ps=ps.filter(x=>x.name.toLowerCase().includes(q0));
     projCount+=ps.length;
   });
@@ -1711,10 +1746,10 @@ function renderGantt(){
 
   const q=(state.search||'').trim().toLowerCase();
   const anyTag=(state.tagFilters||[]).length>0;
-  const anyFilter = anyTag || q || !showCompletedOn() || (state.designFilters||[]).length>0;
+  const anyFilter = anyTag || q || !showCompletedOn() || (state.designFilters||[]).length>0 || (state.releaseFilters||[]).length>0;
   squad.projects.forEach(p=>{
     const catMatch = q && p.name.toLowerCase().includes(q);
-    let projs = p.phases.filter(x=>tagFilterMatch(x.tags) && designFilterMatch(x) && (showCompletedOn()||!x.done));
+    let projs = p.phases.filter(x=>tagFilterMatch(x.tags) && designFilterMatch(x) && releaseFilterMatch(x) && (showCompletedOn()||!x.done));
     if(q && !catMatch) projs = projs.filter(x=>x.name.toLowerCase().includes(q));
     if(anyFilter && projs.length===0) return;   // hide categories with no matching/visible projects
     grid.appendChild(projectRow(p,units,tw));
@@ -1939,7 +1974,7 @@ function projectRow(p,units,tw){
   const row=document.createElement('div'); row.className='row project';
   const q=(state.search||'').trim().toLowerCase();
   const catMatch=q && p.name.toLowerCase().includes(q);
-  let vis = (p.phases||[]).filter(x=>tagFilterMatch(x.tags) && designFilterMatch(x) && (showCompletedOn()||!x.done));
+  let vis = (p.phases||[]).filter(x=>tagFilterMatch(x.tags) && designFilterMatch(x) && releaseFilterMatch(x) && (showCompletedOn()||!x.done));
   if(q && !catMatch) vis = vis.filter(x=>x.name.toLowerCase().includes(q));
   const count=vis.length;
   const acts = inVirtual() ? [] : [
@@ -2139,23 +2174,35 @@ function designStatusLabel(status, endIso, designStartIso, projStartIso){
   if(etaPast && etaWithinProject) return 'Design Overdue';
   return {estimation:'Need Design Estimation',progress:'Design In Progress',review:'Design In Review',pending:'Design Pending'}[grp];
 }
-// The effective design label shown for a project (incl. "Released" for done, '' for none).
-function projectDesignLabel(proj){
-  if(proj.done) return releaseLabel(proj);
+// Pure design status (ignores release state) — drives the Design Status filter.
+function projectDesignStatus(proj){
   const dt=(proj.tasks||[]).filter(t=>t.type==='design');
   const dEnd=dt.map(t=>t.end).filter(validISO).sort().pop()||'';
   const dStart=dt.map(t=>t.start).filter(validISO).sort()[0]||'';
-  const label=designStatusLabel(proj.designStatus||'', dEnd, dStart, proj.start||'');
-  // The project's planned release (end) date has passed but it isn't released yet -> Release Overdue,
-  // regardless of the underlying design status.
-  if(validISO(proj.end) && parse(proj.end) < parse(todayISO())) return 'Release Overdue';
-  return label;
+  return designStatusLabel(proj.designStatus||'', dEnd, dStart, proj.start||'');
 }
-// Design-status filter (personal, multi). '(none)' matches projects with no design label.
-const DESIGN_STATUSES=['Waiting For Start','Need Design Estimation','Design In Progress','Design In Review','Design Pending','Design Overdue','Design Ready','Need L/J Review','No Design','Released','Completed (no release)','Release Overdue'];
+// Release state — drives the Release Status filter and the done/overdue chip.
+// '' = active/not released, else 'Released' | 'Completed (no release)' | 'Release Overdue'.
+function projectReleaseLabel(proj){
+  if(proj.done) return releaseLabel(proj);
+  if(validISO(proj.end) && parse(proj.end) < parse(todayISO())) return 'Release Overdue';
+  return '';
+}
+// The label shown on the timeline chip: release state takes priority over design status.
+function projectDesignLabel(proj){
+  return projectReleaseLabel(proj) || projectDesignStatus(proj);
+}
+// Design-status filter (personal, multi). '(none)' matches projects with no design status.
+const DESIGN_STATUSES=['Waiting For Start','Need Design Estimation','Design In Progress','Design In Review','Design Pending','Design Overdue','Design Ready','Need L/J Review','No Design'];
+// Release-status filter (personal, multi). '(none)' matches active / not-yet-released projects.
+const RELEASE_STATUSES=['Released','Completed (no release)','Release Overdue'];
 function designFilterMatch(proj){
   const df=state.designFilters||[]; if(!df.length) return true;
-  return df.includes(projectDesignLabel(proj) || '(none)');
+  return df.includes(projectDesignStatus(proj) || '(none)');
+}
+function releaseFilterMatch(proj){
+  const rf=state.releaseFilters||[]; if(!rf.length) return true;
+  return rf.includes(projectReleaseLabel(proj) || '(none)');
 }
 
 function taskRow(p,ph,t,units,tw,last,projStartX,projStartDate){
@@ -2730,12 +2777,14 @@ document.getElementById('collapseAll').onclick=()=>setAllCollapsed(true);
 (function(){
   const tagBtn=document.getElementById('tagFilterBtn'), tagMenu=document.getElementById('tagFilterMenu');
   const dBtn=document.getElementById('designFilterBtn'), dMenu=document.getElementById('designFilterMenu');
+  const rBtn=document.getElementById('releaseFilterBtn'), rMenu=document.getElementById('releaseFilterMenu');
   const pBtn=document.getElementById('promoFilterBtn'), pMenu=document.getElementById('promoFilterMenu');
   const cBtn=document.getElementById('categoryFilterBtn'), cMenu=document.getElementById('categoryFilterMenu');
-  const menus=[tagMenu,dMenu,pMenu,cMenu];
+  const menus=[tagMenu,dMenu,rMenu,pMenu,cMenu];
   const toggle=m=>{ menus.forEach(x=>{ if(x!==m) x.style.display='none'; }); m.style.display = m.style.display==='none'?'block':'none'; };
   tagBtn.onclick=e=>{ e.stopPropagation(); toggle(tagMenu); };
   dBtn.onclick=e=>{ e.stopPropagation(); toggle(dMenu); };
+  rBtn.onclick=e=>{ e.stopPropagation(); toggle(rMenu); };
   pBtn.onclick=e=>{ e.stopPropagation(); toggle(pMenu); };
   cBtn.onclick=e=>{ e.stopPropagation(); toggle(cMenu); };
   document.addEventListener('click',e=>{
