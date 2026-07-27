@@ -1458,6 +1458,8 @@ function render(){
   setDisp('#releaseFilterWrap', !listView);
   setDisp('#promoFilterWrap', listView);
   setDisp('#categoryFilterWrap', listView);
+  setDisp('#teamFilterWrap', curSquads().length>1);   // only meaningful when the tribe has more than one team
+  if(curSquads().length<=1 && (state.teamFilters||[]).length){ state.teamFilters=[]; }   // clear a stale filter
   renderGantt();
   syncUrl();
   save();
@@ -2599,6 +2601,7 @@ function openPhaseModal(category,proj){
   const ownSquadName = ownSquad ? ownSquad.name : (activeSquad()?activeSquad().name:'');
   const teamOptions = [...new Set([...curSquads().map(s=>s.name), ...(def.teams||[])].filter(Boolean))];
   const teams = (def.teams && def.teams.length) ? def.teams.slice() : (ownSquadName?[ownSquadName]:[]);
+  const showTeam = curSquads().length>1;   // one-team tribe (e.g. Marketplace) doesn't need the Team field
   modal.innerHTML=`<h3>${editing?'Edit':'New'} Project</h3>
     <div class="field"><label>Project Name</label><input id="m_pname" value="${editing?esc(proj.name):''}" placeholder="e.g. Mobile App"></div>
     <div class="field row2">
@@ -2621,9 +2624,9 @@ function openPhaseModal(category,proj){
         <option value="completed" ${def.release==='completed'?'selected':''}>Completed (no release)</option>
       </select></div>
     </div>
-    <div class="field"><label>Team</label>
+    ${showTeam?`<div class="field"><label>Team</label>
       <div id="m_teams" class="tag-picker"></div>
-    </div>
+    </div>`:''}
     <div class="field row2">
       <div><label>Feature size (optional)</label><select id="m_size">
         <option value="" ${!def.size?'selected':''}>None</option>
@@ -2693,9 +2696,10 @@ function openPhaseModal(category,proj){
   }
   renderDocs();
   modal.querySelector('#m_adddoc').onclick=()=>{docs.push('');renderDocs();};
-  // team picker: chips of squad names; click to toggle (default = own squad)
+  // team picker: chips of squad names; click to toggle (default = own squad). Hidden for one-team tribes.
   const teamWrap=modal.querySelector('#m_teams');
   function renderTeamPicker(){
+    if(!teamWrap) return;
     teamWrap.innerHTML='';
     const row=document.createElement('div'); row.className='tp-row'; teamWrap.appendChild(row);   // flex-wrap so chips never overflow
     teamOptions.forEach(name=>{
