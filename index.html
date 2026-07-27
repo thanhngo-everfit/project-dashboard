@@ -1597,6 +1597,7 @@ function setActiveTribe(id){
   if(state.activeTribe===id) return;
   state.activeTribe=id;
   if(!activeVirtual()){ const sqs=curSquads(); state.activeSquad = sqs[0]?sqs[0].id:null; }
+  _forceJump=true;   // switching tribe re-centres the timeline on today
   render();
 }
 function renderTribes(){
@@ -1697,7 +1698,7 @@ function renderTabs(){
 function renderGantt(){
   const g=document.getElementById('gantt');
   const av=activeVirtual();
-  if(av && av.listByEnd){ g.innerHTML=''; renderListByEnd(g); return; }
+  if(av && av.listByEnd){ _forceJump=false; g.innerHTML=''; renderListByEnd(g); return; }
   const squad=activeSquad();
   // "No design" chips only appear when the squad uses design somewhere; if every project has none, hide them all.
   curSquadHasDesign=(squad.projects||[]).some(cat=>(cat.phases||[]).some(ph=>(ph.tasks||[]).some(t=>t.type==='design')));
@@ -1773,12 +1774,13 @@ function renderGantt(){
   // Center the timeline on today whenever the active tab (squad) OR the view (quarter/month/week)
   // changes. Re-renders of the same tab+view (edits, polling) keep scroll.
   const jk=(state.activeSquad||'')+'|'+curView();
-  if(jk!==_lastJumpSquad && g.querySelector('.today-mark')){
-    _lastJumpSquad=jk;
+  if((_forceJump || jk!==_lastJumpSquad) && g.querySelector('.today-mark')){
+    _lastJumpSquad=jk; _forceJump=false;
     requestAnimationFrame(()=>jumpToday(true));
   }
 }
 let _lastJumpSquad=null;
+let _forceJump=false;   // set when an action (e.g. tribe switch) should force re-centring on today
 let _lastSearchSquad=null;   // clear the search box when the active squad changes
 let curSquadHasDesign=false;   // true if any project in the active squad has design work (drives "No design" chips)
 // Hide the "Today" marker when it scrolls behind the sticky left panel (it lives in the header,
