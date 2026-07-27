@@ -1774,7 +1774,8 @@ function updateDesignReadyChips(){
 // Marketing view: all projects across squads as a release calendar, grouped by release month.
 function renderListByEnd(g){
   const q=(state.search||'').trim().toLowerCase();
-  let items=allProjects().filter(x=>tagFilterMatch(x.p.tags) && promoFilterMatch(x.p) && categoryFilterMatch(x.cat.name) && (showCompletedOn()||!x.p.done));
+  // "Completed (no release)" projects never belong in the Marketing/release view.
+  let items=allProjects().filter(x=>x.p.release!=='completed' && tagFilterMatch(x.p.tags) && promoFilterMatch(x.p) && categoryFilterMatch(x.cat.name) && (showCompletedOn()||!x.p.done));
   if(q) items=items.filter(x=> x.p.name.toLowerCase().includes(q) || (x.cat.name||'').toLowerCase().includes(q) || (x.squad.name||'').toLowerCase().includes(q));
   // group by release month (YYYY-MM of the end date)
   const map=new Map();
