@@ -239,8 +239,11 @@
   .bar{position:absolute;top:calc(50% - 16px);height:32px;border-radius:9px;cursor:grab;
        display:flex;align-items:center;justify-content:flex-start;gap:6px;padding:0 10px;font-size:10.5px;font-weight:600;overflow:hidden;
        user-select:none;transition:transform .12s ease, box-shadow .12s ease, filter .12s ease;transform-origin:center;}
-  /* hover pop — makes the focused project stand out on a shared screen */
-  .bar:hover:not(.summary):not(.dragging){transform:scale(1.06);box-shadow:0 8px 22px rgba(16,24,40,.28);filter:brightness(1.03);z-index:30;overflow:visible;}
+  /* subtle hover feedback on the bar (no resize/zoom) */
+  .bar:hover:not(.summary):not(.dragging){box-shadow:0 4px 14px rgba(16,24,40,.18);}
+  /* highlight the whole project row on hover — left (name) section + timeline track */
+  .row.phase:hover{background:#f5f7fa;}
+  .row.phase:hover .left{background:#f5f7fa;}
   .bar.dragging{cursor:grabbing;opacity:.9;z-index:20;box-shadow:0 6px 16px rgba(16,24,40,.22);}
   .bar.wip{background:transparent!important;border:1.5px dashed currentColor;font-weight:700;}
   .bar.wip .fill{display:none;}
