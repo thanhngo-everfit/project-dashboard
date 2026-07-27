@@ -318,6 +318,7 @@
   .mkt-rel{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.3px;border-radius:999px;padding:2px 9px;white-space:nowrap;}
   .mkt-rel.yes{color:#085d3a;background:#d3f8df;border:1px solid #75e0a7;}
   .mkt-rel.no{color:#667085;background:#f2f4f7;border:1px solid #e4e7ec;}
+  .mkt-rel.done{color:#344054;background:#eaecf0;border:1px solid #d0d5dd;}
   .sizechip{flex:none;font-size:10px;font-weight:800;border-radius:999px;padding:2px 8px;white-space:nowrap;}
   .sizechip.s-Small{background:#dcfce7;color:#166534;}
   .sizechip.s-Medium{background:#dbeafe;color:#1e40af;}
@@ -359,9 +360,19 @@
   .note-fab:hover{color:#101828;}
   .note-fab.open{background:#4c6fff;color:#fff;}
   .note-fab.has::after{content:'';position:absolute;top:-1px;right:-1px;width:11px;height:11px;border-radius:50%;background:#12b3a6;border:2px solid #fff;}
-  .note-panel{width:300px;max-width:34vw;background:#fff;border-radius:14px;padding:18px;box-shadow:0 20px 50px rgba(0,0,0,.25);max-height:80vh;display:flex;flex-direction:column;}
+  .note-panel{width:480px;max-width:46vw;background:#fff;border-radius:14px;padding:18px;box-shadow:0 20px 50px rgba(0,0,0,.25);max-height:82vh;display:flex;flex-direction:column;}
   .note-panel .np-title{font-size:13px;font-weight:800;color:var(--text);margin-bottom:10px;}
-  .note-panel textarea{flex:1;min-height:220px;width:100%;border:1px solid var(--border);border-radius:10px;padding:12px;font-size:14px;font-family:inherit;line-height:1.5;resize:vertical;}
+  .np-toolbar{display:flex;align-items:center;gap:4px;margin-bottom:8px;flex-wrap:wrap;}
+  .np-toolbar button{border:1px solid var(--border);background:#fff;border-radius:8px;padding:5px 9px;font-size:13px;cursor:pointer;color:var(--text);line-height:1;min-width:30px;transition:all .1s;}
+  .np-toolbar button:hover{background:#f2f4f7;}
+  .np-toolbar button.active{background:#e7edff;border-color:#4c6fff;color:#4c6fff;}
+  .np-sep{width:1px;height:18px;background:var(--border);margin:0 4px;}
+  .np-editor{flex:1;min-height:300px;max-height:58vh;overflow-y:auto;width:100%;border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:14px;line-height:1.55;outline:none;word-break:break-word;}
+  .np-editor:focus{border-color:#4c6fff;box-shadow:0 0 0 3px rgba(76,111,255,.12);}
+  .np-editor:empty::before{content:attr(data-placeholder);color:#98a2b3;pointer-events:none;}
+  .np-editor ul,.np-editor ol{margin:4px 0;padding-left:22px;}
+  .np-editor li{margin:2px 0;}
+  .np-editor p{margin:0 0 6px;}
   .modal h3{margin:0 0 20px;font-size:21px;font-weight:800;letter-spacing:-.3px;color:var(--text);padding-bottom:14px;border-bottom:1px solid #eef0f3;}
   .field{margin-bottom:16px;}
   .field label{display:block;font-size:11.5px;font-weight:800;color:#344054;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;}
@@ -601,7 +612,15 @@
         <button type="button" id="noteFab" class="note-fab" title="Note"></button>
         <div class="note-panel" id="notePanel" style="display:none">
           <div class="np-title">Note</div>
-          <textarea id="m_note" placeholder="Add a note…"></textarea>
+          <div class="np-toolbar" id="npToolbar">
+            <button type="button" data-cmd="bold" title="Bold"><b>B</b></button>
+            <button type="button" data-cmd="italic" title="Italic"><i>I</i></button>
+            <button type="button" data-cmd="underline" title="Underline"><u>U</u></button>
+            <span class="np-sep"></span>
+            <button type="button" data-cmd="insertUnorderedList" title="Bullet list">• List</button>
+            <button type="button" data-cmd="insertOrderedList" title="Numbered list">1. List</button>
+          </div>
+          <div id="m_note" class="np-editor" contenteditable="true" data-placeholder="Add a note…"></div>
         </div>
       </div>
     </div>
@@ -823,6 +842,10 @@ function migrate(s){
       if(typeof proj.jira!=='string') proj.jira='';
       if(typeof proj.designStatus!=='string') proj.designStatus='';   // synced from Jira (customfield_10139)
       if(typeof proj.done!=='boolean') proj.done=false;   // manually marked complete (shared)
+      // release status: '' active | 'released' | 'completed' (done, no release). Legacy done -> released.
+      if(typeof proj.release!=='string' || (proj.release!=='released' && proj.release!=='completed' && proj.release!=='')) proj.release = proj.done ? 'released' : '';
+      if(proj.done && !proj.release) proj.release='released';
+      if(!proj.done) proj.release='';
       if(!proj.estimation || typeof proj.estimation!=='object') proj.estimation={};   // per-discipline estimation from Jira
       if(!Array.isArray(proj.docs)) proj.docs=[];
       if(typeof proj.note!=='string') proj.note='';
@@ -1784,8 +1807,11 @@ function renderListByEnd(g){
         const size = p.size?`<span class="sizechip s-${esc(p.size)}">${esc(p.size)}</span>`:'<span class="mkt-dash">—</span>';
         const promo = p.promo==='Yes'?'<span class="promochip">Promotion</span>':(p.promo==='No'?'<span class="mkt-dash">No</span>':'<span class="mkt-dash">—</span>');
         const tags = (p.tags&&p.tags.length&&showTagsOn())?p.tags.map(t=>tagChip(t)).join(''):'';
-        const done = p.done?'<span class="mkt-check" title="Released">✓</span>':'';
-        const rel = p.done?'<span class="mkt-rel yes">Released</span>':'<span class="mkt-rel no">Not yet</span>';
+        const relLbl = releaseLabel(p);
+        const done = p.done?`<span class="mkt-check" title="${relLbl}">✓</span>`:'';
+        const rel = p.release==='released' ? '<span class="mkt-rel yes">Released</span>'
+                  : p.release==='completed' ? '<span class="mkt-rel done">Completed</span>'
+                  : '<span class="mkt-rel no">Not yet</span>';
         const linksHtml=indicatorsHTML(p);
         row.innerHTML=`
           <span class="mkt-name">${done}<span class="dot" style="background:${cat.color||'#cdb4f6'}"></span><span class="txt">${esc(p.name)}</span></span>
@@ -1947,7 +1973,7 @@ function phaseRow(cat,proj,units,tw){
   const delHost=(cat._srcCatByProj&&cat._srcCatByProj[proj.id])||cat._srcCat||cat;   // in virtual view, delete from the real category
   const acts=[];
   acts.push({icon:'＋',title:'Add work',fn:()=>openTaskModal(proj)});   // works in virtual views too (references the real project)
-  acts.push({icon: proj.done?'↩':'✓', title: proj.done?'Mark as not done':'Mark as done', fn:()=>{ proj.done=!proj.done; render(); }});
+  acts.push({icon: proj.done?'↩':'✓', title: proj.done?'Mark as not done':'Mark as done (released)', fn:()=>{ proj.done=!proj.done; proj.release = proj.done ? (proj.release||'released') : ''; render(); }});
   acts.push({icon:'✎',title:'Edit project',fn:()=>openPhaseModal(cat,proj)});
   acts.push({icon:'🗑',title:'Delete',fn:()=>{if(confirm('Delete project "'+proj.name+'"?')){delHost.phases=delHost.phases.filter(x=>x!==proj);render();}}});
   if(proj.done) row.classList.add('done');
@@ -2052,14 +2078,15 @@ function phaseRow(cat,proj,units,tw){
     if(designTasks.length){ chip.style.pointerEvents='auto'; chip.style.cursor='pointer'; chip.onclick=()=>openTaskModal(proj,designTasks[0]); }   // clickable even if the design work has no dates
     track.appendChild(chip);
   }
-  // "Released" chip for a done project — below the bar at the project end date (in all cases)
+  // Done chip ("Released" / "Completed") — below the bar at the project end date (in all cases)
   if(proj.done){
-    const st=DESIGN_LABEL_STYLE['Released'];
+    const lab=releaseLabel(proj);
+    const st=DESIGN_LABEL_STYLE[lab]||DESIGN_LABEL_STYLE['Released'];
     const endX=dateToX(addDays(effEnd(proj,units),1),units);
     const chip=document.createElement('div'); chip.className='design-ready';
     chip.dataset.homex=endX; chip.dataset.align='right';
     chip.style.background=st.bg; chip.style.color=st.c; chip.style.borderColor=st.bd; chip.style.opacity='1';
-    chip.textContent='Released'; chip.title='Project marked as done';
+    chip.textContent=lab; chip.title = lab==='Completed' ? 'Project completed (no release)' : 'Project marked as done';
     chip.style.left=endX+'px'; chip.style.transform='translateX(-100%)';
     track.appendChild(chip);
   }
@@ -2080,7 +2107,10 @@ const DESIGN_LABEL_STYLE={
   'Need L/J Review':       {c:'#3538cd',bg:'#eef4ff',bd:'#c7d7fe'},
   'Waiting For Start':     {c:'#026aa2',bg:'#f0f9ff',bd:'#b9e6fe'},
   'Released':              {c:'#085d3a',bg:'#d3f8df',bd:'#75e0a7'},
+  'Completed':             {c:'#344054',bg:'#eaecf0',bd:'#d0d5dd'},
 };
+// The chip shown for a done project: "Released" or "Completed" (done without a release).
+function releaseLabel(p){ return p.done ? (p.release==='completed' ? 'Completed' : 'Released') : ''; }
 function designStatusGroup(s){
   s=(s||'').toLowerCase().trim();
   if(s==='design in progress'||s==='need to fix') return 'progress';
@@ -2109,14 +2139,14 @@ function designStatusLabel(status, endIso, designStartIso, projStartIso){
 }
 // The effective design label shown for a project (incl. "Released" for done, '' for none).
 function projectDesignLabel(proj){
-  if(proj.done) return 'Released';
+  if(proj.done) return releaseLabel(proj);
   const dt=(proj.tasks||[]).filter(t=>t.type==='design');
   const dEnd=dt.map(t=>t.end).filter(validISO).sort().pop()||'';
   const dStart=dt.map(t=>t.start).filter(validISO).sort()[0]||'';
   return designStatusLabel(proj.designStatus||'', dEnd, dStart, proj.start||'');
 }
 // Design-status filter (personal, multi). '(none)' matches projects with no design label.
-const DESIGN_STATUSES=['Waiting For Start','Need Design Estimation','Design In Progress','Design In Review','Design Pending','Design Overdue','Design Ready','Need L/J Review','No Design','Released'];
+const DESIGN_STATUSES=['Waiting For Start','Need Design Estimation','Design In Progress','Design In Review','Design Pending','Design Overdue','Design Ready','Need L/J Review','No Design','Released','Completed'];
 function designFilterMatch(proj){
   const df=state.designFilters||[]; if(!df.length) return true;
   return df.includes(projectDesignLabel(proj) || '(none)');
@@ -2137,7 +2167,7 @@ function taskRow(p,ph,t,units,tw,last,projStartX,projStartDate){
   ],{connector:true,last:!!last});
   const tip=[];
   if(openBlk) tip.push('Blockers:\n'+(t.blockers||[]).filter(b=>!b.done).map(b=>'• '+b.text).join('\n'));
-  if(hasNote) tip.push('Note:\n'+t.note);
+  if(hasNote) tip.push('Note:\n'+noteToText(t.note));
   if(tip.length) row.title=tip.join('\n\n');   // hover to read blockers / note
   row.appendChild(left);
   const track=document.createElement('div'); track.className='track'; track.style.width=tw+'px';
@@ -2339,16 +2369,67 @@ function hideNoteDock(){
   const d=document.getElementById('noteDock'), p=document.getElementById('notePanel');
   if(d)d.style.display='none'; if(p)p.style.display='none';
 }
-// Floating note button + side popup; auto-expanded if a note exists. Read value from #m_note on save.
+// Notes are stored as light HTML (bold/italic/underline + bullet/numbered lists). Legacy notes are
+// plain text; helpers below keep both working and sanitize what we render/save.
+function noteIsHTML(s){ return /<[a-z!/][^>]*>/i.test(s||''); }
+function noteToHTML(s){   // stored value -> editor innerHTML
+  if(!s) return '';
+  if(noteIsHTML(s)) return sanitizeNoteHTML(s);
+  return esc(s).replace(/\n/g,'<br>');
+}
+function noteToText(s){   // stored value -> plain text (tooltips)
+  if(!s) return '';
+  if(!noteIsHTML(s)) return s;
+  let x=s.replace(/<li[^>]*>/gi,'• ').replace(/<\/(p|div|li|h[1-6]|ul|ol)>/gi,'\n').replace(/<br\s*\/?>/gi,'\n').replace(/<[^>]+>/g,'');
+  const ta=document.createElement('textarea'); ta.innerHTML=x; x=ta.value;
+  return x.replace(/\n{3,}/g,'\n\n').trim();
+}
+function sanitizeNoteHTML(html){
+  if(!html) return '';
+  const allowed={B:1,STRONG:1,I:1,EM:1,U:1,UL:1,OL:1,LI:1,BR:1,P:1,DIV:1,SPAN:1};
+  const tmp=document.createElement('div'); tmp.innerHTML=html;
+  (function clean(node){
+    let ch=node.firstChild;
+    while(ch){
+      const next=ch.nextSibling;
+      if(ch.nodeType===1){
+        clean(ch);
+        if(!allowed[ch.tagName]){ while(ch.firstChild) node.insertBefore(ch.firstChild,ch); node.removeChild(ch); }
+        else { [...ch.attributes].forEach(a=>ch.removeAttribute(a.name)); }
+      } else if(ch.nodeType===8){ node.removeChild(ch); }
+      ch=next;
+    }
+  })(tmp);
+  return tmp.innerHTML;
+}
+// Read the current note from the editor as sanitized HTML ('' when visually empty).
+function readNote(){
+  const el=document.getElementById('m_note');
+  if(!el) return '';
+  if(el.textContent.trim()==='' && !el.querySelector('img')) return '';
+  return sanitizeNoteHTML(el.innerHTML);
+}
+// Floating note button + side popup; auto-expanded if a note exists. Read value via readNote() on save.
 function wireNoteDock(initialNote){
-  const noteDock=document.getElementById('noteDock'), noteBtn=document.getElementById('noteFab'), notePanel=document.getElementById('notePanel'), noteTa=document.getElementById('m_note');
+  const noteDock=document.getElementById('noteDock'), noteBtn=document.getElementById('noteFab'), notePanel=document.getElementById('notePanel'), noteEl=document.getElementById('m_note'), toolbar=document.getElementById('npToolbar');
   noteBtn.innerHTML=NOTE_ICON; noteDock.style.display='flex';
-  noteTa.value=initialNote||'';
-  let open = !!(initialNote && initialNote.trim());
-  function sync(){ notePanel.style.display=open?'flex':'none'; noteBtn.classList.toggle('open',open); noteBtn.classList.toggle('has',noteTa.value.trim()!==''); }
+  noteEl.innerHTML=noteToHTML(initialNote||'');
+  const hasContent=()=>noteEl.textContent.trim()!=='';
+  let open=hasContent();
+  function sync(){ notePanel.style.display=open?'flex':'none'; noteBtn.classList.toggle('open',open); noteBtn.classList.toggle('has',hasContent()); }
   sync();
-  noteBtn.onclick=()=>{ open=!open; sync(); if(open) noteTa.focus(); };
-  noteTa.oninput=()=>noteBtn.classList.toggle('has',noteTa.value.trim()!=='');
+  noteBtn.onclick=()=>{ open=!open; sync(); if(open) noteEl.focus(); };
+  function updateToolbar(){ toolbar.querySelectorAll('button').forEach(b=>{ let on=false; try{on=document.queryCommandState(b.dataset.cmd);}catch(e){} b.classList.toggle('active',on); }); }
+  noteEl.oninput=()=>{
+    if(noteEl.textContent.trim()==='' && !noteEl.querySelector('img')) noteEl.innerHTML='';   // restore placeholder
+    noteBtn.classList.toggle('has',hasContent()); updateToolbar();
+  };
+  noteEl.onkeyup=updateToolbar; noteEl.onmouseup=updateToolbar;
+  toolbar.querySelectorAll('button').forEach(b=>{
+    b.onmousedown=e=>e.preventDefault();   // keep the editor's selection
+    b.onclick=()=>{ noteEl.focus(); try{document.execCommand(b.dataset.cmd,false,null);}catch(e){} updateToolbar(); noteBtn.classList.toggle('has',hasContent()); };
+  });
+  updateToolbar();
 }
 function closeModal(){modalBg.classList.remove('open');modal.innerHTML='';modal.style.width='';hideNoteDock();}
 // Date input with a clear (×) button. Wire with wireDateClears() after innerHTML is set.
@@ -2390,7 +2471,7 @@ function openProjectModal(p){
 // Project modal: name + start + optional end (a single bar on the timeline).
 function openPhaseModal(category,proj){
   const editing=!!proj;
-  const def=proj||{name:'',start:'',end:'',tags:[],size:'',promo:'',priority:'',jira:'',docs:[],note:''};
+  const def=proj||{name:'',start:'',end:'',tags:[],size:'',promo:'',priority:'',jira:'',docs:[],note:'',release:''};
   const tags=(def.tags||[]).slice();
   modal.innerHTML=`<h3>${editing?'Edit':'New'} Project</h3>
     <div class="field"><label>Project Name</label><input id="m_pname" value="${editing?esc(proj.name):''}" placeholder="e.g. Mobile App"></div>
@@ -2403,10 +2484,17 @@ function openPhaseModal(category,proj){
       <div id="m_tags" class="tag-picker"></div>
       <div class="addrow" style="margin-top:6px;"><input id="m_tagnew" placeholder="Add custom tag…"><button type="button" class="btn" id="m_tagadd">Add</button></div>
     </div>
-    <div class="field"><label>Priority (optional)</label><select id="m_priority">
-      <option value="" ${!def.priority?'selected':''}>None</option>
-      ${PRIORITIES.map(p=>`<option value="${p}" ${def.priority===p?'selected':''}>${p}</option>`).join('')}
-    </select></div>
+    <div class="field row2">
+      <div><label>Priority (optional)</label><select id="m_priority">
+        <option value="" ${!def.priority?'selected':''}>None</option>
+        ${PRIORITIES.map(p=>`<option value="${p}" ${def.priority===p?'selected':''}>${p}</option>`).join('')}
+      </select></div>
+      <div><label>Status (optional)</label><select id="m_release">
+        <option value="" ${!def.release?'selected':''}>Active</option>
+        <option value="released" ${def.release==='released'?'selected':''}>Released</option>
+        <option value="completed" ${def.release==='completed'?'selected':''}>Completed (no release)</option>
+      </select></div>
+    </div>
     <div class="field row2">
       <div><label>Feature size (optional)</label><select id="m_size">
         <option value="" ${!def.size?'selected':''}>None</option>
@@ -2489,9 +2577,11 @@ function openPhaseModal(category,proj){
     const priority = modal.querySelector('#m_priority').value;
     const jira = normalizeUrl(modal.querySelector('#m_jira').value.trim());
     const docList = docs.map(d=>normalizeUrl(d.trim())).filter(Boolean);
-    const note = document.getElementById('m_note').value.trim();
-    if(editing){ proj.name=name; proj.start=start; proj.end=end; proj.tags=tagList; proj.size=size; proj.promo=promo; proj.priority=priority; proj.jira=jira; proj.docs=docList; proj.note=note; }
-    else category.phases.push({id:uid(),name,start,end,tags:tagList,size,promo,priority,jira,docs:docList,note,tasks:[]});
+    const note = readNote();
+    const release = modal.querySelector('#m_release').value;   // '' | 'released' | 'completed'
+    const done = release==='released' || release==='completed';
+    if(editing){ proj.name=name; proj.start=start; proj.end=end; proj.tags=tagList; proj.size=size; proj.promo=promo; proj.priority=priority; proj.jira=jira; proj.docs=docList; proj.note=note; proj.release=release; proj.done=done; }
+    else category.phases.push({id:uid(),name,start,end,tags:tagList,size,promo,priority,jira,docs:docList,note,release,done,tasks:[]});
     closeModal();render();
   };
 }
@@ -2596,7 +2686,7 @@ function openTaskModal(phase,t){
     const start=modal.querySelector('#m_start').value,end=modal.querySelector('#m_end').value;
     if(start&&end&&end<start){alert('End date must be on or after start date.');return;}
     const progress=TASK_MAP[type].progress?Number(prog.value):0;
-    const note=document.getElementById('m_note').value.trim();
+    const note=readNote();
     const blk=blockers.filter(b=>b.text.trim()).map(b=>({id:b.id,text:b.text.trim(),done:b.done}));
     if(editing)Object.assign(t,{type,start,end,progress,customName,note,blockers:blk});
     else phase.tasks.push({id:uid(),type,start,end,progress,customName,note,blockers:blk});
