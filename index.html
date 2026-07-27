@@ -554,6 +554,11 @@
       <button id="releaseFilterBtn" class="tagfilter">All</button>
       <div id="releaseFilterMenu" class="tagfilter-menu" style="display:none"></div>
     </div>
+    <div class="tagfilter-wrap" id="teamFilterWrap" style="margin-left:6px;">
+      <span style="font-size:12px;color:var(--muted);font-weight:600;">Team</span>
+      <button id="teamFilterBtn" class="tagfilter">All teams</button>
+      <div id="teamFilterMenu" class="tagfilter-menu" style="display:none"></div>
+    </div>
     <div class="tagfilter-wrap" id="categoryFilterWrap" style="margin-left:6px;display:none;">
       <span style="font-size:12px;color:var(--muted);font-weight:600;">Category</span>
       <button id="categoryFilterBtn" class="tagfilter">All categories</button>
@@ -651,6 +656,16 @@ function isAdmin(){ return currentEmail === ADMIN_EMAIL; }
 // Tribe (top level) > Squad > Category > Project
 function activeTribe(){ return (state.tribes||[]).find(t=>t.id===state.activeTribe) || (state.tribes||[])[0]; }
 function curSquads(){ const t=activeTribe(); return t?(t.squads||[]):[]; }
+// A project's "team" defaults to the squad it lives in. Teams are just squad names.
+function squadOfProject(projId){
+  for(const t of (state.tribes||[])) for(const s of (t.squads||[])) for(const c of (s.projects||[])) if((c.phases||[]).some(p=>p.id===projId)) return s;
+  return null;
+}
+function squadOfCategory(cat){
+  const real=(cat&&(cat._srcCat||cat))||cat;
+  for(const t of (state.tribes||[])) for(const s of (t.squads||[])) if((s.projects||[]).includes(real)) return s;
+  return activeSquad();
+}
 // admin can hide specific tabs (squad or virtual-view ids) for everyone — per tribe (shared)
 function isHidden(id){ const t=activeTribe(); return !!(t && Array.isArray(t.hidden) && t.hidden.includes(id)); }
 function toggleHidden(id){ const t=activeTribe(); if(!t)return; if(!Array.isArray(t.hidden))t.hidden=[]; const i=t.hidden.indexOf(id); if(i>=0)t.hidden.splice(i,1); else t.hidden.push(id); render(); }
@@ -856,6 +871,7 @@ function migrate(s){
       if(!proj.done) proj.release='';
       if(!proj.estimation || typeof proj.estimation!=='object') proj.estimation={};   // per-discipline estimation from Jira
       if(!Array.isArray(proj.docs)) proj.docs=[];
+      if(!Array.isArray(proj.teams) || !proj.teams.length) proj.teams=[sq.name];   // team(s) this project works for; defaults to its squad
       if(typeof proj.note!=='string') proj.note='';
       delete proj.color; delete proj.wip; delete proj.badge;   // color comes from the category now
       if(!Array.isArray(proj.tasks)) proj.tasks=[];
@@ -876,6 +892,7 @@ function migrate(s){
   if(!Array.isArray(s.tagFilters)) s.tagFilters = (typeof s.tagFilter==='string' && s.tagFilter)?[s.tagFilter]:[];   // personal, multi
   if(!Array.isArray(s.designFilters)) s.designFilters=[];   // personal design-status filter
   if(!Array.isArray(s.releaseFilters)) s.releaseFilters=[];   // personal release-status filter
+  if(!Array.isArray(s.teamFilters)) s.teamFilters=[];   // personal team filter
   if(!Array.isArray(s.promoFilters)) s.promoFilters=[];     // personal promotion filter (Marketing view)
   if(!Array.isArray(s.categoryFilters)) s.categoryFilters=[]; // personal category filter (Marketing view)
   delete s.tagFilter;
@@ -1426,6 +1443,7 @@ function render(){
   renderTagFilter();
   renderDesignFilter();
   renderReleaseFilter();
+  renderTeamFilter();
   renderPromoFilter();
   renderCategoryFilter();
   renderJiraSync();
@@ -1524,6 +1542,30 @@ function renderReleaseFilter(){
     row.appendChild(cb); row.appendChild(sp); menu.appendChild(row);
   });
   const clr=document.createElement('button'); clr.className='tf-clear'; clr.textContent='Clear all'; clr.onclick=()=>{ state.releaseFilters=[]; render(); }; menu.appendChild(clr);
+}
+function renderTeamFilter(){
+  const btn=document.getElementById('teamFilterBtn'), menu=document.getElementById('teamFilterMenu'); if(!btn)return;
+  if(!Array.isArray(state.teamFilters)) state.teamFilters=[];
+  // teams present in the current view + all squad names of the active tribe (so you can still pick empty ones)
+  const scope = (activeVirtual()&&activeVirtual().listByEnd) ? allProjects().map(x=>x.p) : activeSquad().projects.flatMap(c=>c.phases||[]);
+  const present=new Set(); scope.forEach(p=>projectTeams(p).forEach(t=>present.add(t)));
+  const opts=[...new Set([...curSquads().map(s=>s.name), ...present])].filter(Boolean).sort((a,b)=>a.localeCompare(b));
+  state.teamFilters=state.teamFilters.filter(s=>opts.includes(s));   // drop filters no longer available
+  const n=state.teamFilters.length;
+  const label=(n===0?'All teams':(n===1?state.teamFilters[0]:n+' teams'));
+  btn.innerHTML=esc(label)+(n>0?' <span class="tf-x" title="Clear team filter">×</span>':'');
+  btn.classList.toggle('active-filter', n>0);
+  const x=btn.querySelector('.tf-x'); if(x) x.onclick=e=>{ e.stopPropagation(); state.teamFilters=[]; render(); };
+  menu.innerHTML='';
+  if(!opts.length){ const e=document.createElement('div'); e.className='tf-empty'; e.textContent='No teams'; menu.appendChild(e); return; }
+  opts.forEach(s=>{
+    const row=document.createElement('label'); row.className='tf-row';
+    const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=state.teamFilters.includes(s);
+    cb.onchange=()=>{ if(cb.checked){ if(!state.teamFilters.includes(s))state.teamFilters.push(s);} else state.teamFilters=state.teamFilters.filter(v=>v!==s); render(); };
+    const sp=document.createElement('span'); sp.innerHTML=`<span class="tagpick" style="color:#3538cd;background:#eef4ff;border-color:#c7d7fe;">${esc(s)}</span>`;
+    row.appendChild(cb); row.appendChild(sp); menu.appendChild(row);
+  });
+  const clr=document.createElement('button'); clr.className='tf-clear'; clr.textContent='Clear all'; clr.onclick=()=>{ state.teamFilters=[]; render(); }; menu.appendChild(clr);
 }
 // Promotion filter (Marketing view). Yes -> 'Promotion', No -> 'No', blank -> '(none)'.
 function promoVal(proj){ return proj.promo==='Yes'?'Promotion':(proj.promo==='No'?'No':'(none)'); }
@@ -1715,7 +1757,7 @@ function renderGantt(){
   let projCount=0;
   squad.projects.forEach(p=>{
     const catMatch=q0 && p.name.toLowerCase().includes(q0);
-    let ps = (p.phases||[]).filter(x=>tagFilterMatch(x.tags) && designFilterMatch(x) && releaseFilterMatch(x) && (showCompletedOn()||!x.done));
+    let ps = (p.phases||[]).filter(x=>tagFilterMatch(x.tags) && designFilterMatch(x) && releaseFilterMatch(x) && teamFilterMatch(x) && (showCompletedOn()||!x.done));
     if(q0 && !catMatch) ps=ps.filter(x=>x.name.toLowerCase().includes(q0));
     projCount+=ps.length;
   });
@@ -1750,10 +1792,10 @@ function renderGantt(){
 
   const q=(state.search||'').trim().toLowerCase();
   const anyTag=(state.tagFilters||[]).length>0;
-  const anyFilter = anyTag || q || !showCompletedOn() || (state.designFilters||[]).length>0 || (state.releaseFilters||[]).length>0;
+  const anyFilter = anyTag || q || !showCompletedOn() || (state.designFilters||[]).length>0 || (state.releaseFilters||[]).length>0 || (state.teamFilters||[]).length>0;
   squad.projects.forEach(p=>{
     const catMatch = q && p.name.toLowerCase().includes(q);
-    let projs = p.phases.filter(x=>tagFilterMatch(x.tags) && designFilterMatch(x) && releaseFilterMatch(x) && (showCompletedOn()||!x.done));
+    let projs = p.phases.filter(x=>tagFilterMatch(x.tags) && designFilterMatch(x) && releaseFilterMatch(x) && teamFilterMatch(x) && (showCompletedOn()||!x.done));
     if(q && !catMatch) projs = projs.filter(x=>x.name.toLowerCase().includes(q));
     if(anyFilter && projs.length===0) return;   // hide categories with no matching/visible projects
     grid.appendChild(projectRow(p,units,tw));
@@ -1815,7 +1857,7 @@ function updateDesignReadyChips(){
 function renderListByEnd(g){
   const q=(state.search||'').trim().toLowerCase();
   // "Completed (no release)" projects never belong in the Marketing/release view.
-  let items=allProjects().filter(x=>x.p.release!=='completed' && tagFilterMatch(x.p.tags) && promoFilterMatch(x.p) && categoryFilterMatch(x.cat.name) && (showCompletedOn()||!x.p.done));
+  let items=allProjects().filter(x=>x.p.release!=='completed' && teamFilterMatch(x.p) && tagFilterMatch(x.p.tags) && promoFilterMatch(x.p) && categoryFilterMatch(x.cat.name) && (showCompletedOn()||!x.p.done));
   if(q) items=items.filter(x=> x.p.name.toLowerCase().includes(q) || (x.cat.name||'').toLowerCase().includes(q) || (x.squad.name||'').toLowerCase().includes(q));
   // group by release month (YYYY-MM of the end date)
   const map=new Map();
@@ -1979,7 +2021,7 @@ function projectRow(p,units,tw){
   const row=document.createElement('div'); row.className='row project';
   const q=(state.search||'').trim().toLowerCase();
   const catMatch=q && p.name.toLowerCase().includes(q);
-  let vis = (p.phases||[]).filter(x=>tagFilterMatch(x.tags) && designFilterMatch(x) && releaseFilterMatch(x) && (showCompletedOn()||!x.done));
+  let vis = (p.phases||[]).filter(x=>tagFilterMatch(x.tags) && designFilterMatch(x) && releaseFilterMatch(x) && teamFilterMatch(x) && (showCompletedOn()||!x.done));
   if(q && !catMatch) vis = vis.filter(x=>x.name.toLowerCase().includes(q));
   const count=vis.length;
   const acts = inVirtual() ? [] : [
@@ -2223,6 +2265,12 @@ function designFilterMatch(proj){
 function releaseFilterMatch(proj){
   const rf=state.releaseFilters||[]; if(!rf.length) return true;
   return rf.includes(projectReleaseLabel(proj) || '(none)');
+}
+// Team filter (personal, multi). A project matches if it works for any selected team.
+function projectTeams(proj){ return (proj.teams&&proj.teams.length)?proj.teams:[]; }
+function teamFilterMatch(proj){
+  const tf=state.teamFilters||[]; if(!tf.length) return true;
+  return projectTeams(proj).some(t=>tf.includes(t));
 }
 
 function taskRow(p,ph,t,units,tw,last,projStartX,projStartDate){
@@ -2544,8 +2592,13 @@ function openProjectModal(p){
 // Project modal: name + start + optional end (a single bar on the timeline).
 function openPhaseModal(category,proj){
   const editing=!!proj;
-  const def=proj||{name:'',start:'',end:'',tags:[],size:'',promo:'',priority:'',jira:'',docs:[],note:'',release:''};
+  const def=proj||{name:'',start:'',end:'',tags:[],size:'',promo:'',priority:'',jira:'',docs:[],note:'',release:'',teams:[]};
   const tags=(def.tags||[]).slice();
+  // Team(s): options are the tribe's squad names; default = the squad this project lives in.
+  const ownSquad = editing ? squadOfProject(proj.id) : squadOfCategory(category);
+  const ownSquadName = ownSquad ? ownSquad.name : (activeSquad()?activeSquad().name:'');
+  const teamOptions = [...new Set([...curSquads().map(s=>s.name), ...(def.teams||[])].filter(Boolean))];
+  const teams = (def.teams && def.teams.length) ? def.teams.slice() : (ownSquadName?[ownSquadName]:[]);
   modal.innerHTML=`<h3>${editing?'Edit':'New'} Project</h3>
     <div class="field"><label>Project Name</label><input id="m_pname" value="${editing?esc(proj.name):''}" placeholder="e.g. Mobile App"></div>
     <div class="field row2">
@@ -2567,6 +2620,9 @@ function openPhaseModal(category,proj){
         <option value="released" ${def.release==='released'?'selected':''}>Released</option>
         <option value="completed" ${def.release==='completed'?'selected':''}>Completed (no release)</option>
       </select></div>
+    </div>
+    <div class="field"><label>Team</label>
+      <div id="m_teams" class="tag-picker"></div>
     </div>
     <div class="field row2">
       <div><label>Feature size (optional)</label><select id="m_size">
@@ -2637,6 +2693,19 @@ function openPhaseModal(category,proj){
   }
   renderDocs();
   modal.querySelector('#m_adddoc').onclick=()=>{docs.push('');renderDocs();};
+  // team picker: chips of squad names; click to toggle (default = own squad)
+  const teamWrap=modal.querySelector('#m_teams');
+  function renderTeamPicker(){
+    teamWrap.innerHTML='';
+    teamOptions.forEach(name=>{
+      const i=teams.indexOf(name); const chip=document.createElement('span');
+      if(i>=0){ chip.className='tagpick sel'; chip.style.cssText='background:#eef4ff;color:#3538cd;border-color:#c7d7fe'; chip.innerHTML=esc(name)+' <b>×</b>'; chip.onclick=()=>{teams.splice(i,1);renderTeamPicker();}; }
+      else { chip.className='tagpick add'; chip.textContent='+ '+name; chip.onclick=()=>{teams.push(name);renderTeamPicker();}; }
+      teamWrap.appendChild(chip);
+    });
+    if(!teamOptions.length){ const e=document.createElement('span'); e.style.cssText='font-size:12px;color:var(--muted);'; e.textContent='No squads yet'; teamWrap.appendChild(e); }
+  }
+  renderTeamPicker();
   wireNoteDock(def.note);   // floating Note button + side popup
   modalBg.classList.add('open'); modal.querySelector('#m_pname').focus();
   modal.querySelector('#m_cancel').onclick=closeModal;
@@ -2653,8 +2722,10 @@ function openPhaseModal(category,proj){
     const note = readNote();
     const release = modal.querySelector('#m_release').value;   // '' | 'released' | 'completed'
     const done = release==='released' || release==='completed';
-    if(editing){ proj.name=name; proj.start=start; proj.end=end; proj.tags=tagList; proj.size=size; proj.promo=promo; proj.priority=priority; proj.jira=jira; proj.docs=docList; proj.note=note; proj.release=release; proj.done=done; }
-    else category.phases.push({id:uid(),name,start,end,tags:tagList,size,promo,priority,jira,docs:docList,note,release,done,tasks:[]});
+    const teamList = [...new Set(teams.map(t=>t.trim()).filter(Boolean))];
+    const finalTeams = teamList.length ? teamList : (ownSquadName?[ownSquadName]:[]);   // never leave a project team-less
+    if(editing){ proj.name=name; proj.start=start; proj.end=end; proj.tags=tagList; proj.size=size; proj.promo=promo; proj.priority=priority; proj.jira=jira; proj.docs=docList; proj.note=note; proj.release=release; proj.done=done; proj.teams=finalTeams; }
+    else category.phases.push({id:uid(),name,start,end,tags:tagList,size,promo,priority,jira,docs:docList,note,release,done,teams:finalTeams,tasks:[]});
     closeModal();render();
   };
 }
@@ -2798,13 +2869,15 @@ document.getElementById('collapseAll').onclick=()=>setAllCollapsed(true);
   const tagBtn=document.getElementById('tagFilterBtn'), tagMenu=document.getElementById('tagFilterMenu');
   const dBtn=document.getElementById('designFilterBtn'), dMenu=document.getElementById('designFilterMenu');
   const rBtn=document.getElementById('releaseFilterBtn'), rMenu=document.getElementById('releaseFilterMenu');
+  const tmBtn=document.getElementById('teamFilterBtn'), tmMenu=document.getElementById('teamFilterMenu');
   const pBtn=document.getElementById('promoFilterBtn'), pMenu=document.getElementById('promoFilterMenu');
   const cBtn=document.getElementById('categoryFilterBtn'), cMenu=document.getElementById('categoryFilterMenu');
-  const menus=[tagMenu,dMenu,rMenu,pMenu,cMenu];
+  const menus=[tagMenu,dMenu,rMenu,tmMenu,pMenu,cMenu];
   const toggle=m=>{ menus.forEach(x=>{ if(x!==m) x.style.display='none'; }); m.style.display = m.style.display==='none'?'block':'none'; };
   tagBtn.onclick=e=>{ e.stopPropagation(); toggle(tagMenu); };
   dBtn.onclick=e=>{ e.stopPropagation(); toggle(dMenu); };
   rBtn.onclick=e=>{ e.stopPropagation(); toggle(rMenu); };
+  tmBtn.onclick=e=>{ e.stopPropagation(); toggle(tmMenu); };
   pBtn.onclick=e=>{ e.stopPropagation(); toggle(pMenu); };
   cBtn.onclick=e=>{ e.stopPropagation(); toggle(cMenu); };
   document.addEventListener('click',e=>{
