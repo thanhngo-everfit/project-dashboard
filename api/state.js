@@ -131,8 +131,13 @@ export default async function handler(req, res) {
         }
       }
       // Snapshot the version we're about to replace so any bad save is recoverable (keep last 30).
+      // Skip when only metadata changed (e.g. auto-sync bumping lastJiraSync with identical tribes) so
+      // the 15-min auto-sync heartbeat can't churn real versions out of the history.
       if (existing && existing.state) {
-        try { await redis.lpush(HKEY, existing); await redis.ltrim(HKEY, 0, 29); } catch (e) { /* history is best-effort */ }
+        const tribesJSON = st => { try { return JSON.stringify((st && st.tribes) || null); } catch (e) { return null; } };
+        if (tribesJSON(existing.state) !== tribesJSON(body.state)) {
+          try { await redis.lpush(HKEY, existing); await redis.ltrim(HKEY, 0, 29); } catch (e) { /* history is best-effort */ }
+        }
       }
       const record = { state: body.state, updatedAt: Date.now(), updatedBy: user.email };
       await redis.set(KEY, record);

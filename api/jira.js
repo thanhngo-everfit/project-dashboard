@@ -112,7 +112,12 @@ export default async function handler(req, res) {
 
   const user = await verify(req);
   if (!user) { res.status(401).json({ error: 'unauthorized' }); return; }
-  if ((user.email || '').toLowerCase() !== ADMIN_EMAIL) { res.status(403).json({ error: 'forbidden' }); return; }
+  // 'sync' is allowed for any verified @everfit.io user (powers auto-sync for everyone);
+  // the debug helpers ('fields' / 'raw') stay admin-only. verify() already enforced the domain.
+  const isAdmin = (user.email || '').toLowerCase() === ADMIN_EMAIL;
+  if ((req.body && (req.body.action === 'fields' || req.body.action === 'raw')) && !isAdmin) {
+    res.status(403).json({ error: 'forbidden' }); return;
+  }
 
   const base = (process.env.JIRA_BASE_URL || '').replace(/\/+$/, '');
   const email = process.env.JIRA_EMAIL, apiToken = process.env.JIRA_API_TOKEN;

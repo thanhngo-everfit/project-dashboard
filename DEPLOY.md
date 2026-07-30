@@ -122,9 +122,17 @@ that issue's **Design ETA**, and sets it as the End date of the project's design
      e.g. `customfield_12752`. If omitted, the field **named "Design Start"** is auto-detected.
 3. **Redeploy** so the function picks up the env vars.
 
+### Auto-sync
+The dashboard also **auto-syncs from Jira every 15 minutes** for anyone who has it open
+(on load, then on a timer). The cadence is coordinated across all viewers via a shared
+`lastJiraSync` timestamp, so it fires ~once per interval regardless of how many people are
+watching. Auto-sync applies changes silently (no review popup); the manual **Jira Sync**
+button (admin only) still opens the tick-to-apply review.
+
 ### Notes
-- Auth is enforced server-side: the endpoint requires a valid Google token **and** the
-  admin email; everyone else gets `403`.
+- Auth is enforced server-side: `action:"sync"` needs a valid Google token for **any**
+  verified `@everfit.io` account (so auto-sync works for everyone). The debug helpers
+  (`action:"fields"` / `action:"raw"`) remain **admin-only**; everyone else gets `403`.
 - To find the field id (if auto-detect fails), the endpoint supports
   `POST /api/jira {"action":"fields","query":"eta"}` which lists matching Jira fields.
 - Local `npx serve` does not run `/api`; test on the deployed URL or with `vercel dev`.

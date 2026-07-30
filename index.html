@@ -1005,15 +1005,17 @@ function applyDesignSync(proj, startIso, endIso, status, est, figma){
   }
   return changed;
 }
-async function jiraSync(){
-  if(!isAdmin() || !idToken) return;
+async function jiraSync(opts){
+  opts=opts||{}; const silent=!!opts.silent;   // silent = auto-sync: apply all changes, no review popup, no status toasts
+  if(!idToken) return;
+  if(!silent && !isAdmin()) return;   // the manual review flow is admin-only; auto-sync runs for everyone
   const targets=[];   // every project across every tribe that has a Jira link
   (state.tribes||[]).forEach(tr=>(tr.squads||[]).forEach(sq=>(sq.projects||[]).forEach(cat=>(cat.phases||[]).forEach(p=>{
     const key=jiraIssueKey(p.jira); if(key) targets.push({proj:p, key});
   }))));
-  if(!targets.length){ setSync('No Jira links to sync','bad'); return; }
-  const btn=document.getElementById('jiraSyncBtn'); if(btn) btn.disabled=true;
-  setSync('Syncing Jira…');
+  if(!targets.length){ if(!silent) setSync('No Jira links to sync','bad'); return; }
+  const btn=document.getElementById('jiraSyncBtn'); if(!silent && btn) btn.disabled=true;
+  if(!silent) setSync('Syncing Jira…');
   try{
     const r = await apiFetch('/api/jira', {method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({action:'sync', issues: targets.map((t,i)=>({id:i, key:t.key}))})});
@@ -1024,7 +1026,7 @@ async function jiraSync(){
                : j.error==='design_eta_field_not_found' ? 'Jira: "Design ETA" field not found'
                : j.error==='forbidden' ? 'Only Thanh can sync Jira'
                : 'Jira sync failed ('+r.status+')';
-      setSync(msg,'bad'); console.warn('[Jira sync] failed', r.status, r.url, j); return;
+      if(!silent) setSync(msg,'bad'); console.warn('[Jira sync] failed', r.status, r.url, j); return;
     }
     // Build the proposed-changes list; nothing is applied until the user confirms in the review popup.
     let noData=0, errored=0; const rows=[];
@@ -1058,11 +1060,21 @@ async function jiraSync(){
     console.log('%c[Jira sync]','font-weight:bold','ETA:', j.fieldId, 'Start:', j.startFieldId, 'Status:', j.statusFieldId, 'Estimation:', j.estIds);
     console.table((j.results||[]).map(rec=>({ project:(targets[rec.id]&&targets[rec.id].proj.name)||'', key:rec.key,
       designStart:rec.designStart||'', designEnd:rec.designEnd||'', designStatus:rec.designStatus||'', estimation:JSON.stringify(rec.est||{}), error:rec.error||'' })));
-    openJiraReview(rows, j.syncedAt, {noData, errored});
-    const changedN=rows.filter(r=>r.changed).length;
-    setSync('Jira: review '+changedN+' change(s)', 'ok');
-  }catch(e){ setSync('Jira sync error','bad'); console.warn(e); }
-  finally{ if(btn) btn.disabled=false; }
+    if(silent){
+      // auto-sync: apply every changed row straight away, then persist the new sync time
+      let applied=0;
+      rows.forEach(r=>{ if(r.changed){ if(applyDesignSync(r.proj, r.newStart, r.newEnd, r.newStatus, r.est, r.figma)) applied++; } });
+      state.lastJiraSync = j.syncedAt || Date.now();
+      lastSyncedJSON=null;   // force a save so the sync time (and any applied changes) persist + debounce other viewers
+      save(); renderJiraSync(); if(applied) render();
+      console.log('[Jira auto-sync] applied '+applied+' change(s) across '+rows.length+' linked project(s)');
+    } else {
+      openJiraReview(rows, j.syncedAt, {noData, errored});
+      const changedN=rows.filter(r=>r.changed).length;
+      setSync('Jira: review '+changedN+' change(s)', 'ok');
+    }
+  }catch(e){ if(!silent) setSync('Jira sync error','bad'); console.warn(e); }
+  finally{ if(!silent && btn) btn.disabled=false; }
 }
 // Review popup: list every project with Jira Design data + the change it would make; apply only the ticked ones.
 function openJiraReview(rows, syncedAt, stats){
@@ -1300,7 +1312,27 @@ async function pollRemote(){
   }catch(e){ /* offline: keep working locally */ }
 }
 function startPolling(){ if(pollTimer) clearInterval(pollTimer); pollTimer = setInterval(pollRemote, 12000); }
-function stopPolling(){ if(pollTimer) clearInterval(pollTimer); pollTimer = null; }
+function stopPolling(){ if(pollTimer) clearInterval(pollTimer); pollTimer = null; stopAutoJiraSync(); }
+// ---- Auto Jira sync: pull from Jira for everyone who has the dashboard open ----
+// Runs silently on load and then on a timer. The 15-min cadence is coordinated across ALL viewers
+// via the shared `lastJiraSync` timestamp, so it fires roughly once per interval no matter how many
+// people are watching (whoever's tab fires first wins; the rest see the fresh timestamp and skip).
+const AUTO_JIRA_INTERVAL = 15*60*1000;
+let autoJiraTimer=null, autoJiraBusy=false;
+async function autoJiraSync(){
+  if(!idToken || !initialLoadDone || saveBlocked || busy || autoJiraBusy) return;
+  if(modalBg.classList.contains('open')) return;              // don't disrupt an open editor / review popup
+  if(dataJSON() !== lastSyncedJSON) return;                    // local unsaved edits pending -> don't clobber
+  if(Date.now() - (state.lastJiraSync||0) < AUTO_JIRA_INTERVAL) return;   // debounced across everyone
+  autoJiraBusy=true;
+  try{ await jiraSync({silent:true}); } finally{ autoJiraBusy=false; }
+}
+function startAutoJiraSync(){
+  if(autoJiraTimer) clearInterval(autoJiraTimer);
+  setTimeout(autoJiraSync, 4000);                       // once shortly after the first load settles
+  autoJiraTimer = setInterval(autoJiraSync, 60*1000);   // check each minute; the interval gate throttles actual syncs
+}
+function stopAutoJiraSync(){ if(autoJiraTimer) clearInterval(autoJiraTimer); autoJiraTimer=null; }
 function handleAuthExpired(){
   stopPolling();
   idToken = null;
@@ -3042,7 +3074,7 @@ function showApp(auth){
   document.getElementById('loginGate').style.display='none';
   document.getElementById('acct').style.display='flex';
   renderProfile(auth);
-  syncLoad().then(startPolling);   // pull the shared copy, then watch for teammates' changes
+  syncLoad().then(()=>{ startPolling(); startAutoJiraSync(); });   // pull shared copy, watch for changes, auto-sync Jira
 }
 function renderProfile(auth){
   const name=auth.name||auth.email||'', initial=(name.trim()[0]||'?');
