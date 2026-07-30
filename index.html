@@ -296,7 +296,7 @@
   .mkt-month-h{font-size:17px;font-weight:800;color:var(--text);letter-spacing:-.2px;margin:0 0 12px;display:flex;align-items:center;gap:10px;}
   .mkt-month-h .cnt{font-size:11px;font-weight:700;color:var(--muted);background:#f0f1f4;border-radius:999px;padding:2px 10px;}
   .mkt-table{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 1px 2px rgba(16,24,40,.05);}
-  .mkt-row{display:grid;grid-template-columns:minmax(210px,2.1fr) minmax(150px,1.3fr) 92px 92px 110px 138px 96px 58px minmax(120px,1.3fr);gap:14px;align-items:center;padding:12px 18px;border-bottom:1px solid #f0f1f4;}
+  .mkt-row{display:grid;grid-template-columns:minmax(210px,2.1fr) minmax(150px,1.3fr) 92px 92px 110px 138px 96px 92px 58px minmax(120px,1.3fr);gap:14px;align-items:center;padding:12px 18px;border-bottom:1px solid #f0f1f4;}
   .mkt-row:last-child{border-bottom:none;}
   .mkt-head{background:#f9fafb;font-size:10.5px;font-weight:800;color:#667085;text-transform:uppercase;letter-spacing:.5px;padding-top:10px;padding-bottom:10px;}
   .mkt-datehead{display:block;padding:9px 18px;background:#fbfcfe;border-bottom:1px solid #eef0f3;border-top:1px solid #eef0f3;font-size:13px;font-weight:800;color:#344054;}
@@ -322,6 +322,10 @@
   .mkt-rel.yes{color:#085d3a;background:#d3f8df;border:1px solid #75e0a7;}
   .mkt-rel.no{color:#667085;background:#f2f4f7;border:1px solid #e4e7ec;}
   .mkt-rel.done{color:#344054;background:#eaecf0;border:1px solid #d0d5dd;}
+  .mkt-scale{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.3px;border-radius:999px;padding:2px 9px;white-space:nowrap;}
+  .mkt-scale.s-internal{color:#475467;background:#f2f4f7;border:1px solid #e4e7ec;}
+  .mkt-scale.s-beta{color:#b54708;background:#fffaeb;border:1px solid #fedf89;}
+  .mkt-scale.s-public{color:#067647;background:#ecfdf3;border:1px solid #abefc6;}
   .sizechip{flex:none;font-size:10px;font-weight:800;border-radius:999px;padding:2px 8px;white-space:nowrap;}
   .sizechip.s-Small{background:#dcfce7;color:#166534;}
   .sizechip.s-Medium{background:#dbeafe;color:#1e40af;}
@@ -702,6 +706,7 @@ function tagsLineHTML(tags){
 }
 const FEATURE_SIZES = ['Small','Medium','Big','Huge'];
 const PRIORITIES = ['Highest','High','Medium','Low'];
+const OPEN_SCALES = ['Internal','Beta','Public'];   // release scope shown in the Marketing view
 // Fixed virtual squads (read-only structure)
 const VIRTUAL_VIEWS = [
   {id:'view:all',  name:'All Squads', allSquads:true, icon:'🌐'},
@@ -861,6 +866,8 @@ function migrate(s){
       delete proj.tag;
       if(typeof proj.size!=='string') proj.size='';
       if(typeof proj.promo!=='string') proj.promo='';
+      if(typeof proj.openScale!=='string') proj.openScale='';   // release scope: Internal | Beta | Public
+      if(!['','Internal','Beta','Public'].includes(proj.openScale)) proj.openScale='';
       if(typeof proj.priority!=='string') proj.priority='';
       if(typeof proj.jira!=='string') proj.jira='';
       if(typeof proj.designStatus!=='string') proj.designStatus='';   // synced from Jira (customfield_10139)
@@ -1876,7 +1883,7 @@ function renderListByEnd(g){
     sec.appendChild(h);
     const tbl=document.createElement('div'); tbl.className='mkt-table';
     const head=document.createElement('div'); head.className='mkt-row mkt-head';
-    head.innerHTML=`<span>Project</span><span>Category</span><span>Priority</span><span>Size</span><span>Promotion?</span><span>Timeline</span><span>Released?</span><span>Links</span><span>Tags</span>`;
+    head.innerHTML=`<span>Project</span><span>Category</span><span>Priority</span><span>Size</span><span>Promotion?</span><span>Timeline</span><span>Released?</span><span>Open Scale</span><span>Links</span><span>Tags</span>`;
     tbl.appendChild(head);
     // within the month, sub-group by exact release (end) date
     const byDate=new Map();
@@ -1897,6 +1904,7 @@ function renderListByEnd(g){
         const rel = p.release==='released' ? '<span class="mkt-rel yes">Released</span>'
                   : p.release==='completed' ? '<span class="mkt-rel done">Completed</span>'
                   : '<span class="mkt-rel no">Not yet</span>';
+        const scale = p.openScale ? `<span class="mkt-scale s-${esc(p.openScale.toLowerCase())}">${esc(p.openScale)}</span>` : '<span class="mkt-dash">—</span>';
         const linksHtml=indicatorsHTML(p);
         row.innerHTML=`
           <span class="mkt-name">${done}<span class="dot" style="background:${cat.color||'#cdb4f6'}"></span><span class="txt">${esc(p.name)}</span></span>
@@ -1906,6 +1914,7 @@ function renderListByEnd(g){
           <span class="mkt-cell">${promo}</span>
           <span class="mkt-date"><span class="rng">${fmtShort(p.start)} → ${fmtShort(p.end)}</span></span>
           <span class="mkt-cell">${rel}</span>
+          <span class="mkt-cell">${scale}</span>
           <span class="mkt-cell mkt-links">${linksHtml||'<span class="mkt-dash">—</span>'}</span>
           <span class="mkt-tags">${tags||'<span class="mkt-dash">—</span>'}</span>`;
         row.onclick=()=>openPhaseModal(cat,p);
@@ -2594,7 +2603,7 @@ function openProjectModal(p){
 // Project modal: name + start + optional end (a single bar on the timeline).
 function openPhaseModal(category,proj){
   const editing=!!proj;
-  const def=proj||{name:'',start:'',end:'',tags:[],size:'',promo:'',priority:'',jira:'',docs:[],note:'',release:'',teams:[]};
+  const def=proj||{name:'',start:'',end:'',tags:[],size:'',promo:'',priority:'',jira:'',docs:[],note:'',release:'',teams:[],openScale:''};
   const tags=(def.tags||[]).slice();
   // Team(s): options are the tribe's squad names; default = the squad this project lives in.
   const ownSquad = editing ? squadOfProject(proj.id) : squadOfCategory(category);
@@ -2638,6 +2647,10 @@ function openPhaseModal(category,proj){
         <option value="No" ${def.promo==='No'?'selected':''}>No</option>
       </select></div>
     </div>
+    <div class="field"><label>Open scale (optional)</label><select id="m_openscale">
+      <option value="" ${!def.openScale?'selected':''}>None</option>
+      ${OPEN_SCALES.map(s=>`<option value="${s}" ${def.openScale===s?'selected':''}>${s}</option>`).join('')}
+    </select></div>
     <div class="field"><label>Jira link (optional)</label><input id="m_jira" value="${esc(def.jira||'')}" placeholder="https://…"></div>
     <div class="field"><label>Documentation (optional)</label>
       <div id="m_docs" class="doclist"></div>
@@ -2721,6 +2734,7 @@ function openPhaseModal(category,proj){
     const tagList = tags.map(t=>t.trim()).filter(Boolean);
     const size = modal.querySelector('#m_size').value;
     const promo = modal.querySelector('#m_promo').value;
+    const openScale = modal.querySelector('#m_openscale').value;
     const priority = modal.querySelector('#m_priority').value;
     const jira = normalizeUrl(modal.querySelector('#m_jira').value.trim());
     const docList = docs.map(d=>normalizeUrl(d.trim())).filter(Boolean);
@@ -2729,8 +2743,8 @@ function openPhaseModal(category,proj){
     const done = release==='released' || release==='completed';
     const teamList = [...new Set(teams.map(t=>t.trim()).filter(Boolean))];
     const finalTeams = teamList.length ? teamList : (ownSquadName?[ownSquadName]:[]);   // never leave a project team-less
-    if(editing){ proj.name=name; proj.start=start; proj.end=end; proj.tags=tagList; proj.size=size; proj.promo=promo; proj.priority=priority; proj.jira=jira; proj.docs=docList; proj.note=note; proj.release=release; proj.done=done; proj.teams=finalTeams; }
-    else category.phases.push({id:uid(),name,start,end,tags:tagList,size,promo,priority,jira,docs:docList,note,release,done,teams:finalTeams,tasks:[]});
+    if(editing){ proj.name=name; proj.start=start; proj.end=end; proj.tags=tagList; proj.size=size; proj.promo=promo; proj.openScale=openScale; proj.priority=priority; proj.jira=jira; proj.docs=docList; proj.note=note; proj.release=release; proj.done=done; proj.teams=finalTeams; }
+    else category.phases.push({id:uid(),name,start,end,tags:tagList,size,promo,openScale,priority,jira,docs:docList,note,release,done,teams:finalTeams,tasks:[]});
     closeModal();render();
   };
 }
