@@ -122,6 +122,11 @@ that issue's **Design ETA**, and sets it as the End date of the project's design
      e.g. `customfield_12752`. If omitted, the field **named "Design Start"** is auto-detected.
 3. **Redeploy** so the function picks up the env vars.
 
+### Linked delivery assignees
+For each JPD idea (PLAN item), the sync also reads its **delivery links** ("Polaris work item
+link" — the delivery panel), resolves the **assignee** of each linked Epic/ticket, and shows their
+avatars under the project name on the timeline (deduped). No config needed.
+
 ### Auto-sync
 The dashboard also **auto-syncs from Jira every 15 minutes** for anyone who has it open
 (on load, then on a timer). The cadence is coordinated across all viewers via a shared

@@ -192,11 +192,18 @@ export default async function handler(req, res) {
         if (!key) { results[i] = { id: it && it.id, key, error: 'no_key' }; continue; }
         try {
           const estFieldIds = EST_FIELDS.map(f => estIds[f.key]).filter(Boolean);
-          const fieldsParam = [fieldId, startFieldId, statusFieldId, 'description', ...estFieldIds].filter(Boolean).join(',');
+          const fieldsParam = [fieldId, startFieldId, statusFieldId, 'description', 'issuelinks', ...estFieldIds].filter(Boolean).join(',');
           const r = await fetch(base + '/rest/api/3/issue/' + encodeURIComponent(key) + '?fields=' + encodeURIComponent(fieldsParam), { headers: jheaders });
           if (!r.ok) { results[i] = { id: it.id, key, error: 'http_' + r.status }; continue; }
           const j = await r.json();
           const f = (j && j.fields) || {};
+          // delivery items linked to this JPD idea (the "Polaris work item link" links = the delivery panel)
+          const linkKeys = [];
+          (Array.isArray(f.issuelinks) ? f.issuelinks : []).forEach(l => {
+            if (!(l && l.type && /polaris work item/i.test(l.type.name || ''))) return;
+            const li = l.inwardIssue || l.outwardIssue;
+            if (li && li.key) linkKeys.push(li.key);
+          });
           const endR = extractRange(f[fieldId]);                 // Design ETA -> end
           const startR = startFieldId ? extractRange(f[startFieldId]) : { start: null, end: null };  // Design Start
           const est = {};   // per-discipline estimation numbers
@@ -208,6 +215,7 @@ export default async function handler(req, res) {
             designStatus: statusFieldId ? extractStatus(f[statusFieldId]) : '',   // customfield_10139
             est,
             figma: extractFigmaLinks(f.description),             // Figma URLs found in the card description
+            linkKeys,                                            // delivery epics/tickets linked to this idea
             raw: { start: startFieldId ? f[startFieldId] ?? null : '(no start field)', end: f[fieldId] ?? null, status: statusFieldId ? f[statusFieldId] ?? null : null },
           };
         } catch (e) {
@@ -216,6 +224,38 @@ export default async function handler(req, res) {
       }
     }
     await Promise.all(Array.from({ length: Math.min(CONCURRENCY, issues.length) }, worker));
+
+    // Resolve assignees of every linked delivery item, then attach a deduped assignee list per idea.
+    const allLinkKeys = [...new Set(results.flatMap(r => (r && r.linkKeys) || []))];
+    const assigneeByKey = {};
+    if (allLinkKeys.length) {
+      let an = 0;
+      async function aworker() {
+        while (true) {
+          const i = an++;
+          if (i >= allLinkKeys.length) return;
+          const k = allLinkKeys[i];
+          try {
+            const r = await fetch(base + '/rest/api/3/issue/' + encodeURIComponent(k) + '?fields=assignee', { headers: jheaders });
+            if (!r.ok) continue;
+            const j = await r.json();
+            const a = j && j.fields && j.fields.assignee;
+            if (a && a.accountId) {
+              const av = a.avatarUrls || {};
+              assigneeByKey[k] = { accountId: a.accountId, name: a.displayName || '', avatar: av['32x32'] || av['24x24'] || av['48x48'] || '' };
+            }
+          } catch (e) { /* skip this link */ }
+        }
+      }
+      await Promise.all(Array.from({ length: Math.min(CONCURRENCY, allLinkKeys.length) }, aworker));
+    }
+    results.forEach(r => {
+      if (!r) return;
+      const seen = new Set(), assignees = [];
+      (r.linkKeys || []).forEach(k => { const a = assigneeByKey[k]; if (a && !seen.has(a.accountId)) { seen.add(a.accountId); assignees.push(a); } });
+      r.assignees = assignees;
+      delete r.linkKeys;
+    });
     res.status(200).json({ results, syncedAt: Date.now(), fieldId, startFieldId, statusFieldId, estIds });
   } catch (e) {
     res.status(500).json({ error: 'server_error', detail: String((e && e.message) || e) });
