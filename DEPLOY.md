@@ -123,9 +123,10 @@ that issue's **Design ETA**, and sets it as the End date of the project's design
 3. **Redeploy** so the function picks up the env vars.
 
 ### Linked delivery assignees
-For each JPD idea (PLAN item), the sync also reads its **delivery links** ("Polaris work item
-link" — the delivery panel), resolves the **assignee** of each linked Epic/ticket, and shows their
-avatars under the project name on the timeline (deduped). No config needed.
+For each JPD idea (PLAN item), the sync reads its **delivery links** ("Polaris work item link" —
+the delivery panel) to find the linked **Epics**, then collects the assignees of the **work inside
+those Epics** — the child tasks/bugs and their sub-tasks (via `parent in (...)`), **not** the Epic's
+own assignee. Their avatars show (deduped) under the project name on the timeline. No config needed.
 
 ### Auto-sync
 The dashboard also **auto-syncs from Jira every 15 minutes** for anyone who has it open

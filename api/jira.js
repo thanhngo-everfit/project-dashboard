@@ -225,34 +225,62 @@ export default async function handler(req, res) {
     }
     await Promise.all(Array.from({ length: Math.min(CONCURRENCY, issues.length) }, worker));
 
-    // Resolve assignees of every linked delivery item, then attach a deduped assignee list per idea.
-    const allLinkKeys = [...new Set(results.flatMap(r => (r && r.linkKeys) || []))];
-    const assigneeByKey = {};
-    if (allLinkKeys.length) {
-      let an = 0;
-      async function aworker() {
-        while (true) {
-          const i = an++;
-          if (i >= allLinkKeys.length) return;
-          const k = allLinkKeys[i];
-          try {
-            const r = await fetch(base + '/rest/api/3/issue/' + encodeURIComponent(k) + '?fields=assignee', { headers: jheaders });
-            if (!r.ok) continue;
-            const j = await r.json();
-            const a = j && j.fields && j.fields.assignee;
-            if (a && a.accountId) {
-              const av = a.avatarUrls || {};
-              assigneeByKey[k] = { accountId: a.accountId, name: a.displayName || '', avatar: av['32x32'] || av['24x24'] || av['48x48'] || '' };
-            }
-          } catch (e) { /* skip this link */ }
-        }
+    // Assignees come from the WORK INSIDE each linked delivery Epic — its child tasks/bugs and their
+    // sub-tasks — NOT the Epic's own assignee. Resolve epicKey -> {accountId -> assignee}, then roll up
+    // per idea (union of all its linked epics' child assignees).
+    const epicKeys = [...new Set(results.flatMap(r => (r && r.linkKeys) || []))];
+    const epicAssignees = {};   // epicKey -> { accountId -> {accountId,name,avatar} }
+    const addAssignee = (epicKey, a) => {
+      if (!epicKey || !a || !a.accountId) return;
+      const m = epicAssignees[epicKey] || (epicAssignees[epicKey] = {});
+      if (!m[a.accountId]) {
+        const av = a.avatarUrls || {};
+        m[a.accountId] = { accountId: a.accountId, name: a.displayName || '', avatar: av['32x32'] || av['24x24'] || av['48x48'] || '' };
       }
-      await Promise.all(Array.from({ length: Math.min(CONCURRENCY, allLinkKeys.length) }, aworker));
+    };
+    // Page through a JQL query (enhanced-search endpoint), calling cb() for each issue.
+    async function jqlEach(jql, fields, cb) {
+      let token = null;
+      for (let guard = 0; guard < 30; guard++) {
+        const b = { jql, maxResults: 100, fields };
+        if (token) b.nextPageToken = token;
+        const r = await fetch(base + '/rest/api/3/search/jql', { method: 'POST', headers: { ...jheaders, 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
+        if (!r.ok) break;
+        const j = await r.json().catch(() => ({}));
+        (j.issues || []).forEach(cb);
+        if (j.isLast || !j.nextPageToken) break;
+        token = j.nextPageToken;
+      }
+    }
+    const chunk = (arr, n) => { const out = []; for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n)); return out; };
+    if (epicKeys.length) {
+      // Level 1: direct children of the epics (tasks / bugs / stories). parent -> epic mapping.
+      const childToEpic = {};
+      for (const grp of chunk(epicKeys, 50)) {
+        await jqlEach('parent in (' + grp.join(',') + ')', ['assignee', 'parent'], iss => {
+          const epic = iss.fields && iss.fields.parent && iss.fields.parent.key;
+          if (!epic) return;
+          childToEpic[iss.key] = epic;
+          addAssignee(epic, iss.fields.assignee);
+        });
+      }
+      // Level 2: sub-tasks of those children -> roll their assignee up to the epic.
+      const childKeys = Object.keys(childToEpic);
+      for (const grp of chunk(childKeys, 50)) {
+        await jqlEach('parent in (' + grp.join(',') + ')', ['assignee', 'parent'], iss => {
+          const parentKey = iss.fields && iss.fields.parent && iss.fields.parent.key;
+          const epic = childToEpic[parentKey];
+          addAssignee(epic, iss.fields && iss.fields.assignee);
+        });
+      }
     }
     results.forEach(r => {
       if (!r) return;
       const seen = new Set(), assignees = [];
-      (r.linkKeys || []).forEach(k => { const a = assigneeByKey[k]; if (a && !seen.has(a.accountId)) { seen.add(a.accountId); assignees.push(a); } });
+      (r.linkKeys || []).forEach(ek => {
+        const m = epicAssignees[ek]; if (!m) return;
+        Object.values(m).forEach(a => { if (!seen.has(a.accountId)) { seen.add(a.accountId); assignees.push(a); } });
+      });
       r.assignees = assignees;
       delete r.linkKeys;
     });
