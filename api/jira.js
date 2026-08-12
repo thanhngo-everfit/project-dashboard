@@ -229,14 +229,15 @@ export default async function handler(req, res) {
     // sub-tasks — NOT the Epic's own assignee. Resolve epicKey -> {accountId -> assignee}, then roll up
     // per idea (union of all its linked epics' child assignees).
     const epicKeys = [...new Set(results.flatMap(r => (r && r.linkKeys) || []))];
-    const epicAssignees = {};   // epicKey -> { accountId -> {accountId,name,avatar} }
-    const addAssignee = (epicKey, a) => {
+    const epicAssignees = {};   // epicKey -> { accountId -> {accountId,name,avatar,seconds} }
+    const addAssignee = (epicKey, a, seconds) => {
       if (!epicKey || !a || !a.accountId) return;
       const m = epicAssignees[epicKey] || (epicAssignees[epicKey] = {});
       if (!m[a.accountId]) {
         const av = a.avatarUrls || {};
-        m[a.accountId] = { accountId: a.accountId, name: a.displayName || '', avatar: av['32x32'] || av['24x24'] || av['48x48'] || '' };
+        m[a.accountId] = { accountId: a.accountId, name: a.displayName || '', avatar: av['32x32'] || av['24x24'] || av['48x48'] || '', seconds: 0 };
       }
+      m[a.accountId].seconds += (Number(seconds) || 0);   // each issue contributes its OWN logged time (no double-count)
     };
     // Page through a JQL query (enhanced-search endpoint), calling cb() for each issue.
     async function jqlEach(jql, fields, cb) {
@@ -257,31 +258,34 @@ export default async function handler(req, res) {
       // Level 1: direct children of the epics (tasks / bugs / stories). parent -> epic mapping.
       const childToEpic = {};
       for (const grp of chunk(epicKeys, 50)) {
-        await jqlEach('parent in (' + grp.join(',') + ')', ['assignee', 'parent'], iss => {
+        await jqlEach('parent in (' + grp.join(',') + ')', ['assignee', 'parent', 'timespent'], iss => {
           const epic = iss.fields && iss.fields.parent && iss.fields.parent.key;
           if (!epic) return;
           childToEpic[iss.key] = epic;
-          addAssignee(epic, iss.fields.assignee);
+          addAssignee(epic, iss.fields.assignee, iss.fields.timespent);
         });
       }
-      // Level 2: sub-tasks of those children -> roll their assignee up to the epic.
+      // Level 2: sub-tasks of those children -> roll their assignee + logged time up to the epic.
       const childKeys = Object.keys(childToEpic);
       for (const grp of chunk(childKeys, 50)) {
-        await jqlEach('parent in (' + grp.join(',') + ')', ['assignee', 'parent'], iss => {
+        await jqlEach('parent in (' + grp.join(',') + ')', ['assignee', 'parent', 'timespent'], iss => {
           const parentKey = iss.fields && iss.fields.parent && iss.fields.parent.key;
           const epic = childToEpic[parentKey];
-          addAssignee(epic, iss.fields && iss.fields.assignee);
+          addAssignee(epic, iss.fields && iss.fields.assignee, iss.fields && iss.fields.timespent);
         });
       }
     }
     results.forEach(r => {
       if (!r) return;
-      const seen = new Set(), assignees = [];
+      const acc = {};   // accountId -> {accountId,name,avatar,seconds} summed across this idea's epics
       (r.linkKeys || []).forEach(ek => {
         const m = epicAssignees[ek]; if (!m) return;
-        Object.values(m).forEach(a => { if (!seen.has(a.accountId)) { seen.add(a.accountId); assignees.push(a); } });
+        Object.values(m).forEach(a => {
+          if (!acc[a.accountId]) acc[a.accountId] = { accountId: a.accountId, name: a.name, avatar: a.avatar, seconds: 0 };
+          acc[a.accountId].seconds += a.seconds || 0;
+        });
       });
-      r.assignees = assignees;
+      r.assignees = Object.values(acc);
       delete r.linkKeys;
     });
     res.status(200).json({ results, syncedAt: Date.now(), fieldId, startFieldId, statusFieldId, estIds });

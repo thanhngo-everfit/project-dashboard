@@ -135,6 +135,26 @@
   .assignee-chip::before{content:'';position:absolute;bottom:calc(100% + 2px);left:50%;transform:translateX(-50%);
     border:5px solid transparent;border-top-color:#101828;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .1s;z-index:60;}
   .assignee-chip:hover::after,.assignee-chip:hover::before{opacity:1;visibility:visible;}
+  /* People view */
+  .ppl{padding:16px 20px 40px;max-width:980px;}
+  .ppl-sumline{font-size:12px;color:var(--muted);font-weight:600;margin:0 2px 14px;}
+  .ppl-card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(16,24,40,.06);}
+  .ppl-head{display:flex;align-items:center;gap:11px;margin-bottom:12px;}
+  .ppl-av{width:36px;height:36px;font-size:13px;flex:none;}
+  .ppl-name{font-size:15px;font-weight:800;color:var(--text);line-height:1.2;}
+  .ppl-sub{font-size:11.5px;color:var(--muted);font-weight:600;margin-top:1px;}
+  .ppl-total{margin-left:auto;font-size:13px;font-weight:800;color:#1849a9;background:#e0eaff;border:1px solid #c7d7fe;border-radius:999px;padding:3px 12px;white-space:nowrap;}
+  .ppl-projects{display:flex;flex-direction:column;gap:7px;}
+  .ppl-prow{display:grid;grid-template-columns:10px minmax(160px,1.4fr) minmax(90px,2fr) 54px;align-items:center;gap:10px;cursor:pointer;border-radius:8px;padding:3px 6px;}
+  .ppl-prow:hover{background:#f5f7fa;}
+  .ppl-dot{width:9px;height:9px;border-radius:50%;flex:none;}
+  .ppl-pname{font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .ppl-cat{font-size:11px;color:var(--muted);font-weight:600;margin-left:6px;}
+  .ppl-bar{position:relative;height:9px;border-radius:999px;background:#eef0f3;overflow:hidden;}
+  .ppl-bar>span{position:absolute;left:0;top:0;bottom:0;border-radius:999px;min-width:2px;}
+  .ppl-hrs{font-size:12px;font-weight:800;color:var(--text);text-align:right;font-variant-numeric:tabular-nums;}
+  .ppl-hrs.zero{color:#98a2b3;font-weight:600;}
+  @media (max-width:820px){ .ppl{padding:12px;} .ppl-prow{grid-template-columns:10px 1fr 46px;} .ppl-prow .ppl-bar{display:none;} }
   .assignee-av{width:22px;height:22px;border-radius:50%;object-fit:cover;border:1px solid #fff;box-shadow:0 0 0 1px var(--border);}
   .assignee-ini{width:22px;height:22px;border-radius:50%;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#fff;border:1px solid #fff;box-shadow:0 0 0 1px var(--border);}
   .links-line{display:flex;align-items:center;gap:5px;flex-wrap:wrap;}
@@ -553,7 +573,7 @@
   <div class="subbar">
     <span class="squad-name" id="squadName"></span>
     <input id="searchBox" class="searchbox" type="search" placeholder="Search projects…" autocomplete="off">
-    <div class="tagfilter-wrap" style="margin-left:6px;">
+    <div class="tagfilter-wrap" id="tagFilterWrap" style="margin-left:6px;">
       <span style="font-size:12px;color:var(--muted);font-weight:600;">Tag</span>
       <button id="tagFilterBtn" class="tagfilter">All tags</button>
       <div id="tagFilterMenu" class="tagfilter-menu" style="display:none"></div>
@@ -728,11 +748,12 @@ const VIRTUAL_VIEWS = [
   {id:'view:jon',  name:"Jon's Requests",  tag:"Jon's request", icon:'🏷️'},
   {id:'view:long', name:"Long's Requests", tag:"Long's request", icon:'🏷️'},
   {id:'view:marketing', name:'Marketing', listByEnd:true, icon:'📅'},
+  {id:'view:people', name:'People', byAssignee:true, icon:'👤'},
 ];
 function activeVirtual(){ return VIRTUAL_VIEWS.find(v=>v.id===state.activeSquad); }
 function inVirtual(){ return !!activeVirtual(); }
 // URL <-> active tab mapping (shareable ?tribe= & ?view= params)
-const VIEW_SLUGS = {'view:all':'all-squads','view:jon':'jon-request','view:long':'long-request','view:marketing':'marketing'};
+const VIEW_SLUGS = {'view:all':'all-squads','view:jon':'jon-request','view:long':'long-request','view:marketing':'marketing','view:people':'people'};
 let pendingViewSlug = null, pendingTribeSlug = null;
 function viewSlug(id){ return VIEW_SLUGS[id] || id; }   // real squads use their id
 function idFromSlug(slug){
@@ -1001,7 +1022,7 @@ function applyDesignSync(proj, startIso, endIso, status, est, figma, assignees){
   const st=status||'';
   if((proj.designStatus||'')!==st){ proj.designStatus=st; changed=true; }
   if(Array.isArray(assignees)){
-    const norm=a=>({accountId:a.accountId||'',name:a.name||'',avatar:a.avatar||''});
+    const norm=a=>({accountId:a.accountId||'',name:a.name||'',avatar:a.avatar||'',seconds:Number(a.seconds)||0});
     const next=assignees.map(norm);
     if(JSON.stringify(proj.assignees||[])!==JSON.stringify(next)){ proj.assignees=next; changed=true; }
   }
@@ -1065,7 +1086,8 @@ async function jiraSync(opts){
       const figma = Array.isArray(rec.figma)?rec.figma:[];
       const newFigma = figma.map(u=>normalizeUrl(u)).filter(u=>u && !(proj.docs||[]).includes(u));   // Figma links not already added
       const assignees = Array.isArray(rec.assignees)?rec.assignees:[];
-      const assigneeDiff = JSON.stringify((proj.assignees||[]).map(a=>a.accountId).sort())!==JSON.stringify(assignees.map(a=>a.accountId).sort());
+      const asgKey=list=>JSON.stringify((list||[]).map(a=>a.accountId+':'+(Number(a.seconds)||0)).sort());
+      const assigneeDiff = asgKey(proj.assignees)!==asgKey(assignees);
       if(!newStart && !end && !status && !hasEst && !newFigma.length && !assigneeDiff){ noData++; return; }   // nothing to sync for this project
       const existing=(proj.tasks||[]).find(x=>x.type==='design');
       const curStart=existing?(existing.start||''):'';
@@ -1388,7 +1410,7 @@ function seed(){
 
 function activeSquad(){
   const v=activeVirtual();
-  if(v){ if(v.listByEnd) return {id:v.id,name:v.name,projects:[],_virtual:true}; return buildVirtualSquad(v); }
+  if(v){ if(v.listByEnd||v.byAssignee) return {id:v.id,name:v.name,projects:[],_virtual:true}; return buildVirtualSquad(v); }
   const sqs=curSquads(); return sqs.find(s=>s.id===state.activeSquad)||sqs[0];
 }
 
@@ -1515,15 +1537,19 @@ function render(){
   // Marketing (release calendar) view: hide controls that don't apply (timeline zoom/view, jump-to-today, settings);
   // swap the Design-status filter for a Promotion filter here.
   const listView = !!(activeVirtual() && activeVirtual().listByEnd);
+  const peopleView = !!(activeVirtual() && activeVirtual().byAssignee);   // "People" view: only the search box applies
   const setDisp=(sel,show)=>{ const el=document.querySelector(sel); if(el) el.style.display = show?'':'none'; };
-  setDisp('#jumpToday', !listView);
-  setDisp('.settings-wrap', !listView);
-  setDisp('#viewToggle', !listView);
-  setDisp('#designFilterWrap', !listView);
-  setDisp('#releaseFilterWrap', !listView);
+  setDisp('#jumpToday', !listView && !peopleView);
+  setDisp('.settings-wrap', !listView && !peopleView);
+  setDisp('#viewToggle', !listView && !peopleView);
+  setDisp('#tagFilterWrap', !peopleView);
+  setDisp('#designFilterWrap', !listView && !peopleView);
+  setDisp('#releaseFilterWrap', !listView && !peopleView);
   setDisp('#promoFilterWrap', listView);
   setDisp('#categoryFilterWrap', listView);
-  setDisp('#teamFilterWrap', curSquads().length>1);   // only meaningful when the tribe has more than one team
+  setDisp('#teamFilterWrap', !peopleView && curSquads().length>1);   // only meaningful when the tribe has more than one team
+  if(peopleView) setDisp('#assigneeFilterWrap', false);   // renderAssigneeFilter may have shown it; hide in People view
+  { const sb=document.getElementById('searchBox'); if(sb) sb.placeholder = peopleView ? 'Search members…' : 'Search projects…'; }
   if(curSquads().length<=1 && (state.teamFilters||[]).length){ state.teamFilters=[]; }   // clear a stale filter
   renderGantt();
   syncUrl();
@@ -1822,7 +1848,7 @@ function renderTabs(){
     const tab=document.createElement('div');
     tab.className='tab tab-virtual'+(v.id===state.activeSquad?' active':'')+(isHidden(v.id)?' hidden-tab':'');
     tab.innerHTML='<span class="vt-ico">'+(v.icon||'🏷️')+'</span><span class="tname">'+esc(v.name)+'</span>';
-    tab.title=v.allSquads ? (v.name+' — every project from all squads') : v.listByEnd ? (v.name+' — all projects across squads, grouped by end date') : (v.name+' — all "'+v.tag+'" projects across squads');
+    tab.title=v.allSquads ? (v.name+' — every project from all squads') : v.listByEnd ? (v.name+' — all projects across squads, grouped by end date') : v.byAssignee ? (v.name+' — assignees across squads with hours logged per project') : (v.name+' — all "'+v.tag+'" projects across squads');
     if(isAdmin()) tab.appendChild(hideToggleBtn(v.id));
     tab.onclick=e=>{ if(e.target.classList.contains('hide-toggle'))return; state.activeSquad=v.id; render(); };
     bar.appendChild(tab);
@@ -1839,6 +1865,7 @@ function renderGantt(){
   const g=document.getElementById('gantt');
   const av=activeVirtual();
   if(av && av.listByEnd){ _forceJump=false; g.innerHTML=''; renderListByEnd(g); return; }
+  if(av && av.byAssignee){ _forceJump=false; g.innerHTML=''; renderByAssignee(g); return; }
   const squad=activeSquad();
   // "No design" chips only appear when the squad uses design somewhere; if every project has none, hide them all.
   curSquadHasDesign=(squad.projects||[]).some(cat=>(cat.phases||[]).some(ph=>(ph.tasks||[]).some(t=>t.type==='design')));
@@ -2012,6 +2039,62 @@ function renderListByEnd(g){
     });
     sec.appendChild(tbl);
     wrap.appendChild(sec);
+  });
+  g.appendChild(wrap);
+}
+// Logged seconds -> compact hours label ("2h", "2.5h", "45m", "0h").
+function fmtHours(sec){ sec=Number(sec)||0; if(sec<=0) return '0h'; if(sec<3600) return Math.round(sec/60)+'m'; return (Math.round(sec/360)/10)+'h'; }
+function personAvatarHTML(a){
+  const col=assigneeColor(a.accountId||a.name||''); const ini=esc(assigneeInitials(a.name));
+  return a.avatar
+    ? `<img class="assignee-av ppl-av" src="${esc(a.avatar)}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'"><span class="assignee-ini ppl-av" style="display:none;background:${col}">${ini}</span>`
+    : `<span class="assignee-ini ppl-av" style="display:inline-flex;background:${col}">${ini}</span>`;
+}
+// "People" view: one card per assignee across the tribe — the projects they're on and hours logged per project.
+function renderByAssignee(g){
+  const q=(state.search||'').trim().toLowerCase();
+  const people={};   // accountId -> {accountId,name,avatar,totalSec,projects:[]}
+  allProjects().forEach(({p,cat})=>{
+    // include completed projects too — hours already spent still count as effort
+    (p.assignees||[]).forEach(a=>{
+      if(!a||!a.accountId) return;
+      const m=people[a.accountId]||(people[a.accountId]={accountId:a.accountId,name:a.name||'Unknown',avatar:a.avatar||'',totalSec:0,projects:[]});
+      if(a.avatar&&!m.avatar) m.avatar=a.avatar;
+      if((!m.name||m.name==='Unknown')&&a.name) m.name=a.name;
+      const sec=Number(a.seconds)||0; m.totalSec+=sec;
+      m.projects.push({name:p.name, cat:cat.name, color:cat.color||'#cdb4f6', seconds:sec, done:!!p.done, label:projectDesignLabel(p), _p:p, _cat:cat});
+    });
+  });
+  let list=Object.values(people);
+  if(q) list=list.filter(m=>m.name.toLowerCase().includes(q));
+  list.sort((a,b)=> b.totalSec-a.totalSec || a.name.localeCompare(b.name));
+  const wrap=document.createElement('div'); wrap.className='ppl';
+  if(!list.length){ const em=document.createElement('div'); em.className='empty'; em.textContent = q ? 'No members match your search.' : 'No assignees yet — run a Jira sync to pull the people on each project’s delivery tickets.'; g.appendChild(em); return; }
+  const totalAll=list.reduce((s,m)=>s+m.totalSec,0);
+  const sum=document.createElement('div'); sum.className='ppl-sumline';
+  sum.textContent=list.length+' '+(list.length===1?'person':'people')+' · '+fmtHours(totalAll)+' logged total'+(q?' (filtered)':'');
+  wrap.appendChild(sum);
+  list.forEach(m=>{
+    m.projects.sort((a,b)=> b.seconds-a.seconds || a.name.localeCompare(b.name));
+    const maxSec=Math.max(1,...m.projects.map(p=>p.seconds));
+    const card=document.createElement('div'); card.className='ppl-card';
+    const head=document.createElement('div'); head.className='ppl-head';
+    head.innerHTML=`${personAvatarHTML(m)}<div class="ppl-id"><div class="ppl-name">${esc(m.name)}</div><div class="ppl-sub">${m.projects.length} project${m.projects.length>1?'s':''}</div></div><span class="ppl-total" title="Total logged time">${fmtHours(m.totalSec)}</span>`;
+    card.appendChild(head);
+    const proj=document.createElement('div'); proj.className='ppl-projects';
+    m.projects.forEach(pr=>{
+      const st=DESIGN_LABEL_STYLE[pr.label]||null;
+      const chip = pr.label ? `<span class="ppl-cat" style="color:${st?st.c:'#667085'}">${esc(pr.label)}</span>` : '';
+      const pct=Math.round((pr.seconds/maxSec)*100);
+      const row=document.createElement('div'); row.className='ppl-prow';
+      row.innerHTML=`<span class="ppl-dot" style="background:${pr.color}"></span>`+
+        `<span class="ppl-pname">${esc(pr.name)}<span class="ppl-cat">${esc(pr.cat)}</span>${chip}</span>`+
+        `<span class="ppl-bar"><span style="width:${pct}%;background:${pr.color}"></span></span>`+
+        `<span class="ppl-hrs${pr.seconds<=0?' zero':''}">${fmtHours(pr.seconds)}</span>`;
+      row.onclick=()=>openPhaseModal(pr._cat, pr._p);
+      proj.appendChild(row);
+    });
+    card.appendChild(proj); wrap.appendChild(card);
   });
   g.appendChild(wrap);
 }
