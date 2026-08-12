@@ -179,6 +179,19 @@ export default async function handler(req, res) {
     }
 
     const issues = Array.isArray(body.issues) ? body.issues.slice(0, 200) : [];
+    // Overall soft deadline: the design-field fetch (below) is the essential part; the assignee/worklog
+    // resolution is a bonus that must never make the whole request time out. Once we pass this deadline,
+    // the people phase stops and we return whatever we have.
+    const started = Date.now();
+    const PEOPLE_DEADLINE_MS = 8500;
+    const overDeadline = () => (Date.now() - started) > PEOPLE_DEADLINE_MS;
+    // fetch with a hard per-request timeout so one slow/hanging Jira call can't stall the whole function.
+    async function jfetch(url, opts, ms = 6000) {
+      const ac = new AbortController();
+      const t = setTimeout(() => ac.abort(), ms);
+      try { return await fetch(url, { ...(opts || {}), signal: ac.signal }); }
+      finally { clearTimeout(t); }
+    }
     // Fetch in parallel (bounded concurrency) so many linked projects don't blow the function timeout.
     const results = new Array(issues.length);
     const CONCURRENCY = 12;
@@ -193,7 +206,7 @@ export default async function handler(req, res) {
         try {
           const estFieldIds = EST_FIELDS.map(f => estIds[f.key]).filter(Boolean);
           const fieldsParam = [fieldId, startFieldId, statusFieldId, 'description', 'issuelinks', ...estFieldIds].filter(Boolean).join(',');
-          const r = await fetch(base + '/rest/api/3/issue/' + encodeURIComponent(key) + '?fields=' + encodeURIComponent(fieldsParam), { headers: jheaders });
+          const r = await jfetch(base + '/rest/api/3/issue/' + encodeURIComponent(key) + '?fields=' + encodeURIComponent(fieldsParam), { headers: jheaders });
           if (!r.ok) { results[i] = { id: it.id, key, error: 'http_' + r.status }; continue; }
           const j = await r.json();
           const f = (j && j.fields) || {};
@@ -257,7 +270,7 @@ export default async function handler(req, res) {
       for (let guard = 0; guard < 30; guard++) {
         const b = { jql, maxResults: 100, fields };
         if (token) b.nextPageToken = token;
-        const r = await fetch(base + '/rest/api/3/search/jql', { method: 'POST', headers: { ...jheaders, 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
+        const r = await jfetch(base + '/rest/api/3/search/jql', { method: 'POST', headers: { ...jheaders, 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
         if (!r.ok) break;
         const j = await r.json().catch(() => ({}));
         (j.issues || []).forEach(cb);
@@ -266,11 +279,12 @@ export default async function handler(req, res) {
       }
     }
     const chunk = (arr, n) => { const out = []; for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n)); return out; };
-    if (epicKeys.length) {
+    if (epicKeys.length && !overDeadline()) {
       const keyToEpic = {};   // every child task/bug + sub-task key -> its delivery epic
       const childToEpic = {};
       // Level 1: direct children of the epics (tasks / bugs / stories). Record assignee (timeline avatars).
       for (const grp of chunk(epicKeys, 50)) {
+        if (overDeadline()) break;
         await jqlEach('parent in (' + grp.join(',') + ')', ['assignee', 'parent'], iss => {
           const epic = iss.fields && iss.fields.parent && iss.fields.parent.key;
           if (!epic) return;
@@ -280,6 +294,7 @@ export default async function handler(req, res) {
       }
       // Level 2: sub-tasks of those children -> roll up to the epic.
       for (const grp of chunk(Object.keys(childToEpic), 50)) {
+        if (overDeadline()) break;
         await jqlEach('parent in (' + grp.join(',') + ')', ['assignee', 'parent'], iss => {
           const parentKey = iss.fields && iss.fields.parent && iss.fields.parent.key;
           const epic = childToEpic[parentKey];
@@ -298,10 +313,10 @@ export default async function handler(req, res) {
       let bi = 0;
       async function batchWorker() {
         while (true) {
-          const i = bi++; if (i >= batches.length) return;
+          const i = bi++; if (i >= batches.length || overDeadline()) return;
           const grp = batches[i];
           try {
-            const r = await fetch(base + '/rest/api/3/search', { method: 'POST', headers: { ...jheaders, 'Content-Type': 'application/json' }, body: JSON.stringify({ jql: 'key in (' + grp.join(',') + ')', maxResults: 100, fields: ['worklog'] }) });
+            const r = await jfetch(base + '/rest/api/3/search', { method: 'POST', headers: { ...jheaders, 'Content-Type': 'application/json' }, body: JSON.stringify({ jql: 'key in (' + grp.join(',') + ')', maxResults: 100, fields: ['worklog'] }) });
             if (r.ok) {
               const j = await r.json().catch(() => ({}));
               (j.issues || []).forEach(iss => {
@@ -320,12 +335,12 @@ export default async function handler(req, res) {
       let ui = 0;
       async function fullWorklog() {
         while (true) {
-          const i = ui++; if (i >= undercounted.length || i >= 60) return;
+          const i = ui++; if (i >= undercounted.length || i >= 60 || overDeadline()) return;
           const key = undercounted[i], epic = keyToEpic[key];
           try {
             let startAt = 0;
             for (let guard = 0; guard < 15; guard++) {
-              const r = await fetch(base + '/rest/api/3/issue/' + encodeURIComponent(key) + '/worklog?startAt=' + startAt + '&maxResults=100', { headers: jheaders });
+              const r = await jfetch(base + '/rest/api/3/issue/' + encodeURIComponent(key) + '/worklog?startAt=' + startAt + '&maxResults=100', { headers: jheaders });
               if (!r.ok) break;
               const j = await r.json().catch(() => ({}));
               const list = j.worklogs || [];
