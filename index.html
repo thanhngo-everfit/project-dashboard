@@ -1076,6 +1076,31 @@ async function jiraSync(opts){
                : 'Jira sync failed ('+r.status+')';
       if(!silent) setSync(msg,'bad'); console.warn('[Jira sync] failed', r.status, r.url, j); return;
     }
+    // People phase: fetch assignees + worklog-author hours for every delivery epic in SMALL batches
+    // (each server call is bounded so it can't time out) and aggregate — this returns COMPLETE data.
+    const epicSet=new Set(); (j.results||[]).forEach(rec=>{ (rec.linkKeys||[]).forEach(k=>epicSet.add(k)); });
+    const epicKeys=[...epicSet], epicPeople={};
+    if(epicKeys.length){
+      const batches=[]; for(let i=0;i<epicKeys.length;i+=25) batches.push(epicKeys.slice(i,i+25));
+      let done=0, bi=0;
+      async function pworker(){
+        while(true){
+          const idx=bi++; if(idx>=batches.length) return;
+          try{
+            const rr=await apiFetch('/api/jira',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'people', epics:batches[idx]})});
+            if(rr.ok){ const jj=await rr.json().catch(()=>({})); Object.assign(epicPeople, jj.people||{}); }
+          }catch(e){ /* skip this batch; a later sync will fill it */ }
+          done++; if(!silent) setSync('Syncing Jira… people '+Math.round(done/batches.length*100)+'%');
+        }
+      }
+      await Promise.all(Array.from({length:Math.min(4,batches.length)}, pworker));
+    }
+    // Union a project's linked epics -> its people (summing a person's seconds across epics).
+    const unionPeople=(linkKeys,field)=>{
+      const acc={};
+      (linkKeys||[]).forEach(ek=>{ const p=epicPeople[ek]; if(!p) return; (p[field]||[]).forEach(a=>{ if(!a||!a.accountId) return; if(!acc[a.accountId]) acc[a.accountId]={accountId:a.accountId,name:a.name||'',avatar:a.avatar||'',seconds:0}; acc[a.accountId].seconds+=Number(a.seconds)||0; }); });
+      return Object.values(acc);
+    };
     // Build the proposed-changes list; nothing is applied until the user confirms in the review popup.
     let noData=0, errored=0; const rows=[];
     (j.results||[]).forEach(rec=>{
@@ -1090,8 +1115,8 @@ async function jiraSync(opts){
       const hasEst = Object.keys(est).length>0;
       const figma = Array.isArray(rec.figma)?rec.figma:[];
       const newFigma = figma.map(u=>normalizeUrl(u)).filter(u=>u && !(proj.docs||[]).includes(u));   // Figma links not already added
-      const assignees = Array.isArray(rec.assignees)?rec.assignees:[];
-      const contributors = Array.isArray(rec.contributors)?rec.contributors:[];
+      const assignees = unionPeople(rec.linkKeys, 'assignees');
+      const contributors = unionPeople(rec.linkKeys, 'contributors');
       const asgKey=list=>JSON.stringify((list||[]).map(a=>a.accountId+':'+(Number(a.seconds)||0)).sort());
       const assigneeDiff = asgKey(proj.assignees)!==asgKey(assignees) || asgKey(proj.contributors)!==asgKey(contributors);
       if(!newStart && !end && !status && !hasEst && !newFigma.length && !assigneeDiff){ noData++; return; }   // nothing to sync for this project
@@ -1109,7 +1134,8 @@ async function jiraSync(opts){
         action: (!existing&&(newStart||end))?'Create':(changed?'Update':'No change'), changed});
     });
     // Diagnostics (console)
-    console.log('%c[Jira sync]','font-weight:bold','ETA:', j.fieldId, 'Start:', j.startFieldId, 'Status:', j.statusFieldId, 'Estimation:', j.estIds, 'LoggedTotal(s):', j.loggedTotal);
+    const loggedTotal=Object.values(epicPeople).reduce((s,p)=>s+((p.contributors||[]).reduce((n,a)=>n+(a.seconds||0),0)),0);
+    console.log('%c[Jira sync]','font-weight:bold','ETA:', j.fieldId, 'Start:', j.startFieldId, 'Status:', j.statusFieldId, 'Estimation:', j.estIds, 'epics:', epicKeys.length, 'LoggedTotal(s):', loggedTotal);
     console.table((j.results||[]).map(rec=>({ project:(targets[rec.id]&&targets[rec.id].proj.name)||'', key:rec.key,
       designStart:rec.designStart||'', designEnd:rec.designEnd||'', designStatus:rec.designStatus||'', estimation:JSON.stringify(rec.est||{}), error:rec.error||'' })));
     if(silent){

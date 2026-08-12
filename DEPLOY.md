@@ -129,8 +129,13 @@ those Epics** — the child tasks/bugs and their sub-tasks (via `parent in (...)
 own assignee. Their avatars show (deduped) under the project name on the timeline.
 
 The **People** view (👤 tab) is driven by **worklog authors** — the person who actually *logged* each
-hour (`/issue/{key}/worklog`), not the ticket assignee (often a lead/placeholder). It lists everyone
-who logged time, the projects they worked on, and hours per project. No config needed.
+hour, not the ticket assignee (often a lead/placeholder). It lists everyone who logged time, the
+projects they worked on, and hours per project. No config needed.
+
+To stay within the serverless function timeout while returning **complete** data, the sync is split:
+`action:'sync'` fetches design fields per idea and returns each idea's delivery-epic keys; the client
+then calls `action:'people'` in **small batches of epics** (bounded per call) and aggregates the
+assignees + worklog-author hours across all batches. No single request does enough work to time out.
 
 ### Auto-sync
 The dashboard also **auto-syncs from Jira every 15 minutes** for anyone who has it open

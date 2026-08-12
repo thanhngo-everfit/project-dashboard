@@ -129,7 +129,99 @@ export default async function handler(req, res) {
   const jheaders = { Authorization: auth, Accept: 'application/json' };
   const body = req.body || {};
 
+  // fetch with a hard per-request timeout so one slow/hanging Jira call can't stall the whole function.
+  async function jfetch(url, opts, ms = 8000) {
+    const ac = new AbortController();
+    const t = setTimeout(() => ac.abort(), ms);
+    try { return await fetch(url, { ...(opts || {}), signal: ac.signal }); }
+    finally { clearTimeout(t); }
+  }
+  const chunk = (arr, n) => { const out = []; for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n)); return out; };
+  // Page through a JQL query (enhanced-search endpoint), calling cb() for each issue.
+  async function jqlEach(jql, fields, cb) {
+    let token = null;
+    for (let guard = 0; guard < 30; guard++) {
+      const b = { jql, maxResults: 100, fields };
+      if (token) b.nextPageToken = token;
+      const r = await jfetch(base + '/rest/api/3/search/jql', { method: 'POST', headers: { ...jheaders, 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
+      if (!r.ok) break;
+      const j = await r.json().catch(() => ({}));
+      (j.issues || []).forEach(cb);
+      if (j.isLast || !j.nextPageToken) break;
+      token = j.nextPageToken;
+    }
+  }
+  // Resolve, for a (small) batch of delivery epics: who's ASSIGNED to the work inside them (child tasks/
+  // bugs + sub-tasks), and who LOGGED time (worklog authors) with seconds. The client calls this in
+  // batches so no single request is heavy — that keeps every call well under the function timeout while
+  // still returning complete data across all batches.
+  async function resolveEpicPeople(epicKeys) {
+    const epicAssignees = {}, epicContributors = {};
+    const addTo = (map, epicKey, a, seconds) => {
+      if (!epicKey || !a || !a.accountId) return;
+      const m = map[epicKey] || (map[epicKey] = {});
+      if (!m[a.accountId]) { const av = a.avatarUrls || {}; m[a.accountId] = { accountId: a.accountId, name: a.displayName || '', avatar: av['32x32'] || av['24x24'] || av['48x48'] || '', seconds: 0 }; }
+      m[a.accountId].seconds += (Number(seconds) || 0);
+    };
+    const keyToEpic = {}, childToEpic = {};
+    for (const grp of chunk(epicKeys, 50)) {
+      await jqlEach('parent in (' + grp.join(',') + ')', ['assignee', 'parent'], iss => {
+        const epic = iss.fields && iss.fields.parent && iss.fields.parent.key; if (!epic) return;
+        childToEpic[iss.key] = epic; keyToEpic[iss.key] = epic; addTo(epicAssignees, epic, iss.fields.assignee, 0);
+      });
+    }
+    for (const grp of chunk(Object.keys(childToEpic), 50)) {
+      await jqlEach('parent in (' + grp.join(',') + ')', ['assignee', 'parent'], iss => {
+        const pk = iss.fields && iss.fields.parent && iss.fields.parent.key; const epic = childToEpic[pk]; if (!epic) return;
+        keyToEpic[iss.key] = epic; addTo(epicAssignees, epic, iss.fields && iss.fields.assignee, 0);
+      });
+    }
+    // logged time -> worklog authors (batched: classic /search returns worklog entries inline)
+    const allKeys = Object.keys(keyToEpic);
+    const undercounted = [];
+    for (const grp of chunk(allKeys, 80)) {
+      try {
+        const r = await jfetch(base + '/rest/api/3/search', { method: 'POST', headers: { ...jheaders, 'Content-Type': 'application/json' }, body: JSON.stringify({ jql: 'key in (' + grp.join(',') + ')', maxResults: 100, fields: ['worklog'] }) });
+        if (r.ok) {
+          const j = await r.json().catch(() => ({}));
+          (j.issues || []).forEach(iss => {
+            const epic = keyToEpic[iss.key]; if (!epic) return;
+            const wlf = (iss.fields && iss.fields.worklog) || {}; const list = wlf.worklogs || [];
+            if ((wlf.total || 0) > list.length) { undercounted.push(iss.key); return; }
+            list.forEach(wl => addTo(epicContributors, epic, wl.author, wl.timeSpentSeconds));
+          });
+        }
+      } catch (e) { /* worklog best-effort */ }
+    }
+    for (const key of undercounted.slice(0, 150)) {   // tickets with a paged worklog list -> fetch fully
+      const epic = keyToEpic[key]; if (!epic) continue;
+      try {
+        let startAt = 0;
+        for (let g = 0; g < 25; g++) {
+          const r = await jfetch(base + '/rest/api/3/issue/' + encodeURIComponent(key) + '/worklog?startAt=' + startAt + '&maxResults=100', { headers: jheaders });
+          if (!r.ok) break;
+          const j = await r.json().catch(() => ({}));
+          const list = j.worklogs || []; list.forEach(wl => addTo(epicContributors, epic, wl.author, wl.timeSpentSeconds));
+          startAt += list.length; if (startAt >= (j.total || 0) || !list.length) break;
+        }
+      } catch (e) {}
+    }
+    return { epicAssignees, epicContributors };
+  }
+
   try {
+    // People phase (client-driven, small batches): given delivery-epic keys, return per-epic
+    // { assignees, contributors[+seconds] }. Bounded per call so it never times out; the client
+    // batches across all epics to get complete data.
+    if (body.action === 'people') {
+      const epics = [...new Set((Array.isArray(body.epics) ? body.epics : []).map(k => String(k || '').trim()).filter(Boolean))].slice(0, 60);
+      if (!epics.length) { res.status(200).json({ people: {} }); return; }
+      const { epicAssignees, epicContributors } = await resolveEpicPeople(epics);
+      const people = {};
+      epics.forEach(ek => { people[ek] = { assignees: Object.values(epicAssignees[ek] || {}), contributors: Object.values(epicContributors[ek] || {}) }; });
+      res.status(200).json({ people });
+      return;
+    }
     // list fields (helper to discover the Design ETA custom field id)
     if (body.action === 'fields') {
       const r = await fetch(base + '/rest/api/3/field', { headers: jheaders });
@@ -179,19 +271,9 @@ export default async function handler(req, res) {
     }
 
     const issues = Array.isArray(body.issues) ? body.issues.slice(0, 200) : [];
-    // Overall soft deadline: the design-field fetch (below) is the essential part; the assignee/worklog
-    // resolution is a bonus that must never make the whole request time out. Once we pass this deadline,
-    // the people phase stops and we return whatever we have.
-    const started = Date.now();
-    const PEOPLE_DEADLINE_MS = 8500;
-    const overDeadline = () => (Date.now() - started) > PEOPLE_DEADLINE_MS;
-    // fetch with a hard per-request timeout so one slow/hanging Jira call can't stall the whole function.
-    async function jfetch(url, opts, ms = 6000) {
-      const ac = new AbortController();
-      const t = setTimeout(() => ac.abort(), ms);
-      try { return await fetch(url, { ...(opts || {}), signal: ac.signal }); }
-      finally { clearTimeout(t); }
-    }
+    // Design-field fetch only. Assignee/worklog resolution is NOT done here — the client fetches it in
+    // small batches via action:'people' (keyed off the linkKeys we return), so the sync stays fast and
+    // returns complete data without ever hitting the function timeout.
     // Fetch in parallel (bounded concurrency) so many linked projects don't blow the function timeout.
     const results = new Array(issues.length);
     const CONCURRENCY = 12;
@@ -237,141 +319,8 @@ export default async function handler(req, res) {
       }
     }
     await Promise.all(Array.from({ length: Math.min(CONCURRENCY, issues.length) }, worker));
-
-    // Assignees come from the WORK INSIDE each linked delivery Epic — its child tasks/bugs and their
-    // sub-tasks — NOT the Epic's own assignee. Resolve epicKey -> {accountId -> assignee}, then roll up
-    // per idea (union of all its linked epics' child assignees).
-    const epicKeys = [...new Set(results.flatMap(r => (r && r.linkKeys) || []))];
-    const epicAssignees = {};   // epicKey -> { accountId -> {accountId,name,avatar,seconds} }
-    const addAssignee = (epicKey, a, seconds) => {
-      if (!epicKey || !a || !a.accountId) return;
-      const m = epicAssignees[epicKey] || (epicAssignees[epicKey] = {});
-      if (!m[a.accountId]) {
-        const av = a.avatarUrls || {};
-        m[a.accountId] = { accountId: a.accountId, name: a.displayName || '', avatar: av['32x32'] || av['24x24'] || av['48x48'] || '', seconds: 0 };
-      }
-      m[a.accountId].seconds += (Number(seconds) || 0);   // each issue contributes its OWN logged time (no double-count)
-    };
-    // Contributors = WORKLOG AUTHORS (who actually logged the hours), which is who "spent" the time —
-    // distinct from the ticket assignee (often a lead/placeholder). Powers the People view.
-    const epicContributors = {};   // epicKey -> { accountId -> {accountId,name,avatar,seconds} }
-    const addContributor = (epicKey, a, seconds) => {
-      if (!epicKey || !a || !a.accountId) return;
-      const m = epicContributors[epicKey] || (epicContributors[epicKey] = {});
-      if (!m[a.accountId]) {
-        const av = a.avatarUrls || {};
-        m[a.accountId] = { accountId: a.accountId, name: a.displayName || '', avatar: av['32x32'] || av['24x24'] || av['48x48'] || '', seconds: 0 };
-      }
-      m[a.accountId].seconds += (Number(seconds) || 0);
-    };
-    // Page through a JQL query (enhanced-search endpoint), calling cb() for each issue.
-    async function jqlEach(jql, fields, cb) {
-      let token = null;
-      for (let guard = 0; guard < 30; guard++) {
-        const b = { jql, maxResults: 100, fields };
-        if (token) b.nextPageToken = token;
-        const r = await jfetch(base + '/rest/api/3/search/jql', { method: 'POST', headers: { ...jheaders, 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
-        if (!r.ok) break;
-        const j = await r.json().catch(() => ({}));
-        (j.issues || []).forEach(cb);
-        if (j.isLast || !j.nextPageToken) break;
-        token = j.nextPageToken;
-      }
-    }
-    const chunk = (arr, n) => { const out = []; for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n)); return out; };
-    if (epicKeys.length && !overDeadline()) {
-      const keyToEpic = {};   // every child task/bug + sub-task key -> its delivery epic
-      const childToEpic = {};
-      // Level 1: direct children of the epics (tasks / bugs / stories). Record assignee (timeline avatars).
-      for (const grp of chunk(epicKeys, 50)) {
-        if (overDeadline()) break;
-        await jqlEach('parent in (' + grp.join(',') + ')', ['assignee', 'parent'], iss => {
-          const epic = iss.fields && iss.fields.parent && iss.fields.parent.key;
-          if (!epic) return;
-          childToEpic[iss.key] = epic; keyToEpic[iss.key] = epic;
-          addAssignee(epic, iss.fields.assignee, 0);
-        });
-      }
-      // Level 2: sub-tasks of those children -> roll up to the epic.
-      for (const grp of chunk(Object.keys(childToEpic), 50)) {
-        if (overDeadline()) break;
-        await jqlEach('parent in (' + grp.join(',') + ')', ['assignee', 'parent'], iss => {
-          const parentKey = iss.fields && iss.fields.parent && iss.fields.parent.key;
-          const epic = childToEpic[parentKey];
-          if (!epic) return;
-          keyToEpic[iss.key] = epic;
-          addAssignee(epic, iss.fields && iss.fields.assignee, 0);
-        });
-      }
-      // Logged time -> worklog authors. Read worklogs in batches (classic /search returns worklog entries
-      // inline) — one request per ~80 tickets run concurrently, so the function can't time out. Tickets
-      // with no worklogs contribute nothing. Tickets with more worklogs than the inline page are finished
-      // off individually below (bounded).
-      const allKeys = Object.keys(keyToEpic);
-      const batches = chunk(allKeys, 80);
-      const undercounted = [];
-      let bi = 0;
-      async function batchWorker() {
-        while (true) {
-          const i = bi++; if (i >= batches.length || overDeadline()) return;
-          const grp = batches[i];
-          try {
-            const r = await jfetch(base + '/rest/api/3/search', { method: 'POST', headers: { ...jheaders, 'Content-Type': 'application/json' }, body: JSON.stringify({ jql: 'key in (' + grp.join(',') + ')', maxResults: 100, fields: ['worklog'] }) });
-            if (r.ok) {
-              const j = await r.json().catch(() => ({}));
-              (j.issues || []).forEach(iss => {
-                const epic = keyToEpic[iss.key]; if (!epic) return;
-                const wlf = (iss.fields && iss.fields.worklog) || {};
-                const list = wlf.worklogs || [];
-                if ((wlf.total || 0) > list.length) { undercounted.push(iss.key); return; }   // page it fully below
-                list.forEach(wl => addContributor(epic, wl.author, wl.timeSpentSeconds));
-              });
-            }
-          } catch (e) { /* worklog is best-effort */ }
-        }
-      }
-      await Promise.all(Array.from({ length: Math.min(CONCURRENCY, batches.length) }, batchWorker));
-      // Finish off tickets whose worklog list was paged (rare) — bounded so we never risk a timeout.
-      let ui = 0;
-      async function fullWorklog() {
-        while (true) {
-          const i = ui++; if (i >= undercounted.length || i >= 60 || overDeadline()) return;
-          const key = undercounted[i], epic = keyToEpic[key];
-          try {
-            let startAt = 0;
-            for (let guard = 0; guard < 15; guard++) {
-              const r = await jfetch(base + '/rest/api/3/issue/' + encodeURIComponent(key) + '/worklog?startAt=' + startAt + '&maxResults=100', { headers: jheaders });
-              if (!r.ok) break;
-              const j = await r.json().catch(() => ({}));
-              const list = j.worklogs || [];
-              list.forEach(wl => addContributor(epic, wl.author, wl.timeSpentSeconds));
-              startAt += list.length;
-              if (startAt >= (j.total || 0) || !list.length) break;
-            }
-          } catch (e) {}
-        }
-      }
-      await Promise.all(Array.from({ length: Math.min(CONCURRENCY, undercounted.length) }, fullWorklog));
-    }
-    const unionByEpic = (map, linkKeys) => {   // sum a person's seconds across all of an idea's epics
-      const acc = {};
-      (linkKeys || []).forEach(ek => {
-        const m = map[ek]; if (!m) return;
-        Object.values(m).forEach(a => {
-          if (!acc[a.accountId]) acc[a.accountId] = { accountId: a.accountId, name: a.name, avatar: a.avatar, seconds: 0 };
-          acc[a.accountId].seconds += a.seconds || 0;
-        });
-      });
-      return Object.values(acc);
-    };
-    results.forEach(r => {
-      if (!r) return;
-      r.assignees = unionByEpic(epicAssignees, r.linkKeys);       // who's assigned (timeline avatars)
-      r.contributors = unionByEpic(epicContributors, r.linkKeys); // who logged hours (People view)
-      delete r.linkKeys;
-    });
-    const loggedTotal = results.reduce((s, r) => s + ((r && r.contributors) || []).reduce((n, a) => n + (a.seconds || 0), 0), 0);   // diagnostic
-    res.status(200).json({ results, syncedAt: Date.now(), fieldId, startFieldId, statusFieldId, estIds, loggedTotal });
+    // Each result carries linkKeys (its delivery-epic keys); the client uses them to drive action:'people'.
+    res.status(200).json({ results, syncedAt: Date.now(), fieldId, startFieldId, statusFieldId, estIds });
   } catch (e) {
     res.status(500).json({ error: 'server_error', detail: String((e && e.message) || e) });
   }
