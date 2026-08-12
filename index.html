@@ -2072,21 +2072,21 @@ function renderByAssignee(g){
   if(!list.length){ const em=document.createElement('div'); em.className='empty'; em.textContent = q ? 'No members match your search.' : 'No assignees yet — run a Jira sync to pull the people on each project’s delivery tickets.'; g.appendChild(em); return; }
   const totalAll=list.reduce((s,m)=>s+m.totalSec,0);
   const sum=document.createElement('div'); sum.className='ppl-sumline';
-  sum.textContent=list.length+' '+(list.length===1?'person':'people')+' · '+fmtHours(totalAll)+' logged total'+(q?' (filtered)':'');
+  sum.textContent=list.length+' '+(list.length===1?'person':'people')+' · '+fmtHours(totalAll)+' spent total'+(q?' (filtered)':'');
   wrap.appendChild(sum);
   list.forEach(m=>{
     m.projects.sort((a,b)=> b.seconds-a.seconds || a.name.localeCompare(b.name));
     const maxSec=Math.max(1,...m.projects.map(p=>p.seconds));
     const card=document.createElement('div'); card.className='ppl-card';
     const head=document.createElement('div'); head.className='ppl-head';
-    head.innerHTML=`${personAvatarHTML(m)}<div class="ppl-id"><div class="ppl-name">${esc(m.name)}</div><div class="ppl-sub">${m.projects.length} project${m.projects.length>1?'s':''}</div></div><span class="ppl-total" title="Total logged time">${fmtHours(m.totalSec)}</span>`;
+    head.innerHTML=`${personAvatarHTML(m)}<div class="ppl-id"><div class="ppl-name">${esc(m.name)}</div><div class="ppl-sub">${m.projects.length} project${m.projects.length>1?'s':''}</div></div><span class="ppl-total" title="Total time spent">${fmtHours(m.totalSec)}</span>`;
     card.appendChild(head);
     const proj=document.createElement('div'); proj.className='ppl-projects';
     m.projects.forEach(pr=>{
       const st=DESIGN_LABEL_STYLE[pr.label]||null;
       const chip = pr.label ? `<span class="ppl-cat" style="color:${st?st.c:'#667085'}">${esc(pr.label)}</span>` : '';
       const pct=Math.round((pr.seconds/maxSec)*100);
-      const row=document.createElement('div'); row.className='ppl-prow';
+      const row=document.createElement('div'); row.className='ppl-prow'; row.title='Time spent: '+fmtHours(pr.seconds);
       row.innerHTML=`<span class="ppl-dot" style="background:${pr.color}"></span>`+
         `<span class="ppl-pname">${esc(pr.name)}<span class="ppl-cat">${esc(pr.cat)}</span>${chip}</span>`+
         `<span class="ppl-bar"><span style="width:${pct}%;background:${pr.color}"></span></span>`+
