@@ -266,18 +266,6 @@ export default async function handler(req, res) {
       }
     }
     const chunk = (arr, n) => { const out = []; for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n)); return out; };
-    // Fetch logged time per issue key. Prefer the classic /search (reliably returns `timespent`);
-    // the enhanced /search/jql is used for structure/assignee but can omit time fields.
-    async function loggedSecondsByKey(keys, into) {
-      for (const grp of chunk(keys, 90)) {
-        try {
-          const r = await fetch(base + '/rest/api/3/search', { method: 'POST', headers: { ...jheaders, 'Content-Type': 'application/json' }, body: JSON.stringify({ jql: 'key in (' + grp.join(',') + ')', maxResults: 100, fields: ['timespent'] }) });
-          if (!r.ok) continue;
-          const j = await r.json().catch(() => ({}));
-          (j.issues || []).forEach(iss => { into[iss.key] = Number(iss.fields && iss.fields.timespent) || 0; });
-        } catch (e) { /* time is best-effort */ }
-      }
-    }
     if (epicKeys.length) {
       const keyToEpic = {};   // every child task/bug + sub-task key -> its delivery epic
       const childToEpic = {};
@@ -300,19 +288,43 @@ export default async function handler(req, res) {
           addAssignee(epic, iss.fields && iss.fields.assignee, 0);
         });
       }
-      // Logged time -> worklog authors. Only fetch worklogs for items that actually have logged time.
+      // Logged time -> worklog authors. Read worklogs in batches (classic /search returns worklog entries
+      // inline) — one request per ~80 tickets run concurrently, so the function can't time out. Tickets
+      // with no worklogs contribute nothing. Tickets with more worklogs than the inline page are finished
+      // off individually below (bounded).
       const allKeys = Object.keys(keyToEpic);
-      const secByKey = {};
-      await loggedSecondsByKey(allKeys, secByKey);
-      const timed = allKeys.filter(k => (secByKey[k] || 0) > 0).slice(0, 600);   // cap for the function budget
-      let wi = 0;
-      async function wlWorker() {
+      const batches = chunk(allKeys, 80);
+      const undercounted = [];
+      let bi = 0;
+      async function batchWorker() {
         while (true) {
-          const i = wi++; if (i >= timed.length) return;
-          const key = timed[i], epic = keyToEpic[key];
+          const i = bi++; if (i >= batches.length) return;
+          const grp = batches[i];
+          try {
+            const r = await fetch(base + '/rest/api/3/search', { method: 'POST', headers: { ...jheaders, 'Content-Type': 'application/json' }, body: JSON.stringify({ jql: 'key in (' + grp.join(',') + ')', maxResults: 100, fields: ['worklog'] }) });
+            if (r.ok) {
+              const j = await r.json().catch(() => ({}));
+              (j.issues || []).forEach(iss => {
+                const epic = keyToEpic[iss.key]; if (!epic) return;
+                const wlf = (iss.fields && iss.fields.worklog) || {};
+                const list = wlf.worklogs || [];
+                if ((wlf.total || 0) > list.length) { undercounted.push(iss.key); return; }   // page it fully below
+                list.forEach(wl => addContributor(epic, wl.author, wl.timeSpentSeconds));
+              });
+            }
+          } catch (e) { /* worklog is best-effort */ }
+        }
+      }
+      await Promise.all(Array.from({ length: Math.min(CONCURRENCY, batches.length) }, batchWorker));
+      // Finish off tickets whose worklog list was paged (rare) — bounded so we never risk a timeout.
+      let ui = 0;
+      async function fullWorklog() {
+        while (true) {
+          const i = ui++; if (i >= undercounted.length || i >= 60) return;
+          const key = undercounted[i], epic = keyToEpic[key];
           try {
             let startAt = 0;
-            for (let guard = 0; guard < 20; guard++) {
+            for (let guard = 0; guard < 15; guard++) {
               const r = await fetch(base + '/rest/api/3/issue/' + encodeURIComponent(key) + '/worklog?startAt=' + startAt + '&maxResults=100', { headers: jheaders });
               if (!r.ok) break;
               const j = await r.json().catch(() => ({}));
@@ -321,10 +333,10 @@ export default async function handler(req, res) {
               startAt += list.length;
               if (startAt >= (j.total || 0) || !list.length) break;
             }
-          } catch (e) { /* worklog is best-effort */ }
+          } catch (e) {}
         }
       }
-      await Promise.all(Array.from({ length: Math.min(CONCURRENCY, timed.length) }, wlWorker));
+      await Promise.all(Array.from({ length: Math.min(CONCURRENCY, undercounted.length) }, fullWorklog));
     }
     const unionByEpic = (map, linkKeys) => {   // sum a person's seconds across all of an idea's epics
       const acc = {};
