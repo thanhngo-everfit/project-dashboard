@@ -916,6 +916,7 @@ function migrate(s){
       if(!Array.isArray(proj.docs)) proj.docs=[];
       if(!Array.isArray(proj.teams) || !proj.teams.length) proj.teams=[sq.name];   // team(s) this project works for; defaults to its squad
       if(!Array.isArray(proj.assignees)) proj.assignees=[];   // assignees of linked delivery items (synced from Jira)
+      if(!Array.isArray(proj.contributors)) proj.contributors=[];   // worklog authors + logged seconds (People view)
       if(typeof proj.note!=='string') proj.note='';
       delete proj.color; delete proj.wip; delete proj.badge;   // color comes from the category now
       if(!Array.isArray(proj.tasks)) proj.tasks=[];
@@ -1017,14 +1018,18 @@ function jiraIssueKey(url){
   return m ? m[1].toUpperCase() : '';
 }
 // Apply a synced Jira row: set design status, and the design work start/end (create the task if either date exists).
-function applyDesignSync(proj, startIso, endIso, status, est, figma, assignees){
+function applyDesignSync(proj, startIso, endIso, status, est, figma, assignees, contributors){
   let changed=false;
   const st=status||'';
   if((proj.designStatus||'')!==st){ proj.designStatus=st; changed=true; }
+  const normPeople=list=>(list||[]).map(a=>({accountId:a.accountId||'',name:a.name||'',avatar:a.avatar||'',seconds:Number(a.seconds)||0}));
   if(Array.isArray(assignees)){
-    const norm=a=>({accountId:a.accountId||'',name:a.name||'',avatar:a.avatar||'',seconds:Number(a.seconds)||0});
-    const next=assignees.map(norm);
+    const next=normPeople(assignees);
     if(JSON.stringify(proj.assignees||[])!==JSON.stringify(next)){ proj.assignees=next; changed=true; }
+  }
+  if(Array.isArray(contributors)){
+    const next=normPeople(contributors);
+    if(JSON.stringify(proj.contributors||[])!==JSON.stringify(next)){ proj.contributors=next; changed=true; }
   }
   const e = est||{};
   if(JSON.stringify(proj.estimation||{})!==JSON.stringify(e)){ proj.estimation=e; changed=true; }
@@ -1086,8 +1091,9 @@ async function jiraSync(opts){
       const figma = Array.isArray(rec.figma)?rec.figma:[];
       const newFigma = figma.map(u=>normalizeUrl(u)).filter(u=>u && !(proj.docs||[]).includes(u));   // Figma links not already added
       const assignees = Array.isArray(rec.assignees)?rec.assignees:[];
+      const contributors = Array.isArray(rec.contributors)?rec.contributors:[];
       const asgKey=list=>JSON.stringify((list||[]).map(a=>a.accountId+':'+(Number(a.seconds)||0)).sort());
-      const assigneeDiff = asgKey(proj.assignees)!==asgKey(assignees);
+      const assigneeDiff = asgKey(proj.assignees)!==asgKey(assignees) || asgKey(proj.contributors)!==asgKey(contributors);
       if(!newStart && !end && !status && !hasEst && !newFigma.length && !assigneeDiff){ noData++; return; }   // nothing to sync for this project
       const existing=(proj.tasks||[]).find(x=>x.type==='design');
       const curStart=existing?(existing.start||''):'';
@@ -1099,7 +1105,7 @@ async function jiraSync(opts){
       const estDiff = JSON.stringify(proj.estimation||{})!==JSON.stringify(est);
       const changed = endDiff || startDiff || statusDiff || estDiff || newFigma.length>0 || assigneeDiff || (!existing && (newStart||end));
       const label = designStatusLabel(status, end||curEnd, newStart||curStart||'', proj.start||'');
-      rows.push({proj, key:rec.key, name:proj.name, curStart, curEnd, newStart, newEnd:end, newStatus:status, est, figma, newFigma, assignees, label,
+      rows.push({proj, key:rec.key, name:proj.name, curStart, curEnd, newStart, newEnd:end, newStatus:status, est, figma, newFigma, assignees, contributors, label,
         action: (!existing&&(newStart||end))?'Create':(changed?'Update':'No change'), changed});
     });
     // Diagnostics (console)
@@ -1109,7 +1115,7 @@ async function jiraSync(opts){
     if(silent){
       // auto-sync: apply every changed row straight away, then persist the new sync time
       let applied=0;
-      rows.forEach(r=>{ if(r.changed){ if(applyDesignSync(r.proj, r.newStart, r.newEnd, r.newStatus, r.est, r.figma, r.assignees)) applied++; } });
+      rows.forEach(r=>{ if(r.changed){ if(applyDesignSync(r.proj, r.newStart, r.newEnd, r.newStatus, r.est, r.figma, r.assignees, r.contributors)) applied++; } });
       state.lastJiraSync = j.syncedAt || Date.now();
       lastSyncedJSON=null;   // force a save so the sync time (and any applied changes) persist + debounce other viewers
       save(); renderJiraSync(); if(applied) render();
@@ -1143,12 +1149,13 @@ function openJiraReview(rows, syncedAt, stats){
     const estLine = estParts.length?`<div class="jr-dates">Estimation: <b>${esc(estParts.join(' · '))}</b></div>`:'';
     const figmaLine = (r.newFigma&&r.newFigma.length)?`<div class="jr-dates">+ ${r.newFigma.length} Figma link${r.newFigma.length>1?'s':''}</div>`:'';
     const asgLine = (r.assignees&&r.assignees.length)?`<div class="jr-dates">Assignees: <b>${esc(r.assignees.map(a=>a.name).filter(Boolean).join(', '))}</b></div>`:'';
+    const conLine = (r.contributors&&r.contributors.length)?`<div class="jr-dates">Logged: <b>${esc(r.contributors.map(a=>a.name+' '+fmtHours(a.seconds)).join(', '))}</b></div>`:'';
     const badgeCls = r.action==='Create'?'create':r.action==='Update'?'update':'nochange';
     return `<label class="jr-row ${r.changed?'':'nochange'}">
       <input type="checkbox" class="jr-cb" data-i="${i}" ${r.changed?'checked':''}>
       <span class="jr-main">
         <div><span class="jr-name">${esc(r.name)}</span> <span class="jr-key">${esc(r.key)}</span></div>
-        ${dateLine}${statusLine}${estLine}${figmaLine}${asgLine}
+        ${dateLine}${statusLine}${estLine}${figmaLine}${asgLine}${conLine}
       </span>
       <span class="jr-badge ${badgeCls}">${r.action}</span>
     </label>`;
@@ -1172,7 +1179,7 @@ function openJiraReview(rows, syncedAt, stats){
   modal.querySelector('#jr-cancel').onclick=closeModal;
   saveBtn.onclick=()=>{
     let applied=0;
-    cbs.forEach(c=>{ if(c.checked){ const r=rows[+c.dataset.i]; if(applyDesignSync(r.proj, r.newStart, r.newEnd, r.newStatus, r.est, r.figma, r.assignees)) applied++; } });
+    cbs.forEach(c=>{ if(c.checked){ const r=rows[+c.dataset.i]; if(applyDesignSync(r.proj, r.newStart, r.newEnd, r.newStatus, r.est, r.figma, r.assignees, r.contributors)) applied++; } });
     state.lastJiraSync = syncedAt || Date.now();
     lastSyncedJSON=null;   // force a save even if only the timestamp changed
     closeModal(); save(); renderJiraSync(); render();
@@ -2055,8 +2062,9 @@ function renderByAssignee(g){
   const q=(state.search||'').trim().toLowerCase();
   const people={};   // accountId -> {accountId,name,avatar,totalSec,projects:[]}
   allProjects().forEach(({p,cat})=>{
-    // include completed projects too — hours already spent still count as effort
-    (p.assignees||[]).forEach(a=>{
+    // include completed projects too — hours already spent still count as effort.
+    // Uses contributors = worklog authors (who logged the time), not the ticket assignee.
+    (p.contributors||[]).forEach(a=>{
       if(!a||!a.accountId) return;
       const m=people[a.accountId]||(people[a.accountId]={accountId:a.accountId,name:a.name||'Unknown',avatar:a.avatar||'',totalSec:0,projects:[]});
       if(a.avatar&&!m.avatar) m.avatar=a.avatar;
@@ -2069,7 +2077,7 @@ function renderByAssignee(g){
   if(q) list=list.filter(m=>m.name.toLowerCase().includes(q));
   list.sort((a,b)=> b.totalSec-a.totalSec || a.name.localeCompare(b.name));
   const wrap=document.createElement('div'); wrap.className='ppl';
-  if(!list.length){ const em=document.createElement('div'); em.className='empty'; em.textContent = q ? 'No members match your search.' : 'No assignees yet — run a Jira sync to pull the people on each project’s delivery tickets.'; g.appendChild(em); return; }
+  if(!list.length){ const em=document.createElement('div'); em.className='empty'; em.textContent = q ? 'No members match your search.' : 'No logged time yet — run a Jira sync to pull worklogs from each project’s delivery tickets.'; g.appendChild(em); return; }
   const totalAll=list.reduce((s,m)=>s+m.totalSec,0);
   const sum=document.createElement('div'); sum.className='ppl-sumline';
   sum.textContent=list.length+' '+(list.length===1?'person':'people')+' · '+fmtHours(totalAll)+' spent total'+(q?' (filtered)':'');

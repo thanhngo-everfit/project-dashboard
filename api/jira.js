@@ -239,6 +239,18 @@ export default async function handler(req, res) {
       }
       m[a.accountId].seconds += (Number(seconds) || 0);   // each issue contributes its OWN logged time (no double-count)
     };
+    // Contributors = WORKLOG AUTHORS (who actually logged the hours), which is who "spent" the time —
+    // distinct from the ticket assignee (often a lead/placeholder). Powers the People view.
+    const epicContributors = {};   // epicKey -> { accountId -> {accountId,name,avatar,seconds} }
+    const addContributor = (epicKey, a, seconds) => {
+      if (!epicKey || !a || !a.accountId) return;
+      const m = epicContributors[epicKey] || (epicContributors[epicKey] = {});
+      if (!m[a.accountId]) {
+        const av = a.avatarUrls || {};
+        m[a.accountId] = { accountId: a.accountId, name: a.displayName || '', avatar: av['32x32'] || av['24x24'] || av['48x48'] || '', seconds: 0 };
+      }
+      m[a.accountId].seconds += (Number(seconds) || 0);
+    };
     // Page through a JQL query (enhanced-search endpoint), calling cb() for each issue.
     async function jqlEach(jql, fields, cb) {
       let token = null;
@@ -267,49 +279,71 @@ export default async function handler(req, res) {
       }
     }
     if (epicKeys.length) {
-      const workItems = [];   // {key, epic, assignee} for every child task/bug + sub-task
-      const secByKey = {};    // key -> logged seconds (from /search/jql if present; classic /search fills the rest)
-      // Level 1: direct children of the epics (tasks / bugs / stories). parent -> epic mapping.
+      const keyToEpic = {};   // every child task/bug + sub-task key -> its delivery epic
       const childToEpic = {};
+      // Level 1: direct children of the epics (tasks / bugs / stories). Record assignee (timeline avatars).
       for (const grp of chunk(epicKeys, 50)) {
-        await jqlEach('parent in (' + grp.join(',') + ')', ['assignee', 'parent', 'timespent'], iss => {
+        await jqlEach('parent in (' + grp.join(',') + ')', ['assignee', 'parent'], iss => {
           const epic = iss.fields && iss.fields.parent && iss.fields.parent.key;
           if (!epic) return;
-          childToEpic[iss.key] = epic;
-          workItems.push({ key: iss.key, epic, assignee: iss.fields.assignee });
-          if (iss.fields.timespent != null) secByKey[iss.key] = Number(iss.fields.timespent) || 0;
+          childToEpic[iss.key] = epic; keyToEpic[iss.key] = epic;
+          addAssignee(epic, iss.fields.assignee, 0);
         });
       }
       // Level 2: sub-tasks of those children -> roll up to the epic.
-      const childKeys = Object.keys(childToEpic);
-      for (const grp of chunk(childKeys, 50)) {
-        await jqlEach('parent in (' + grp.join(',') + ')', ['assignee', 'parent', 'timespent'], iss => {
+      for (const grp of chunk(Object.keys(childToEpic), 50)) {
+        await jqlEach('parent in (' + grp.join(',') + ')', ['assignee', 'parent'], iss => {
           const parentKey = iss.fields && iss.fields.parent && iss.fields.parent.key;
           const epic = childToEpic[parentKey];
           if (!epic) return;
-          workItems.push({ key: iss.key, epic, assignee: iss.fields && iss.fields.assignee });
-          if (iss.fields && iss.fields.timespent != null) secByKey[iss.key] = Number(iss.fields.timespent) || 0;
+          keyToEpic[iss.key] = epic;
+          addAssignee(epic, iss.fields && iss.fields.assignee, 0);
         });
       }
-      // Fill logged time for any work item we didn't already get it for (classic /search endpoint).
-      const missing = [...new Set(workItems.map(w => w.key))].filter(k => secByKey[k] == null);
-      if (missing.length) await loggedSecondsByKey(missing, secByKey);
-      workItems.forEach(w => addAssignee(w.epic, w.assignee, secByKey[w.key] || 0));
+      // Logged time -> worklog authors. Only fetch worklogs for items that actually have logged time.
+      const allKeys = Object.keys(keyToEpic);
+      const secByKey = {};
+      await loggedSecondsByKey(allKeys, secByKey);
+      const timed = allKeys.filter(k => (secByKey[k] || 0) > 0).slice(0, 600);   // cap for the function budget
+      let wi = 0;
+      async function wlWorker() {
+        while (true) {
+          const i = wi++; if (i >= timed.length) return;
+          const key = timed[i], epic = keyToEpic[key];
+          try {
+            let startAt = 0;
+            for (let guard = 0; guard < 20; guard++) {
+              const r = await fetch(base + '/rest/api/3/issue/' + encodeURIComponent(key) + '/worklog?startAt=' + startAt + '&maxResults=100', { headers: jheaders });
+              if (!r.ok) break;
+              const j = await r.json().catch(() => ({}));
+              const list = j.worklogs || [];
+              list.forEach(wl => addContributor(epic, wl.author, wl.timeSpentSeconds));
+              startAt += list.length;
+              if (startAt >= (j.total || 0) || !list.length) break;
+            }
+          } catch (e) { /* worklog is best-effort */ }
+        }
+      }
+      await Promise.all(Array.from({ length: Math.min(CONCURRENCY, timed.length) }, wlWorker));
     }
-    results.forEach(r => {
-      if (!r) return;
-      const acc = {};   // accountId -> {accountId,name,avatar,seconds} summed across this idea's epics
-      (r.linkKeys || []).forEach(ek => {
-        const m = epicAssignees[ek]; if (!m) return;
+    const unionByEpic = (map, linkKeys) => {   // sum a person's seconds across all of an idea's epics
+      const acc = {};
+      (linkKeys || []).forEach(ek => {
+        const m = map[ek]; if (!m) return;
         Object.values(m).forEach(a => {
           if (!acc[a.accountId]) acc[a.accountId] = { accountId: a.accountId, name: a.name, avatar: a.avatar, seconds: 0 };
           acc[a.accountId].seconds += a.seconds || 0;
         });
       });
-      r.assignees = Object.values(acc);
+      return Object.values(acc);
+    };
+    results.forEach(r => {
+      if (!r) return;
+      r.assignees = unionByEpic(epicAssignees, r.linkKeys);       // who's assigned (timeline avatars)
+      r.contributors = unionByEpic(epicContributors, r.linkKeys); // who logged hours (People view)
       delete r.linkKeys;
     });
-    const loggedTotal = results.reduce((s, r) => s + ((r && r.assignees) || []).reduce((n, a) => n + (a.seconds || 0), 0), 0);   // diagnostic
+    const loggedTotal = results.reduce((s, r) => s + ((r && r.contributors) || []).reduce((n, a) => n + (a.seconds || 0), 0), 0);   // diagnostic
     res.status(200).json({ results, syncedAt: Date.now(), fieldId, startFieldId, statusFieldId, estIds, loggedTotal });
   } catch (e) {
     res.status(500).json({ error: 'server_error', detail: String((e && e.message) || e) });
