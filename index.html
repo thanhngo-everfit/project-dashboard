@@ -1103,7 +1103,7 @@ async function jiraSync(opts){
         action: (!existing&&(newStart||end))?'Create':(changed?'Update':'No change'), changed});
     });
     // Diagnostics (console)
-    console.log('%c[Jira sync]','font-weight:bold','ETA:', j.fieldId, 'Start:', j.startFieldId, 'Status:', j.statusFieldId, 'Estimation:', j.estIds);
+    console.log('%c[Jira sync]','font-weight:bold','ETA:', j.fieldId, 'Start:', j.startFieldId, 'Status:', j.statusFieldId, 'Estimation:', j.estIds, 'LoggedTotal(s):', j.loggedTotal);
     console.table((j.results||[]).map(rec=>({ project:(targets[rec.id]&&targets[rec.id].proj.name)||'', key:rec.key,
       designStart:rec.designStart||'', designEnd:rec.designEnd||'', designStatus:rec.designStatus||'', estimation:JSON.stringify(rec.est||{}), error:rec.error||'' })));
     if(silent){

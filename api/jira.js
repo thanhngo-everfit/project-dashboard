@@ -254,7 +254,21 @@ export default async function handler(req, res) {
       }
     }
     const chunk = (arr, n) => { const out = []; for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n)); return out; };
+    // Fetch logged time per issue key. Prefer the classic /search (reliably returns `timespent`);
+    // the enhanced /search/jql is used for structure/assignee but can omit time fields.
+    async function loggedSecondsByKey(keys, into) {
+      for (const grp of chunk(keys, 90)) {
+        try {
+          const r = await fetch(base + '/rest/api/3/search', { method: 'POST', headers: { ...jheaders, 'Content-Type': 'application/json' }, body: JSON.stringify({ jql: 'key in (' + grp.join(',') + ')', maxResults: 100, fields: ['timespent'] }) });
+          if (!r.ok) continue;
+          const j = await r.json().catch(() => ({}));
+          (j.issues || []).forEach(iss => { into[iss.key] = Number(iss.fields && iss.fields.timespent) || 0; });
+        } catch (e) { /* time is best-effort */ }
+      }
+    }
     if (epicKeys.length) {
+      const workItems = [];   // {key, epic, assignee} for every child task/bug + sub-task
+      const secByKey = {};    // key -> logged seconds (from /search/jql if present; classic /search fills the rest)
       // Level 1: direct children of the epics (tasks / bugs / stories). parent -> epic mapping.
       const childToEpic = {};
       for (const grp of chunk(epicKeys, 50)) {
@@ -262,18 +276,25 @@ export default async function handler(req, res) {
           const epic = iss.fields && iss.fields.parent && iss.fields.parent.key;
           if (!epic) return;
           childToEpic[iss.key] = epic;
-          addAssignee(epic, iss.fields.assignee, iss.fields.timespent);
+          workItems.push({ key: iss.key, epic, assignee: iss.fields.assignee });
+          if (iss.fields.timespent != null) secByKey[iss.key] = Number(iss.fields.timespent) || 0;
         });
       }
-      // Level 2: sub-tasks of those children -> roll their assignee + logged time up to the epic.
+      // Level 2: sub-tasks of those children -> roll up to the epic.
       const childKeys = Object.keys(childToEpic);
       for (const grp of chunk(childKeys, 50)) {
         await jqlEach('parent in (' + grp.join(',') + ')', ['assignee', 'parent', 'timespent'], iss => {
           const parentKey = iss.fields && iss.fields.parent && iss.fields.parent.key;
           const epic = childToEpic[parentKey];
-          addAssignee(epic, iss.fields && iss.fields.assignee, iss.fields && iss.fields.timespent);
+          if (!epic) return;
+          workItems.push({ key: iss.key, epic, assignee: iss.fields && iss.fields.assignee });
+          if (iss.fields && iss.fields.timespent != null) secByKey[iss.key] = Number(iss.fields.timespent) || 0;
         });
       }
+      // Fill logged time for any work item we didn't already get it for (classic /search endpoint).
+      const missing = [...new Set(workItems.map(w => w.key))].filter(k => secByKey[k] == null);
+      if (missing.length) await loggedSecondsByKey(missing, secByKey);
+      workItems.forEach(w => addAssignee(w.epic, w.assignee, secByKey[w.key] || 0));
     }
     results.forEach(r => {
       if (!r) return;
@@ -288,7 +309,8 @@ export default async function handler(req, res) {
       r.assignees = Object.values(acc);
       delete r.linkKeys;
     });
-    res.status(200).json({ results, syncedAt: Date.now(), fieldId, startFieldId, statusFieldId, estIds });
+    const loggedTotal = results.reduce((s, r) => s + ((r && r.assignees) || []).reduce((n, a) => n + (a.seconds || 0), 0), 0);   // diagnostic
+    res.status(200).json({ results, syncedAt: Date.now(), fieldId, startFieldId, statusFieldId, estIds, loggedTotal });
   } catch (e) {
     res.status(500).json({ error: 'server_error', detail: String((e && e.message) || e) });
   }
