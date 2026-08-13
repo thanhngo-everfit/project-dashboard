@@ -139,7 +139,7 @@
   .ppl{padding:16px 20px 40px;max-width:1300px;}
   .ppl-layout{display:flex;gap:24px;align-items:flex-start;}
   .ppl-main{flex:1;min-width:0;}
-  .ppl-side{flex:none;width:344px;position:sticky;top:12px;}
+  .ppl-side{flex:none;width:430px;position:sticky;top:12px;}
   .ppl-head{cursor:pointer;border-radius:9px;margin:-4px -6px 8px;padding:4px 6px 12px;}
   .ppl-head:hover{background:#f7f9fc;}
   .ppl-head.sel{background:#eef4ff;}
@@ -148,16 +148,24 @@
   .cal-title .cal-name{color:var(--text);}
   .cal-title .cal-sub{font-weight:600;color:var(--muted);font-size:11px;}
   .cal-empty{font-size:12px;color:var(--muted);padding:8px 2px;}
-  .cal-grid{display:flex;flex-direction:column;gap:4px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px;box-shadow:0 1px 3px rgba(16,24,40,.06);}
-  .cal-row{display:grid;grid-template-columns:40px repeat(7,1fr);gap:4px;align-items:stretch;}
-  .cal-row.cal-head{align-items:center;margin-bottom:2px;}
-  .cal-wk{font-size:10px;font-weight:700;color:var(--muted);display:flex;align-items:center;}
-  .cal-dh{font-size:9.5px;font-weight:800;color:#98a2b3;text-align:center;text-transform:uppercase;}
-  .cal-cell{min-height:38px;border-radius:7px;background:#f2f4f7;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;color:#98a2b3;}
-  .cal-cell.today{outline:2px solid #4c6fff;outline-offset:-2px;}
-  .cal-dnum{font-size:9.5px;font-weight:600;line-height:1;}
-  .cal-dh2{font-size:10px;font-weight:800;line-height:1;}
-  @media (max-width:900px){ .ppl-layout{flex-direction:column;} .ppl-side{width:100%;position:static;} }
+  /* horizontal day-bar calendar (days along the x-axis, scrolls sideways) */
+  .cal-h{overflow-x:auto;overflow-y:hidden;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 1px 3px rgba(16,24,40,.06);}
+  .cal-hin{display:flex;align-items:flex-end;gap:0;padding:12px 12px 8px;width:max-content;}
+  .cal-mon{position:relative;display:flex;}
+  .cal-mon+.cal-mon{margin-left:10px;border-left:1px solid #eef0f3;padding-left:10px;}
+  .cal-mon .cal-mlbl{position:absolute;top:-2px;left:0;font-size:9.5px;font-weight:800;color:#98a2b3;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;}
+  .cal-day{flex:none;width:26px;display:flex;flex-direction:column;align-items:center;gap:2px;padding-top:14px;}
+  .cal-day.wkstart{margin-left:5px;}
+  .cal-barwrap{height:76px;width:15px;display:flex;align-items:flex-end;}
+  .cal-bar{width:100%;border-radius:4px 4px 0 0;background:#7f9cff;min-height:2px;}
+  .cal-day.wknd .cal-bar{background:#d3dbf6;}
+  .cal-day.today .cal-bar{background:#1849a9;}
+  .cal-dval{font-size:8.5px;font-weight:800;color:#475467;height:11px;line-height:1;}
+  .cal-dnum{font-size:10px;font-weight:700;color:var(--text);line-height:1;}
+  .cal-day.today .cal-dnum{color:#4c6fff;}
+  .cal-wd{font-size:8px;font-weight:700;color:#98a2b3;text-transform:uppercase;line-height:1;}
+  .cal-day.wknd .cal-dnum,.cal-day.wknd .cal-wd{color:#b6bcc7;}
+  @media (max-width:1000px){ .ppl-layout{flex-direction:column;} .ppl-side{width:100%;position:static;} }
   .ppl-sumline{font-size:12px;color:var(--muted);font-weight:600;margin:0 2px 14px;}
   .ppl-card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(16,24,40,.06);}
   .ppl-head{display:flex;align-items:center;gap:11px;margin-bottom:12px;}
@@ -2244,29 +2252,32 @@ function renderDayCalendar(container, sel){
   const toISO=dt=>{ const y=dt.getFullYear(), m=String(dt.getMonth()+1).padStart(2,'0'), d=String(dt.getDate()).padStart(2,'0'); return y+'-'+m+'-'+d; };
   const parseD=s=>{ const [y,mo,d]=s.split('-').map(Number); return new Date(y,mo-1,d); };
   const addD=(dt,n)=>new Date(dt.getFullYear(),dt.getMonth(),dt.getDate()+n);
-  const mondayOf=dt=>addD(dt,-((dt.getDay()+6)%7));
   const maxSec=Math.max(...dates.map(d=>days[d]));
   const todayISO2=toISO(new Date());
-  const endMon=mondayOf(parseD(dates[dates.length-1]));
-  let startMon=mondayOf(parseD(dates[0]));
-  const N=16, totalWeeks=Math.round((endMon-startMon)/(7*864e5))+1;
-  if(totalWeeks>N) startMon=addD(endMon,-(N-1)*7);
-  const grid=document.createElement('div'); grid.className='cal-grid'; container.appendChild(grid);
-  const head=document.createElement('div'); head.className='cal-row cal-head';
-  head.innerHTML='<span class="cal-wk"></span>'+['Mo','Tu','We','Th','Fr','Sa','Su'].map(d=>`<span class="cal-dh">${d}</span>`).join('');
-  grid.appendChild(head);
-  for(let wkMon=new Date(endMon); wkMon>=startMon; wkMon=addD(wkMon,-7)){
-    const row=document.createElement('div'); row.className='cal-row';
-    let cells=`<span class="cal-wk">${esc(MONTHS[wkMon.getMonth()].slice(0,3)+' '+wkMon.getDate())}</span>`;
-    for(let i=0;i<7;i++){
-      const d=addD(wkMon,i), iso=toISO(d), sec=days[iso]||0, future=iso>todayISO2;
-      let style='';
-      if(sec>0){ const int=0.16+0.84*Math.min(1,sec/maxSec); style=`background:rgba(76,111,255,${int.toFixed(2)});color:${int>0.55?'#fff':'#1849a9'}`; }
-      else if(future){ style='opacity:.35'; }
-      cells+=`<span class="cal-cell${iso===todayISO2?' today':''}" style="${style}" title="${esc(iso+' · '+fmtHours(sec))}"><span class="cal-dnum">${d.getDate()}</span>${sec>0?`<span class="cal-dh2">${esc(fmtHours(sec))}</span>`:''}</span>`;
+  const WD=['Su','Mo','Tu','We','Th','Fr','Sa'];
+  // continuous days from the first to the last logged day (cap to the most recent ~112 days)
+  let start=parseD(dates[0]); const end=parseD(dates[dates.length-1]);
+  const maxDays=112; if((end-start)/864e5 > maxDays) start=addD(end,-maxDays);
+  const scroll=document.createElement('div'); scroll.className='cal-h';
+  const inner=document.createElement('div'); inner.className='cal-hin';
+  let curMon=null, monEl=null;
+  for(let d=new Date(start); d<=end; d=addD(d,1)){
+    const iso=toISO(d), sec=days[iso]||0, wd=d.getDay(), weekend=(wd===0||wd===6);
+    const monKey=d.getFullYear()+'-'+d.getMonth();
+    if(monKey!==curMon){ curMon=monKey; monEl=document.createElement('div'); monEl.className='cal-mon';
+      const lbl=document.createElement('div'); lbl.className='cal-mlbl'; lbl.textContent=MONTHS[d.getMonth()].slice(0,3)+' '+String(d.getFullYear()).slice(2); monEl.appendChild(lbl); inner.appendChild(monEl);
     }
-    row.innerHTML=cells; grid.appendChild(row);
+    const hpct=sec>0?Math.max(3,Math.round(sec/maxSec*100)):0;
+    const cell=document.createElement('div');
+    cell.className='cal-day'+(weekend?' wknd':'')+(iso===todayISO2?' today':'')+(wd===1?' wkstart':'');
+    cell.title=iso+' · '+fmtHours(sec);
+    cell.innerHTML=`<div class="cal-dval">${sec>0?esc(fmtHours(sec)):''}</div>`+
+      `<div class="cal-barwrap"><div class="cal-bar" style="height:${hpct}%"></div></div>`+
+      `<div class="cal-dnum">${d.getDate()}</div><div class="cal-wd">${WD[wd]}</div>`;
+    monEl.appendChild(cell);
   }
+  scroll.appendChild(inner); container.appendChild(scroll);
+  scroll.scrollLeft=scroll.scrollWidth;   // start at the most recent day
 }
 
 // x centered on today's day block (avg of the day's left and right edges)
