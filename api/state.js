@@ -14,6 +14,9 @@ const ALLOWED_DOMAIN = 'everfit.io';
 const ADMIN_EMAIL = 'thanhngo@everfit.io';   // only this user can add/remove squads
 const KEY = 'roadmap:state';
 const HKEY = 'roadmap:history';   // rolling list of prior versions (newest first), for rollback
+// Identifies the currently-deployed build. Serverless functions always run the latest deploy, so a
+// client whose stored version no longer matches this is running an old tab -> it should refresh.
+const VERSION = process.env.APP_VERSION || process.env.VERCEL_GIT_COMMIT_SHA || process.env.VERCEL_DEPLOYMENT_ID || '';
 
 // Works with either the native Vercel KV env vars or the Upstash Marketplace ones.
 const redis = new Redis({
@@ -66,7 +69,7 @@ export default async function handler(req, res) {
         return;
       }
       const record = await redis.get(KEY); // null if never written
-      res.status(200).json({ record: record || null });
+      res.status(200).json({ record: record || null, version: VERSION });
       return;
     }
 
@@ -129,6 +132,11 @@ export default async function handler(req, res) {
           res.status(403).json({ error: 'structure_change_forbidden' });
           return;
         }
+      }
+      // Preserve shared metadata that older clients don't send, so an old tab can't wipe it on save.
+      if (existing && existing.state && body.state && typeof body.state === 'object') {
+        if (body.state.people == null && existing.state.people) body.state.people = existing.state.people;
+        if (body.state.tagCreators == null && existing.state.tagCreators) body.state.tagCreators = existing.state.tagCreators;
       }
       // Snapshot the version we're about to replace so any bad save is recoverable (keep last 30).
       // Skip when only metadata changed (e.g. auto-sync bumping lastJiraSync with identical tribes) so

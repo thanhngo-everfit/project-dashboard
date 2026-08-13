@@ -166,6 +166,11 @@
   .cal-wd{font-size:8px;font-weight:700;color:#98a2b3;text-transform:uppercase;line-height:1;}
   .cal-day.wknd .cal-dnum,.cal-day.wknd .cal-wd{color:#b6bcc7;}
   @media (max-width:1000px){ .ppl-layout{flex-direction:column;} .ppl-side{width:100%;position:static;} }
+  .update-banner{position:fixed;top:0;left:0;right:0;z-index:99999;background:#b42318;color:#fff;font-size:13px;font-weight:600;
+    display:flex;align-items:center;justify-content:center;gap:16px;padding:10px 18px;box-shadow:0 2px 12px rgba(0,0,0,.25);text-align:center;}
+  .update-banner button{flex:none;background:#fff;color:#b42318;border:none;border-radius:8px;padding:6px 16px;font-weight:800;font-size:12px;cursor:pointer;}
+  .update-banner button:hover{background:#fee4e2;}
+  body.has-update-banner{padding-top:42px;}
   .ppl-controls{display:flex;align-items:center;gap:12px;margin:0 2px 14px;flex-wrap:wrap;}
   .ppl-sqf{font-size:12px;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:6px;}
   .ppl-sqf select{font-size:13px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;font-family:inherit;background:#fff;}
@@ -1058,9 +1063,28 @@ let dragTabId = null;          // squad id while dragging a tab to reorder
 function dataJSON(){ return JSON.stringify(state.tribes); }
 let saveBlocked = false;      // set when the server rejects a save as a wipe; stops auto-save until reload
 let initialLoadDone = false;  // don't push anything until the first server load has resolved
+let appVersion = null;        // the deploy version this tab loaded with (from the first /api/state response)
+let updateAvailable = false;  // true once the server reports a newer deploy -> pause saves + show refresh banner
+// Detect a newer deployment: the API always runs the latest build, so if its version changes from what
+// this tab first saw, this tab is stale. Pause all saving (so an old tab can't overwrite fresh data) and
+// prompt a refresh.
+function checkVersion(v){
+  if(!v || updateAvailable) return;
+  if(appVersion===null){ appVersion=v; return; }
+  if(v!==appVersion){ updateAvailable=true; saveBlocked=true; showUpdateBanner(); }
+}
+function showUpdateBanner(){
+  if(document.getElementById('updateBanner')) return;
+  document.body.classList.add('has-update-banner');
+  const b=document.createElement('div'); b.id='updateBanner'; b.className='update-banner';
+  b.innerHTML='<span>🔄 A new version of the dashboard is available. Editing is paused to protect your data — please refresh.</span><button id="ub_reload">Refresh now</button>';
+  document.body.appendChild(b);
+  document.getElementById('ub_reload').onclick=()=>location.reload();
+  setSync('New version — refresh', 'bad');
+}
 function save(){
   localStorage.setItem(STORE_KEY, JSON.stringify(state));   // full local cache incl. personal view
-  if(!idToken || saveBlocked || !initialLoadDone) return;   // never auto-save before we've seen the server copy
+  if(!idToken || saveBlocked || updateAvailable || !initialLoadDone) return;   // stale tab / not loaded -> never push
   if(dataJSON() === lastSyncedJSON) return;   // data unchanged (only view/UI changed) -> don't push
   scheduleSave();
 }
@@ -1462,6 +1486,7 @@ async function syncLoad(){
     if(r.status===401){ handleAuthExpired(); return; }
     if(r.ok){
       const j = await r.json();
+      checkVersion(j.version);
       const rec = j.record;
       if(rec && rec.state && (rec.state.tribes || rec.state.squads)){
         adoptRemoteData(migrate(rec.state), rec.updatedAt);
@@ -1499,12 +1524,13 @@ function adoptRemoteData(data, updatedAt){
 async function pollRemote(){
   if(!idToken || busy) return;
   if(modalBg.classList.contains('open')) return;     // editing -> don't interrupt
-  if(dataJSON() !== lastSyncedJSON) return;           // local data edits pending -> our save wins
   try{
     const r = await apiFetch('/api/state', {method:'GET'});
     if(r.status===401){ handleAuthExpired(); return; }
     if(!r.ok) return;
     const j = await r.json();
+    checkVersion(j.version);                          // detect a new deploy even while we hold local edits
+    if(dataJSON() !== lastSyncedJSON) return;         // local data edits pending -> don't adopt over them
     const rec = j.record;
     if(rec && rec.state && (rec.state.tribes || rec.state.squads) && rec.updatedAt > baselineUpdatedAt){
       adoptRemoteData(migrate(rec.state), rec.updatedAt);
