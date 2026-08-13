@@ -184,12 +184,12 @@ export default async function handler(req, res) {
     // client controls the batch size, so this is always bounded and never times out.
     if (body.action === 'worklogs') {
       const keys = [...new Set((Array.isArray(body.keys) ? body.keys : []).map(k => String(k || '').trim()).filter(Boolean))].slice(0, 60);
-      const logged = {}, days = {};
+      const logged = {};
       let ki = 0;
       async function wworker() {
         while (true) {
           const i = ki++; if (i >= keys.length) return;
-          const key = keys[i], byId = {}, byDay = {};
+          const key = keys[i], byId = {};   // accountId -> { ..person, seconds, days:{YYYY-MM-DD:seconds} }
           try {
             let startAt = 0;
             for (let g = 0; g < 25; g++) {
@@ -198,20 +198,21 @@ export default async function handler(req, res) {
               const j = await r.json().catch(() => ({}));
               const list = j.worklogs || [];
               list.forEach(wl => {
+                const a = wl.author; if (!a || !a.accountId) return;
                 const secs = Number(wl.timeSpentSeconds) || 0;
-                const a = wl.author; if (a && a.accountId) { if (!byId[a.accountId]) byId[a.accountId] = { ...person(a), seconds: 0 }; byId[a.accountId].seconds += secs; }
-                const d = String(wl.started || '').slice(0, 10);   // worklog date (YYYY-MM-DD) for the calendar
-                if (/^\d{4}-\d{2}-\d{2}$/.test(d)) byDay[d] = (byDay[d] || 0) + secs;
+                const e = byId[a.accountId] || (byId[a.accountId] = { ...person(a), seconds: 0, days: {} });
+                e.seconds += secs;
+                const d = String(wl.started || '').slice(0, 10);   // the day this worklog was logged for
+                if (/^\d{4}-\d{2}-\d{2}$/.test(d)) e.days[d] = (e.days[d] || 0) + secs;
               });
               startAt += list.length; if (startAt >= (j.total || 0) || !list.length) break;
             }
           } catch (e) { /* skip this ticket */ }
           logged[key] = Object.values(byId);
-          days[key] = byDay;
         }
       }
       await Promise.all(Array.from({ length: Math.min(12, keys.length) }, wworker));
-      res.status(200).json({ logged, days });
+      res.status(200).json({ logged });
       return;
     }
     // list fields (helper to discover the Design ETA custom field id)
