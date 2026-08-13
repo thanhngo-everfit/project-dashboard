@@ -136,7 +136,23 @@
     border:5px solid transparent;border-top-color:#101828;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .1s;z-index:60;}
   .assignee-chip:hover::after,.assignee-chip:hover::before{opacity:1;visibility:visible;}
   /* People view */
-  .ppl{padding:16px 20px 40px;max-width:980px;}
+  .ppl{padding:16px 20px 40px;max-width:1300px;}
+  .ppl-layout{display:flex;gap:24px;align-items:flex-start;}
+  .ppl-main{flex:1;min-width:0;}
+  .ppl-side{flex:none;width:344px;position:sticky;top:12px;}
+  .cal-title{font-size:13px;font-weight:800;color:var(--text);margin:2px 2px 10px;}
+  .cal-title .cal-sub{font-weight:600;color:var(--muted);font-size:11px;margin-left:6px;}
+  .cal-empty{font-size:12px;color:var(--muted);padding:8px 2px;}
+  .cal-grid{display:flex;flex-direction:column;gap:4px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px;box-shadow:0 1px 3px rgba(16,24,40,.06);}
+  .cal-row{display:grid;grid-template-columns:40px repeat(7,1fr);gap:4px;align-items:stretch;}
+  .cal-row.cal-head{align-items:center;margin-bottom:2px;}
+  .cal-wk{font-size:10px;font-weight:700;color:var(--muted);display:flex;align-items:center;}
+  .cal-dh{font-size:9.5px;font-weight:800;color:#98a2b3;text-align:center;text-transform:uppercase;}
+  .cal-cell{min-height:38px;border-radius:7px;background:#f2f4f7;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;color:#98a2b3;}
+  .cal-cell.today{outline:2px solid #4c6fff;outline-offset:-2px;}
+  .cal-dnum{font-size:9.5px;font-weight:600;line-height:1;}
+  .cal-dh2{font-size:10px;font-weight:800;line-height:1;}
+  @media (max-width:900px){ .ppl-layout{flex-direction:column;} .ppl-side{width:100%;position:static;} }
   .ppl-sumline{font-size:12px;color:var(--muted);font-weight:600;margin:0 2px 14px;}
   .ppl-card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(16,24,40,.06);}
   .ppl-head{display:flex;align-items:center;gap:11px;margin-bottom:12px;}
@@ -917,6 +933,7 @@ function migrate(s){
       if(!Array.isArray(proj.teams) || !proj.teams.length) proj.teams=[sq.name];   // team(s) this project works for; defaults to its squad
       if(!Array.isArray(proj.assignees)) proj.assignees=[];   // assignees of linked delivery items (synced from Jira)
       if(!Array.isArray(proj.contributors)) proj.contributors=[];   // worklog authors + logged seconds (People view)
+      if(!proj.dayTotals || typeof proj.dayTotals!=='object' || Array.isArray(proj.dayTotals)) proj.dayTotals={};   // team seconds logged per day (calendar)
       if(typeof proj.note!=='string') proj.note='';
       delete proj.color; delete proj.wip; delete proj.badge;   // color comes from the category now
       if(!Array.isArray(proj.tasks)) proj.tasks=[];
@@ -1018,7 +1035,7 @@ function jiraIssueKey(url){
   return m ? m[1].toUpperCase() : '';
 }
 // Apply a synced Jira row: set design status, and the design work start/end (create the task if either date exists).
-function applyDesignSync(proj, startIso, endIso, status, est, figma, assignees, contributors){
+function applyDesignSync(proj, startIso, endIso, status, est, figma, assignees, contributors, dayTotals){
   let changed=false;
   const st=status||'';
   if((proj.designStatus||'')!==st){ proj.designStatus=st; changed=true; }
@@ -1030,6 +1047,10 @@ function applyDesignSync(proj, startIso, endIso, status, est, figma, assignees, 
   if(Array.isArray(contributors)){
     const next=normPeople(contributors);
     if(JSON.stringify(proj.contributors||[])!==JSON.stringify(next)){ proj.contributors=next; changed=true; }
+  }
+  if(dayTotals && typeof dayTotals==='object'){
+    const stable=o=>JSON.stringify(Object.fromEntries(Object.entries(o||{}).sort()));
+    if(stable(proj.dayTotals)!==stable(dayTotals)){ proj.dayTotals=dayTotals; changed=true; }
   }
   const e = est||{};
   if(JSON.stringify(proj.estimation||{})!==JSON.stringify(e)){ proj.estimation=e; changed=true; }
@@ -1089,6 +1110,7 @@ async function jiraSync(opts){
     const epicKeys=[...epicSet];
     const epicAssignees={};           // epicKey -> [{accountId,name,avatar}]
     const epicContributors={};        // epicKey -> {accountId -> {..,seconds}}
+    const epicDays={};                // epicKey -> {YYYY-MM-DD -> seconds} (team, for the calendar)
     const ticketToEpic={}, ticketList=[]; let sawTs=false;
     if(epicKeys.length){
       if(!silent) setSync('Syncing Jira… people');
@@ -1118,18 +1140,29 @@ async function jiraSync(opts){
               const m=epicContributors[epic]||(epicContributors[epic]={});
               (authors||[]).forEach(a=>{ if(!a||!a.accountId) return; if(!m[a.accountId]) m[a.accountId]={accountId:a.accountId,name:a.name||'',avatar:a.avatar||'',seconds:0}; m[a.accountId].seconds+=Number(a.seconds)||0; });
             });
+            Object.entries(jj.days||{}).forEach(([key,byDay])=>{
+              const epic=ticketToEpic[key]; if(!epic) return;
+              const m=epicDays[epic]||(epicDays[epic]={});
+              Object.entries(byDay||{}).forEach(([d,s])=>{ m[d]=(m[d]||0)+(Number(s)||0); });
+            });
           }
         }catch(e){}
         e2++; if(!silent) setSync('Syncing Jira… people '+(40+Math.round(e2/(wb.length||1)*60))+'%');
       });
     }
     const epicPeople={};
-    epicKeys.forEach(ek=>{ epicPeople[ek]={ assignees: epicAssignees[ek]||[], contributors: Object.values(epicContributors[ek]||{}) }; });
+    epicKeys.forEach(ek=>{ epicPeople[ek]={ assignees: epicAssignees[ek]||[], contributors: Object.values(epicContributors[ek]||{}), days: epicDays[ek]||{} }; });
     // Union a project's linked epics -> its people (summing a person's seconds across epics).
     const unionPeople=(linkKeys,field)=>{
       const acc={};
       (linkKeys||[]).forEach(ek=>{ const p=epicPeople[ek]; if(!p) return; (p[field]||[]).forEach(a=>{ if(!a||!a.accountId) return; if(!acc[a.accountId]) acc[a.accountId]={accountId:a.accountId,name:a.name||'',avatar:a.avatar||'',seconds:0}; acc[a.accountId].seconds+=Number(a.seconds)||0; }); });
       return Object.values(acc);
+    };
+    // Union a project's linked epics -> team seconds logged per day.
+    const unionDays=(linkKeys)=>{
+      const acc={};
+      (linkKeys||[]).forEach(ek=>{ const p=epicPeople[ek]; if(!p) return; Object.entries(p.days||{}).forEach(([d,s])=>{ acc[d]=(acc[d]||0)+(Number(s)||0); }); });
+      return acc;
     };
     // Build the proposed-changes list; nothing is applied until the user confirms in the review popup.
     let noData=0, errored=0; const rows=[];
@@ -1147,8 +1180,10 @@ async function jiraSync(opts){
       const newFigma = figma.map(u=>normalizeUrl(u)).filter(u=>u && !(proj.docs||[]).includes(u));   // Figma links not already added
       const assignees = unionPeople(rec.linkKeys, 'assignees');
       const contributors = unionPeople(rec.linkKeys, 'contributors');
+      const dayTotals = unionDays(rec.linkKeys);
       const asgKey=list=>JSON.stringify((list||[]).map(a=>a.accountId+':'+(Number(a.seconds)||0)).sort());
-      const assigneeDiff = asgKey(proj.assignees)!==asgKey(assignees) || asgKey(proj.contributors)!==asgKey(contributors);
+      const stableObj=o=>JSON.stringify(Object.fromEntries(Object.entries(o||{}).sort()));
+      const assigneeDiff = asgKey(proj.assignees)!==asgKey(assignees) || asgKey(proj.contributors)!==asgKey(contributors) || stableObj(proj.dayTotals)!==stableObj(dayTotals);
       if(!newStart && !end && !status && !hasEst && !newFigma.length && !assigneeDiff){ noData++; return; }   // nothing to sync for this project
       const existing=(proj.tasks||[]).find(x=>x.type==='design');
       const curStart=existing?(existing.start||''):'';
@@ -1160,7 +1195,7 @@ async function jiraSync(opts){
       const estDiff = JSON.stringify(proj.estimation||{})!==JSON.stringify(est);
       const changed = endDiff || startDiff || statusDiff || estDiff || newFigma.length>0 || assigneeDiff || (!existing && (newStart||end));
       const label = designStatusLabel(status, end||curEnd, newStart||curStart||'', proj.start||'');
-      rows.push({proj, key:rec.key, name:proj.name, curStart, curEnd, newStart, newEnd:end, newStatus:status, est, figma, newFigma, assignees, contributors, label,
+      rows.push({proj, key:rec.key, name:proj.name, curStart, curEnd, newStart, newEnd:end, newStatus:status, est, figma, newFigma, assignees, contributors, dayTotals, label,
         action: (!existing&&(newStart||end))?'Create':(changed?'Update':'No change'), changed});
     });
     // Diagnostics (console)
@@ -1171,7 +1206,7 @@ async function jiraSync(opts){
     if(silent){
       // auto-sync: apply every changed row straight away, then persist the new sync time
       let applied=0;
-      rows.forEach(r=>{ if(r.changed){ if(applyDesignSync(r.proj, r.newStart, r.newEnd, r.newStatus, r.est, r.figma, r.assignees, r.contributors)) applied++; } });
+      rows.forEach(r=>{ if(r.changed){ if(applyDesignSync(r.proj, r.newStart, r.newEnd, r.newStatus, r.est, r.figma, r.assignees, r.contributors, r.dayTotals)) applied++; } });
       state.lastJiraSync = j.syncedAt || Date.now();
       lastSyncedJSON=null;   // force a save so the sync time (and any applied changes) persist + debounce other viewers
       save(); renderJiraSync(); if(applied) render();
@@ -1235,7 +1270,7 @@ function openJiraReview(rows, syncedAt, stats){
   modal.querySelector('#jr-cancel').onclick=closeModal;
   saveBtn.onclick=()=>{
     let applied=0;
-    cbs.forEach(c=>{ if(c.checked){ const r=rows[+c.dataset.i]; if(applyDesignSync(r.proj, r.newStart, r.newEnd, r.newStatus, r.est, r.figma, r.assignees, r.contributors)) applied++; } });
+    cbs.forEach(c=>{ if(c.checked){ const r=rows[+c.dataset.i]; if(applyDesignSync(r.proj, r.newStart, r.newEnd, r.newStatus, r.est, r.figma, r.assignees, r.contributors, r.dayTotals)) applied++; } });
     state.lastJiraSync = syncedAt || Date.now();
     lastSyncedJSON=null;   // force a save even if only the timestamp changed
     closeModal(); save(); renderJiraSync(); render();
@@ -2129,15 +2164,22 @@ function renderByAssignee(g){
       m.projects.push({name:p.name, cat:cat.name, color:cat.color||'#cdb4f6', seconds:sec, done:!!p.done, label:projectDesignLabel(p), _p:p, _cat:cat});
     });
   });
-  let list=Object.values(people);
+  const allList=Object.values(people);
+  const wrap=document.createElement('div'); wrap.className='ppl';
+  if(!allList.length){ const em=document.createElement('div'); em.className='empty'; em.textContent = 'No logged time yet — run a Jira sync to pull worklogs from each project’s delivery tickets.'; wrap.appendChild(em); g.appendChild(wrap); return; }
+  let list=allList.slice();
   if(q) list=list.filter(m=>m.name.toLowerCase().includes(q));
   list.sort((a,b)=> b.totalSec-a.totalSec || a.name.localeCompare(b.name));
-  const wrap=document.createElement('div'); wrap.className='ppl';
-  if(!list.length){ const em=document.createElement('div'); em.className='empty'; em.textContent = q ? 'No members match your search.' : 'No logged time yet — run a Jira sync to pull worklogs from each project’s delivery tickets.'; g.appendChild(em); return; }
+  const layout=document.createElement('div'); layout.className='ppl-layout';
+  const main=document.createElement('div'); main.className='ppl-main';
+  const side=document.createElement('div'); side.className='ppl-side';
+  renderTeamCalendar(side);   // whole-team daily hours, week grid
+  layout.appendChild(main); layout.appendChild(side); wrap.appendChild(layout);
   const totalAll=list.reduce((s,m)=>s+m.totalSec,0);
   const sum=document.createElement('div'); sum.className='ppl-sumline';
   sum.textContent=list.length+' '+(list.length===1?'person':'people')+' · '+fmtHours(totalAll)+' spent total'+(q?' (filtered)':'');
-  wrap.appendChild(sum);
+  main.appendChild(sum);
+  if(!list.length){ const em=document.createElement('div'); em.className='cal-empty'; em.textContent='No members match your search.'; main.appendChild(em); }
   list.forEach(m=>{
     m.projects.sort((a,b)=> b.seconds-a.seconds || a.name.localeCompare(b.name));
     const maxSec=Math.max(1,...m.projects.map(p=>p.seconds));
@@ -2158,9 +2200,51 @@ function renderByAssignee(g){
       row.onclick=()=>openPhaseModal(pr._cat, pr._p);
       proj.appendChild(row);
     });
-    card.appendChild(proj); wrap.appendChild(card);
+    card.appendChild(proj); main.appendChild(card);
   });
   g.appendChild(wrap);
+}
+// Whole-team hours logged per day (summed from every project's dayTotals).
+function buildTeamDays(){
+  const days={};
+  allProjects().forEach(({p})=>{ const dt=p.dayTotals||{}; for(const d in dt){ if(/^\d{4}-\d{2}-\d{2}$/.test(d)){ const s=Number(dt[d])||0; if(s>0) days[d]=(days[d]||0)+s; } } });
+  return days;
+}
+// Week-grid calendar (newest week on top) of the team's daily logged hours.
+function renderTeamCalendar(container){
+  const days=buildTeamDays();
+  const title=document.createElement('div'); title.className='cal-title';
+  const dates=Object.keys(days).sort();
+  if(!dates.length){ title.textContent='Daily hours'; container.appendChild(title); const e=document.createElement('div'); e.className='cal-empty'; e.textContent='No logged time yet.'; container.appendChild(e); return; }
+  const total=Object.values(days).reduce((a,b)=>a+b,0);
+  title.innerHTML='Daily hours <span class="cal-sub">team · '+esc(fmtHours(total))+' total</span>';
+  container.appendChild(title);
+  const toISO=dt=>{ const y=dt.getFullYear(), m=String(dt.getMonth()+1).padStart(2,'0'), d=String(dt.getDate()).padStart(2,'0'); return y+'-'+m+'-'+d; };
+  const parseD=s=>{ const [y,mo,d]=s.split('-').map(Number); return new Date(y,mo-1,d); };
+  const addD=(dt,n)=>new Date(dt.getFullYear(),dt.getMonth(),dt.getDate()+n);
+  const mondayOf=dt=>addD(dt,-((dt.getDay()+6)%7));   // getDay: 0=Sun -> shift so Monday starts the week
+  const maxSec=Math.max(...Object.values(days));
+  const todayISO2=toISO(new Date());
+  const endMon=mondayOf(parseD(dates[dates.length-1]));
+  let startMon=mondayOf(parseD(dates[0]));
+  const N=16, totalWeeks=Math.round((endMon-startMon)/(7*864e5))+1;   // cap to the most recent N weeks
+  if(totalWeeks>N) startMon=addD(endMon,-(N-1)*7);
+  const grid=document.createElement('div'); grid.className='cal-grid'; container.appendChild(grid);
+  const head=document.createElement('div'); head.className='cal-row cal-head';
+  head.innerHTML='<span class="cal-wk"></span>'+['Mo','Tu','We','Th','Fr','Sa','Su'].map(d=>`<span class="cal-dh">${d}</span>`).join('');
+  grid.appendChild(head);
+  for(let wkMon=new Date(endMon); wkMon>=startMon; wkMon=addD(wkMon,-7)){
+    const row=document.createElement('div'); row.className='cal-row';
+    let cells=`<span class="cal-wk">${esc(MONTHS[wkMon.getMonth()].slice(0,3)+' '+wkMon.getDate())}</span>`;
+    for(let i=0;i<7;i++){
+      const d=addD(wkMon,i), iso=toISO(d), sec=days[iso]||0, future=iso>todayISO2;
+      let style='';
+      if(sec>0){ const int=0.16+0.84*Math.min(1,sec/maxSec); style=`background:rgba(76,111,255,${int.toFixed(2)});color:${int>0.55?'#fff':'#1849a9'}`; }
+      else if(future){ style='opacity:.35'; }
+      cells+=`<span class="cal-cell${iso===todayISO2?' today':''}" style="${style}" title="${esc(iso+' · '+fmtHours(sec))}"><span class="cal-dnum">${d.getDate()}</span>${sec>0?`<span class="cal-dh2">${esc(fmtHours(sec))}</span>`:''}</span>`;
+    }
+    row.innerHTML=cells; grid.appendChild(row);
+  }
 }
 
 // x centered on today's day block (avg of the day's left and right edges)
