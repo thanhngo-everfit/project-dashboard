@@ -166,6 +166,18 @@
   .cal-wd{font-size:8px;font-weight:700;color:#98a2b3;text-transform:uppercase;line-height:1;}
   .cal-day.wknd .cal-dnum,.cal-day.wknd .cal-wd{color:#b6bcc7;}
   @media (max-width:1000px){ .ppl-layout{flex-direction:column;} .ppl-side{width:100%;position:static;} }
+  .ppl-controls{display:flex;align-items:center;gap:12px;margin:0 2px 14px;flex-wrap:wrap;}
+  .ppl-sqf{font-size:12px;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:6px;}
+  .ppl-sqf select{font-size:13px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;font-family:inherit;background:#fff;}
+  .pm-search{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;margin-bottom:10px;}
+  .pm-head{display:grid;grid-template-columns:1fr 168px 148px;gap:10px;font-size:10.5px;font-weight:800;color:#98a2b3;text-transform:uppercase;letter-spacing:.4px;padding:0 4px 6px;}
+  .pm-list{max-height:54vh;overflow-y:auto;display:flex;flex-direction:column;gap:3px;}
+  .pm-row{display:grid;grid-template-columns:1fr 168px 148px;gap:10px;align-items:center;padding:4px;border-radius:8px;}
+  .pm-row:hover{background:#f7f9fc;}
+  .pm-person{display:flex;align-items:center;gap:9px;min-width:0;}
+  .pm-person .assignee-av,.pm-person .assignee-ini{width:28px;height:28px;font-size:11px;flex:none;}
+  .pm-name{font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .pm-row select{font-size:13px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;font-family:inherit;background:#fff;width:100%;}
   .ppl-sumline{font-size:12px;color:var(--muted);font-weight:600;margin:0 2px 14px;}
   .ppl-card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(16,24,40,.06);}
   .ppl-head{display:flex;align-items:center;gap:11px;margin-bottom:12px;}
@@ -771,6 +783,34 @@ function tagsLineHTML(tags){
 const FEATURE_SIZES = ['Small','Medium','Big','Huge'];
 const PRIORITIES = ['Highest','High','Medium','Low'];
 const OPEN_SCALES = ['Internal','Beta','Public'];   // release scope shown in the Marketing view
+const ROLES = ['Backend','Frontend','Android','iOS','Fullstack','QA','QC','BA','Design','PM','DevOps','Data'];   // people roles
+// Shared people directory helpers. Person identity = Jira accountId.
+function personMeta(id){ return (state.people && state.people[id]) || {}; }
+function personSquad(id){ return personMeta(id).squad || ''; }
+function personRole(id){ return personMeta(id).role || ''; }
+// Every person seen across the tribe's projects (contributors + assignees), merged with the directory.
+function knownPeople(){
+  const map={};
+  allProjects().forEach(({p})=>{
+    [...(p.contributors||[]), ...(p.assignees||[])].forEach(a=>{
+      if(!a||!a.accountId) return;
+      const m=map[a.accountId]||(map[a.accountId]={accountId:a.accountId,name:a.name||'',avatar:a.avatar||''});
+      if(a.name && (!m.name||m.name==='Unknown')) m.name=a.name;
+      if(a.avatar && !m.avatar) m.avatar=a.avatar;
+    });
+  });
+  // include directory entries even if they aren't currently a contributor
+  Object.entries(state.people||{}).forEach(([id,meta])=>{
+    const m=map[id]||(map[id]={accountId:id,name:'',avatar:''});
+    if(meta.name && !m.name) m.name=meta.name; if(meta.avatar && !m.avatar) m.avatar=meta.avatar;
+  });
+  return Object.values(map).map(m=>({...m, squad:personSquad(m.accountId), role:personRole(m.accountId)}));
+}
+function setPersonMeta(id, name, avatar, squad, role){
+  if(!state.people) state.people={};
+  const cur=state.people[id]||{};
+  state.people[id]={ name:name||cur.name||'', avatar:avatar||cur.avatar||'', squad:squad||'', role:role||'' };
+}
 // Fixed virtual squads (read-only structure)
 const VIRTUAL_VIEWS = [
   {id:'view:all',  name:'All Squads', allSquads:true, icon:'🌐'},
@@ -902,6 +942,7 @@ function load(){
  * name + start/end + color); project.tasks[] = dev work.
  * Migration: older data used project.segments[] (multiple phases) -> collapse into one start/end. */
 function migrate(s){
+  if(!s.people || typeof s.people!=='object' || Array.isArray(s.people)) s.people={};   // shared directory: accountId -> {name,avatar,squad,role}
   // wrap legacy top-level squads into a single "Core Product" tribe
   if(!Array.isArray(s.tribes)){
     s.tribes = [{ id:'tribe_core', name:'Core Product', squads: Array.isArray(s.squads)?s.squads:[] }];
@@ -1384,7 +1425,7 @@ async function syncSave(){
   setSync('Saving…');
   try{
     const r = await apiFetch('/api/state', {
-      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({state:{tribes:state.tribes, lastJiraSync:state.lastJiraSync||0, tagCreators:state.tagCreators||{}}})
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({state:{tribes:state.tribes, lastJiraSync:state.lastJiraSync||0, tagCreators:state.tagCreators||{}, people:state.people||{}}})
     });
     if(r.status===401){ handleAuthExpired(); return; }
     if(r.status===409){
@@ -1444,6 +1485,7 @@ function adoptRemoteData(data, updatedAt){
   state.tribes = data.tribes;
   if(typeof data.lastJiraSync==='number') state.lastJiraSync = data.lastJiraSync;   // shared Jira sync time
   if(data.tagCreators && typeof data.tagCreators==='object') state.tagCreators = data.tagCreators;   // shared tag creators
+  if(data.people && typeof data.people==='object') state.people = data.people;   // shared people directory
   if(!state.tribes.find(t=>t.id===state.activeTribe) && state.tribes[0]) state.activeTribe=state.tribes[0].id;
   if(!activeVirtual()){
     const sqs=curSquads();
@@ -2183,6 +2225,8 @@ function renderByAssignee(g){
   if(!allList.length){ const em=document.createElement('div'); em.className='empty'; em.textContent = 'No logged time yet — run a Jira sync to pull worklogs from each project’s delivery tickets.'; wrap.appendChild(em); g.appendChild(wrap); return; }
   let list=allList.slice();
   if(q) list=list.filter(m=>m.name.toLowerCase().includes(q));
+  const sqf=state.peopleSquadFilter||'';   // filter by assigned squad ('' all, '__none__' unassigned)
+  if(sqf) list=list.filter(m=> sqf==='__none__' ? !personSquad(m.accountId) : personSquad(m.accountId)===sqf);
   list.sort((a,b)=> b.totalSec-a.totalSec || a.name.localeCompare(b.name));
   list.forEach(m=>m.projects.sort((a,b)=> b.seconds-a.seconds || a.name.localeCompare(b.name)));
   const byId={}; list.forEach(m=>byId[m.accountId]=m);
@@ -2211,16 +2255,27 @@ function renderByAssignee(g){
   const renderSide=()=>{ side.innerHTML=''; renderDayCalendar(side, selectedDays()); };
   const select=sel=>{ pplSel=sel; renderSide(); highlight(); };
 
+  const squads=curSquads().map(s=>s.name);
+  const controls=document.createElement('div'); controls.className='ppl-controls';
+  controls.innerHTML=`<button class="btn" id="pplManage">⚙ Manage people</button>`+
+    `<label class="ppl-sqf">Squad <select id="pplSqf">`+
+    ['<option value="">All squads</option>', ...squads.map(s=>`<option value="${esc(s)}" ${sqf===s?'selected':''}>${esc(s)}</option>`), `<option value="__none__" ${sqf==='__none__'?'selected':''}>Unassigned</option>`].join('')+
+    `</select></label>`;
+  main.appendChild(controls);
+  controls.querySelector('#pplManage').onclick=openPeopleManager;
+  controls.querySelector('#pplSqf').onchange=e=>{ state.peopleSquadFilter=e.target.value; render(); };
   const totalAll=list.reduce((s,m)=>s+m.totalSec,0);
   const sum=document.createElement('div'); sum.className='ppl-sumline';
-  sum.textContent=list.length+' '+(list.length===1?'person':'people')+' · '+fmtHours(totalAll)+' spent total'+(q?' (filtered)':'');
+  sum.textContent=list.length+' '+(list.length===1?'person':'people')+' · '+fmtHours(totalAll)+' spent total'+((q||sqf)?' (filtered)':'');
   main.appendChild(sum);
   if(!list.length){ const em=document.createElement('div'); em.className='cal-empty'; em.textContent='No members match your search.'; main.appendChild(em); }
   list.forEach(m=>{
     const maxSec=Math.max(1,...m.projects.map(p=>p.seconds));
     const card=document.createElement('div'); card.className='ppl-card';
     const head=document.createElement('div'); head.className='ppl-head'; head.dataset.acc=m.accountId; head.title='Show all of '+m.name+"'s days";
-    head.innerHTML=`${personAvatarHTML(m)}<div class="ppl-id"><div class="ppl-name">${esc(m.name)}</div><div class="ppl-sub">${m.projects.length} project${m.projects.length>1?'s':''}</div></div><span class="ppl-total" title="Total time spent">${fmtHours(m.totalSec)}</span>`;
+    const metaBits=[personRole(m.accountId), personSquad(m.accountId)].filter(Boolean).join(' · ');
+    const subTxt=(metaBits?esc(metaBits)+' · ':'')+m.projects.length+' project'+(m.projects.length>1?'s':'');
+    head.innerHTML=`${personAvatarHTML(m)}<div class="ppl-id"><div class="ppl-name">${esc(m.name)}</div><div class="ppl-sub">${subTxt}</div></div><span class="ppl-total" title="Total time spent">${fmtHours(m.totalSec)}</span>`;
     head.onclick=()=>select({accountId:m.accountId, projId:null});
     card.appendChild(head);
     const proj=document.createElement('div'); proj.className='ppl-projects';
@@ -2278,6 +2333,40 @@ function renderDayCalendar(container, sel){
   }
   scroll.appendChild(inner); container.appendChild(scroll);
   scroll.scrollLeft=scroll.scrollWidth;   // start at the most recent day
+}
+// Manage People: assign a squad + role to each known person (shared directory).
+function openPeopleManager(){
+  const squads=curSquads().map(s=>s.name);
+  const ppl=knownPeople().sort((a,b)=>(a.name||'zzz').localeCompare(b.name||'zzz'));
+  const work={}; ppl.forEach(p=>work[p.accountId]={squad:p.squad||'',role:p.role||''});
+  const opt=(v,sel)=>`<option value="${esc(v)}" ${sel===v?'selected':''}>${esc(v)}</option>`;
+  const rowHtml=p=>`<div class="pm-row" data-id="${esc(p.accountId)}">
+      <span class="pm-person">${personAvatarHTML(p)}<span class="pm-name">${esc(p.name||'Unknown')}</span></span>
+      <select class="pm-squad"><option value="">— Squad —</option>${squads.map(s=>opt(s,p.squad)).join('')}</select>
+      <select class="pm-role"><option value="">— Role —</option>${ROLES.map(r=>opt(r,p.role)).join('')}</select>
+    </div>`;
+  modal.style.width='700px';
+  modal.innerHTML=`<h3>Manage People</h3>
+    <div style="font-size:12px;color:var(--muted);margin:-6px 0 12px;">Assign a squad and role to each person. ${ppl.length} ${ppl.length===1?'person':'people'}.</div>
+    <input id="pm_search" class="pm-search" placeholder="Search name…" autocomplete="off">
+    <div class="pm-head"><span>Person</span><span>Squad</span><span>Role</span></div>
+    <div class="pm-list" id="pm_list">${ppl.length?ppl.map(rowHtml).join(''):'<div style="padding:14px;color:var(--muted);font-size:13px;">No people yet — run a Jira sync first.</div>'}</div>
+    <div class="modal-actions"><button class="btn" id="pm_cancel">Cancel</button><button class="btn primary" id="pm_save">Save</button></div>`;
+  const listEl=modal.querySelector('#pm_list');
+  listEl.querySelectorAll('.pm-row').forEach(row=>{
+    const id=row.dataset.id;
+    row.querySelector('.pm-squad').onchange=e=>work[id].squad=e.target.value;
+    row.querySelector('.pm-role').onchange=e=>work[id].role=e.target.value;
+  });
+  const sb=modal.querySelector('#pm_search');
+  sb.oninput=()=>{ const s=sb.value.trim().toLowerCase(); listEl.querySelectorAll('.pm-row').forEach(row=>{ const n=(row.querySelector('.pm-name').textContent||'').toLowerCase(); row.style.display=(!s||n.includes(s))?'':'none'; }); };
+  modal.querySelector('#pm_cancel').onclick=closeModal;
+  modal.querySelector('#pm_save').onclick=()=>{
+    ppl.forEach(p=>{ const w=work[p.accountId]; setPersonMeta(p.accountId, p.name, p.avatar, w.squad, w.role); });
+    lastSyncedJSON=null;   // people live outside dataJSON() (which only tracks tribes) -> force the save to push
+    closeModal(); save(); render();
+  };
+  modalBg.classList.add('open');
 }
 
 // x centered on today's day block (avg of the day's left and right edges)
