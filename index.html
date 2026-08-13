@@ -1053,6 +1053,12 @@ function applyDesignSync(proj, startIso, endIso, status, est, figma, assignees, 
   }
   return changed;
 }
+// Run fn(0..count-1) with bounded concurrency.
+async function runPool(conc, count, fn){
+  let i=0;
+  async function w(){ while(true){ const idx=i++; if(idx>=count) return; await fn(idx); } }
+  await Promise.all(Array.from({length:Math.min(conc,Math.max(0,count))}, w));
+}
 async function jiraSync(opts){
   opts=opts||{}; const silent=!!opts.silent;   // silent = auto-sync: apply all changes, no review popup, no status toasts
   if(!idToken) return;
@@ -1076,25 +1082,49 @@ async function jiraSync(opts){
                : 'Jira sync failed ('+r.status+')';
       if(!silent) setSync(msg,'bad'); console.warn('[Jira sync] failed', r.status, r.url, j); return;
     }
-    // People phase: fetch assignees + worklog-author hours for every delivery epic in SMALL batches
-    // (each server call is bounded so it can't time out) and aggregate — this returns COMPLETE data.
+    // People phase — two client-batched steps so no server call is ever heavy (complete data, no 504):
+    //   step 1: assignees + the child ticket keys per delivery epic (cheap /search/jql)
+    //   step 2: worklog authors + seconds per ticket (per-issue /worklog, the reliable source)
     const epicSet=new Set(); (j.results||[]).forEach(rec=>{ (rec.linkKeys||[]).forEach(k=>epicSet.add(k)); });
-    const epicKeys=[...epicSet], epicPeople={};
+    const epicKeys=[...epicSet];
+    const epicAssignees={};           // epicKey -> [{accountId,name,avatar}]
+    const epicContributors={};        // epicKey -> {accountId -> {..,seconds}}
+    const ticketToEpic={}, ticketList=[]; let sawTs=false;
     if(epicKeys.length){
-      const batches=[]; for(let i=0;i<epicKeys.length;i+=25) batches.push(epicKeys.slice(i,i+25));
-      let done=0, bi=0;
-      async function pworker(){
-        while(true){
-          const idx=bi++; if(idx>=batches.length) return;
-          try{
-            const rr=await apiFetch('/api/jira',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'people', epics:batches[idx]})});
-            if(rr.ok){ const jj=await rr.json().catch(()=>({})); Object.assign(epicPeople, jj.people||{}); }
-          }catch(e){ /* skip this batch; a later sync will fill it */ }
-          done++; if(!silent) setSync('Syncing Jira… people '+Math.round(done/batches.length*100)+'%');
-        }
-      }
-      await Promise.all(Array.from({length:Math.min(4,batches.length)}, pworker));
+      if(!silent) setSync('Syncing Jira… people');
+      // step 1
+      const eb=[]; for(let i=0;i<epicKeys.length;i+=40) eb.push(epicKeys.slice(i,i+40));
+      let e1=0;
+      await runPool(4, eb.length, async idx=>{
+        try{
+          const rr=await apiFetch('/api/jira',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'people', epics:eb[idx]})});
+          if(rr.ok){ const jj=await rr.json().catch(()=>({}));
+            Object.assign(epicAssignees, jj.assignees||{});
+            (jj.tickets||[]).forEach(t=>{ ticketToEpic[t.key]=t.epic; ticketList.push(t); if(t.ts!=null) sawTs=true; });
+          }
+        }catch(e){}
+        e1++; if(!silent) setSync('Syncing Jira… people '+Math.round(e1/eb.length*40)+'%');
+      });
+      // step 2 — only tickets that have logged time (ts>0); if Jira didn't return timespent, check them all
+      const candidates=(sawTs ? ticketList.filter(t=>t.ts>0) : ticketList).map(t=>t.key);
+      const wb=[]; for(let i=0;i<candidates.length;i+=30) wb.push(candidates.slice(i,i+30));
+      let e2=0;
+      await runPool(4, wb.length, async idx=>{
+        try{
+          const rr=await apiFetch('/api/jira',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'worklogs', keys:wb[idx]})});
+          if(rr.ok){ const jj=await rr.json().catch(()=>({}));
+            Object.entries(jj.logged||{}).forEach(([key,authors])=>{
+              const epic=ticketToEpic[key]; if(!epic) return;
+              const m=epicContributors[epic]||(epicContributors[epic]={});
+              (authors||[]).forEach(a=>{ if(!a||!a.accountId) return; if(!m[a.accountId]) m[a.accountId]={accountId:a.accountId,name:a.name||'',avatar:a.avatar||'',seconds:0}; m[a.accountId].seconds+=Number(a.seconds)||0; });
+            });
+          }
+        }catch(e){}
+        e2++; if(!silent) setSync('Syncing Jira… people '+(40+Math.round(e2/(wb.length||1)*60))+'%');
+      });
     }
+    const epicPeople={};
+    epicKeys.forEach(ek=>{ epicPeople[ek]={ assignees: epicAssignees[ek]||[], contributors: Object.values(epicContributors[ek]||{}) }; });
     // Union a project's linked epics -> its people (summing a person's seconds across epics).
     const unionPeople=(linkKeys,field)=>{
       const acc={};
