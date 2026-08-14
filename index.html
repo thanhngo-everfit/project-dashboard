@@ -694,6 +694,7 @@
           <label class="sm-switch" style="margin-bottom:12px;"><span>Show size</span><input type="checkbox" id="showSize"><span class="track"></span></label>
           <label class="sm-switch" style="margin-bottom:12px;"><span>Show design work</span><input type="checkbox" id="showDesign"><span class="track"></span></label>
           <label class="sm-switch" style="margin-bottom:12px;"><span>Show estimation</span><input type="checkbox" id="showEstimation"><span class="track"></span></label>
+          <label class="sm-switch" style="margin-bottom:12px;"><span>Show assignees</span><input type="checkbox" id="showAssignees"><span class="track"></span></label>
           <label class="sm-switch"><span>Show completed projects</span><input type="checkbox" id="showCompleted"><span class="track"></span></label>
         </div>
       </div>
@@ -763,6 +764,7 @@ function showSizeOn(){ return state.showSize !== false; }
 function showDesignOn(){ return state.showDesign !== false; }
 function showCompletedOn(){ return state.showCompleted !== false; }
 function showEstimationOn(){ return state.showEstimation !== false; }
+function showAssigneesOn(){ return state.showAssignees !== false; }
 
 /* ============================ State ============================ */
 const STORE_KEY = 'roadmapDashboardV2';
@@ -2617,7 +2619,7 @@ function phaseRow(cat,proj,units,tw){
   const size=showSizeOn()?sizeLineHTML(proj):'';
   const links=showLinksOn()?linksLineHTML(proj):'';
   const est=showEstimationOn()?estimationLineHTML(proj):'';
-  const assignees=assigneesLineHTML(proj);   // synced from Jira; always shown when present
+  const assignees=showAssigneesOn()?assigneesLineHTML(proj):'';   // synced from Jira; toggled in View Settings
   const showTagChips = proj.tags && proj.tags.length && showTagsOn();
   if((size || links || est || assignees || showTagChips) && lab){
     const col=document.createElement('div'); col.className='namecol';
@@ -3466,16 +3468,18 @@ document.getElementById('historyBtn').onclick=()=>openVersionHistory();
   const links=document.getElementById('showLinks'), size=document.getElementById('showSize'), design=document.getElementById('showDesign');
   const completed=document.getElementById('showCompleted');
   const estimation=document.getElementById('showEstimation');
+  const assignees=document.getElementById('showAssignees');
   const viewSeg=document.getElementById('defaultViewSeg');
   const syncViewSeg=()=>viewSeg.querySelectorAll('button').forEach(b=>b.classList.toggle('active', b.dataset.v===(state.defaultView||'week')));
   btn.onclick=e=>{ e.stopPropagation(); const open=menu.style.display==='none'; menu.style.display=open?'block':'none';
-    if(open){ tog.checked=showTagsOn(); links.checked=showLinksOn(); size.checked=showSizeOn(); design.checked=showDesignOn(); estimation.checked=showEstimationOn(); completed.checked=showCompletedOn(); syncViewSeg(); updateZoomLabel(); document.getElementById('smRows').style.display=isAdmin()?'':'none'; } };
+    if(open){ tog.checked=showTagsOn(); links.checked=showLinksOn(); size.checked=showSizeOn(); design.checked=showDesignOn(); estimation.checked=showEstimationOn(); assignees.checked=showAssigneesOn(); completed.checked=showCompletedOn(); syncViewSeg(); updateZoomLabel(); document.getElementById('smRows').style.display=isAdmin()?'':'none'; } };
   document.addEventListener('click',e=>{ if(!e.target.closest('.settings-wrap')) menu.style.display='none'; });
   tog.onchange=e=>{ setShowTags(e.target.checked); render(); };
   links.onchange=e=>{ state.showLinks=e.target.checked; render(); };
   size.onchange=e=>{ state.showSize=e.target.checked; render(); };
   design.onchange=e=>{ state.showDesign=e.target.checked; render(); };
   estimation.onchange=e=>{ state.showEstimation=e.target.checked; render(); };
+  assignees.onchange=e=>{ state.showAssignees=e.target.checked; render(); };
   completed.onchange=e=>{ state.showCompleted=e.target.checked; render(); };
   viewSeg.querySelectorAll('button').forEach(b=>b.onclick=()=>{ state.defaultView=b.dataset.v; state.viewBySquad={}; syncViewSeg(); render(); });   // apply to this session now
 })();
