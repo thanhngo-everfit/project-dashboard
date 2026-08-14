@@ -2294,12 +2294,12 @@ function renderByAssignee(g){
 
   const squads=curSquads().map(s=>s.name);
   const controls=document.createElement('div'); controls.className='ppl-controls';
-  controls.innerHTML=`<button class="btn" id="pplManage">⚙ Manage people</button>`+
+  controls.innerHTML=(isAdmin()?`<button class="btn" id="pplManage">⚙ Manage people</button>`:'')+
     `<label class="ppl-sqf">Squad <select id="pplSqf">`+
     ['<option value="">All squads</option>', ...squads.map(s=>`<option value="${esc(s)}" ${sqf===s?'selected':''}>${esc(s)}</option>`), `<option value="__none__" ${sqf==='__none__'?'selected':''}>Unassigned</option>`].join('')+
     `</select></label>`;
   main.appendChild(controls);
-  controls.querySelector('#pplManage').onclick=openPeopleManager;
+  const mng=controls.querySelector('#pplManage'); if(mng) mng.onclick=openPeopleManager;
   controls.querySelector('#pplSqf').onchange=e=>{ state.peopleSquadFilter=e.target.value; render(); };
   const totalAll=list.reduce((s,m)=>s+m.totalSec,0);
   const sum=document.createElement('div'); sum.className='ppl-sumline';
@@ -2383,8 +2383,9 @@ async function patchPeople(patch){
     else { setSync('People save failed','bad'); }
   }catch(e){ setSync('People save failed — offline','bad'); }
 }
-// Manage People: assign a squad + role to each known person (shared directory).
+// Manage People: assign a squad + role to each known person (shared directory). Admin only.
 function openPeopleManager(){
+  if(!isAdmin()) return;
   const squads=curSquads().map(s=>s.name);
   const ppl=knownPeople().sort((a,b)=>(a.name||'zzz').localeCompare(b.name||'zzz'));
   const work={}; ppl.forEach(p=>work[p.accountId]={squad:p.squad||'',role:p.role||''});

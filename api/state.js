@@ -93,6 +93,7 @@ export default async function handler(req, res) {
       // Targeted merge of the shared people directory only — reads the CURRENT record and updates just
       // `people`, so a person edit never overwrites concurrent tribe/project changes by someone else.
       if (body.action === 'patchPeople') {
+        if ((user.email || '').toLowerCase() !== ADMIN_EMAIL) { res.status(403).json({ error: 'forbidden' }); return; }   // only the admin manages people
         const patch = (body.people && typeof body.people === 'object' && !Array.isArray(body.people)) ? body.people : null;
         if (!patch) { res.status(400).json({ error: 'missing_people' }); return; }
         const cur = await redis.get(KEY);
