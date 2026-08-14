@@ -1449,7 +1449,10 @@ async function syncSave(){
   setSync('Saving…');
   try{
     const r = await apiFetch('/api/state', {
-      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({state:{tribes:state.tribes, lastJiraSync:state.lastJiraSync||0, tagCreators:state.tagCreators||{}, people:state.people||{}}})
+      // NOTE: `people` is intentionally omitted — it's updated only via action:'patchPeople' (a targeted
+      // merge), and the server preserves the existing people when a save doesn't include it. This stops a
+      // full dashboard save from clobbering a concurrent person edit.
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({state:{tribes:state.tribes, lastJiraSync:state.lastJiraSync||0, tagCreators:state.tagCreators||{}}})
     });
     if(r.status===401){ handleAuthExpired(); return; }
     if(r.status===409){
@@ -2360,6 +2363,18 @@ function renderDayCalendar(container, sel){
   scroll.appendChild(inner); container.appendChild(scroll);
   scroll.scrollLeft=scroll.scrollWidth;   // start at the most recent day
 }
+// Save ONLY the changed people to the server (merged into the current record), so it never overwrites
+// concurrent project/tribe edits by someone else.
+async function patchPeople(patch){
+  if(!idToken || updateAvailable || saveBlocked) return;   // stale tab -> don't write
+  setSync('Saving people…');
+  try{
+    const r=await apiFetch('/api/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'patchPeople', people:patch})});
+    if(r.status===401){ handleAuthExpired(); return; }
+    if(r.ok){ const j=await r.json().catch(()=>({})); checkVersion(j.version); setSync('People updated','ok'); }
+    else { setSync('People save failed','bad'); }
+  }catch(e){ setSync('People save failed — offline','bad'); }
+}
 // Manage People: assign a squad + role to each known person (shared directory).
 function openPeopleManager(){
   const squads=curSquads().map(s=>s.name);
@@ -2388,9 +2403,15 @@ function openPeopleManager(){
   sb.oninput=()=>{ const s=sb.value.trim().toLowerCase(); listEl.querySelectorAll('.pm-row').forEach(row=>{ const n=(row.querySelector('.pm-name').textContent||'').toLowerCase(); row.style.display=(!s||n.includes(s))?'':'none'; }); };
   modal.querySelector('#pm_cancel').onclick=closeModal;
   modal.querySelector('#pm_save').onclick=()=>{
-    ppl.forEach(p=>{ const w=work[p.accountId]; setPersonMeta(p.accountId, p.name, p.avatar, w.squad, w.role); });
-    lastSyncedJSON=null;   // people live outside dataJSON() (which only tracks tribes) -> force the save to push
-    closeModal(); save(); render();
+    const patch={};   // only the rows that actually changed
+    ppl.forEach(p=>{ const w=work[p.accountId];
+      if((w.squad||'')!==(p.squad||'') || (w.role||'')!==(p.role||'')){
+        setPersonMeta(p.accountId, p.name, p.avatar, w.squad, w.role);
+        patch[p.accountId]=state.people[p.accountId];
+      }
+    });
+    closeModal(); render();
+    if(Object.keys(patch).length) patchPeople(patch);   // targeted merge — does NOT push the whole dashboard
   };
   modalBg.classList.add('open');
 }

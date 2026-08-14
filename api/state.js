@@ -90,6 +90,19 @@ export default async function handler(req, res) {
         res.status(200).json({ ok: true, restored: true, updatedAt: record.updatedAt });
         return;
       }
+      // Targeted merge of the shared people directory only — reads the CURRENT record and updates just
+      // `people`, so a person edit never overwrites concurrent tribe/project changes by someone else.
+      if (body.action === 'patchPeople') {
+        const patch = (body.people && typeof body.people === 'object' && !Array.isArray(body.people)) ? body.people : null;
+        if (!patch) { res.status(400).json({ error: 'missing_people' }); return; }
+        const cur = await redis.get(KEY);
+        const state = (cur && cur.state) ? cur.state : { tribes: [] };
+        state.people = { ...(state.people || {}), ...patch };   // merge per-accountId (keeps others' people edits)
+        const record = { state, updatedAt: Date.now(), updatedBy: user.email };
+        await redis.set(KEY, record);
+        res.status(200).json({ ok: true, updatedAt: record.updatedAt, version: VERSION });
+        return;
+      }
       if (typeof body.state === 'undefined' || body.state === null) {
         res.status(400).json({ error: 'missing_state' });
         return;
