@@ -788,7 +788,15 @@ function tagsLineHTML(tags){
 const FEATURE_SIZES = ['Small','Medium','Big','Huge'];
 const PRIORITIES = ['Highest','High','Medium','Low'];
 const OPEN_SCALES = ['Internal','Beta','Public'];   // release scope shown in the Marketing view
-const ROLES = ['Backend','Frontend','Android','iOS','Fullstack','QA','QC','BA','Design','PM','DevOps','Data'];   // people roles
+const ROLES = ['Backend','Frontend','Android','iOS','Fullstack','QA','QC','BA','Design','PM','PC','DevOps','Data'];   // people roles (PC = Project Coordinator)
+// Training & Automation squad roster (name -> role) for the one-click assign button in Manage People.
+const TA_ROSTER = [
+  ['Anh Phan','Frontend'], ['Dong Vo','Backend'], ['Duong Tran','Data'], ['Duyen Tran','PC'],
+  ['Hanh Tran','Frontend'], ['Khoa Huynh','Android'], ['Ngoc Nguyen','BA'], ['Nhat Huy','Backend'],
+  ['Thanh Ngo','PM'], ['Tran Nguyen','QA'], ['Trang Ngo','QA'], ['Tuyen Tran','iOS'],
+];
+const DIACRITICS=new RegExp('['+String.fromCharCode(0x300)+'-'+String.fromCharCode(0x36f)+']','g');
+const stripAccents=s=>(s||'').normalize('NFD').replace(DIACRITICS,'').toLowerCase().trim();
 // Shared people directory helpers. Person identity = Jira accountId.
 function personMeta(id){ return (state.people && state.people[id]) || {}; }
 function personSquad(id){ return personMeta(id).squad || ''; }
@@ -2388,7 +2396,8 @@ function openPeopleManager(){
     </div>`;
   modal.style.width='700px';
   modal.innerHTML=`<h3>Manage People</h3>
-    <div style="font-size:12px;color:var(--muted);margin:-6px 0 12px;">Assign a squad and role to each person. ${ppl.length} ${ppl.length===1?'person':'people'}.</div>
+    <div style="font-size:12px;color:var(--muted);margin:-6px 0 10px;">Assign a squad and role to each person. ${ppl.length} ${ppl.length===1?'person':'people'}.</div>
+    <button class="btn" id="pm_ta" style="margin-bottom:12px;">⚡ Assign Training &amp; Automation roster</button>
     <input id="pm_search" class="pm-search" placeholder="Search name…" autocomplete="off">
     <div class="pm-head"><span>Person</span><span>Squad</span><span>Role</span></div>
     <div class="pm-list" id="pm_list">${ppl.length?ppl.map(rowHtml).join(''):'<div style="padding:14px;color:var(--muted);font-size:13px;">No people yet — run a Jira sync first.</div>'}</div>
@@ -2401,6 +2410,24 @@ function openPeopleManager(){
   });
   const sb=modal.querySelector('#pm_search');
   sb.oninput=()=>{ const s=sb.value.trim().toLowerCase(); listEl.querySelectorAll('.pm-row').forEach(row=>{ const n=(row.querySelector('.pm-name').textContent||'').toLowerCase(); row.style.display=(!s||n.includes(s))?'':'none'; }); };
+  // One-click: fill squad+role for everyone matching the Training & Automation roster (by name).
+  modal.querySelector('#pm_ta').onclick=()=>{
+    const sqObj=curSquads().find(s=>/training/i.test(s.name)&&/automation/i.test(s.name));
+    const squad=sqObj?sqObj.name:'Training & Automation';
+    let n=0;
+    ppl.forEach(p=>{
+      const np=stripAccents(p.name);
+      const hit=TA_ROSTER.find(([nm])=>np.startsWith(stripAccents(nm)));
+      if(!hit) return;
+      work[p.accountId]={squad, role:hit[1]}; n++;
+      const row=listEl.querySelector('.pm-row[data-id="'+CSS.escape(p.accountId)+'"]');
+      if(row){ const ss=row.querySelector('.pm-squad'), rs=row.querySelector('.pm-role');
+        if(![...ss.options].some(o=>o.value===squad)){ const o=document.createElement('option'); o.value=squad; o.textContent=squad; ss.appendChild(o); }
+        ss.value=squad; rs.value=hit[1];
+      }
+    });
+    setSync('Filled '+n+' from T&A roster — review, then Save', n?'ok':'bad');
+  };
   modal.querySelector('#pm_cancel').onclick=closeModal;
   modal.querySelector('#pm_save').onclick=()=>{
     const patch={};   // only the rows that actually changed
