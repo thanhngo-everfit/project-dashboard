@@ -1059,6 +1059,7 @@ function setZoom(z){ if(!state.zoomByView) state.zoomByView={}; state.zoomByView
  *   we have no unsaved local edits, and we suppress redundant pushes to avoid ping-pong. */
 let idToken = null;            // current Google ID token (for API auth)
 let baselineUpdatedAt = 0;     // server timestamp we are currently in sync with
+let baseTribesUpdatedAt = 0;   // server 'tribes last changed' stamp our edits are based on (optimistic concurrency)
 let lastSyncedJSON = null;     // serialized state last confirmed on the server
 let saveTimer = null;
 let pollTimer = null;
@@ -1081,20 +1082,24 @@ let updateAvailable = false;  // true once the server reports a newer deploy -> 
 function checkVersion(v){
   if(!v || updateAvailable) return;
   if(appVersion===null){ appVersion=v; return; }
-  if(v!==appVersion){ updateAvailable=true; saveBlocked=true; showUpdateBanner(); }
+  if(v!==appVersion){ updateAvailable=true; showUpdateBanner(); }   // prompt refresh (does NOT block saving)
 }
-function showUpdateBanner(){
-  if(document.getElementById('updateBanner')) return;
+function showUpdateBanner(msg){
+  const el=document.getElementById('updateBanner');
+  const text = msg || '🔄 A new version of the dashboard is available — please refresh to get the latest.';
+  if(el){ const s=el.querySelector('span'); if(s) s.textContent=text; return; }
   document.body.classList.add('has-update-banner');
   const b=document.createElement('div'); b.id='updateBanner'; b.className='update-banner';
-  b.innerHTML='<span>🔄 A new version of the dashboard is available. Editing is paused to protect your data — please refresh.</span><button id="ub_reload">Refresh now</button>';
+  b.innerHTML='<span></span><button id="ub_reload">Refresh now</button>';
+  b.querySelector('span').textContent=text;
   document.body.appendChild(b);
   document.getElementById('ub_reload').onclick=()=>location.reload();
-  setSync('New version — refresh', 'bad');
 }
 function save(){
   localStorage.setItem(STORE_KEY, JSON.stringify(state));   // full local cache incl. personal view
-  if(!idToken || saveBlocked || updateAvailable || !initialLoadDone) return;   // stale tab / not loaded -> never push
+  if(!idToken || saveBlocked || !initialLoadDone) return;   // not loaded / hard-blocked -> don't push
+  // NOTE: a newer deploy no longer blocks saving — the server rejects only genuinely-stale writes
+  // (optimistic concurrency), so your own edits still save while real overwrites are prevented.
   if(dataJSON() === lastSyncedJSON) return;   // data unchanged (only view/UI changed) -> don't push
   scheduleSave();
 }
@@ -1462,12 +1467,19 @@ async function syncSave(){
       // NOTE: `people` is intentionally omitted — it's updated only via action:'patchPeople' (a targeted
       // merge), and the server preserves the existing people when a save doesn't include it. This stops a
       // full dashboard save from clobbering a concurrent person edit.
-      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({state:{tribes:state.tribes, lastJiraSync:state.lastJiraSync||0, tagCreators:state.tagCreators||{}}})
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({state:{tribes:state.tribes, lastJiraSync:state.lastJiraSync||0, tagCreators:state.tagCreators||{}}, baseTribesUpdatedAt: baseTribesUpdatedAt})
     });
     if(r.status===401){ handleAuthExpired(); return; }
     if(r.status===409){
-      // server refused to overwrite a populated board with a near-empty one (anti-wipe guard)
       const j = await r.json().catch(()=>({}));
+      if(j.error==='conflict'){
+        // someone else saved newer data since we loaded — don't overwrite it
+        saveBlocked = true;
+        setSync('Changed elsewhere — refresh to sync', 'bad');
+        showUpdateBanner('Someone else updated the dashboard. Refresh to load the latest before editing (your last change wasn’t saved).');
+        return;
+      }
+      // server refused to overwrite a populated board with a near-empty one (anti-wipe guard)
       saveBlocked = true;   // stop auto-saving so we don't hammer the guard; keep the good server copy
       setSync('Save blocked — would erase '+(j.oldCount||'')+' projects', 'bad');
       console.warn('[save] wipe_guard: server has', j.oldCount, 'projects, refused to overwrite with', j.newCount);
@@ -1478,6 +1490,7 @@ async function syncSave(){
       const j = await r.json();
       lastSyncedJSON = payload;
       baselineUpdatedAt = j.updatedAt || baselineUpdatedAt;
+      baseTribesUpdatedAt = j.tribesUpdatedAt || baseTribesUpdatedAt;
       setSync('Saved', 'ok');
     } else if(r.status===403){
       const j = await r.json().catch(()=>({}));
@@ -1502,7 +1515,7 @@ async function syncLoad(){
       checkVersion(j.version);
       const rec = j.record;
       if(rec && rec.state && (rec.state.tribes || rec.state.squads)){
-        adoptRemoteData(migrate(rec.state), rec.updatedAt);
+        adoptRemoteData(migrate(rec.state), rec.updatedAt, rec.tribesUpdatedAt);
         setSync('Saved', 'ok');
       } else {
         // No shared data yet. Do NOT auto-write our seed — that once clobbered real data when a
@@ -1518,7 +1531,7 @@ async function syncLoad(){
   render();
 }
 // Replace only the shared data; keep this browser's personal view/tab/zoom/collapse.
-function adoptRemoteData(data, updatedAt){
+function adoptRemoteData(data, updatedAt, tribesUpdatedAt){
   saveBlocked = false;   // we now hold the good server copy again
   state.tribes = data.tribes;
   if(typeof data.lastJiraSync==='number') state.lastJiraSync = data.lastJiraSync;   // shared Jira sync time
@@ -1530,6 +1543,7 @@ function adoptRemoteData(data, updatedAt){
     if(!sqs.find(s=>s.id===state.activeSquad) && sqs[0]) state.activeSquad=sqs[0].id;
   }
   baselineUpdatedAt = updatedAt || 0;
+  baseTribesUpdatedAt = tribesUpdatedAt || updatedAt || 0;
   lastSyncedJSON = dataJSON();
   localStorage.setItem(STORE_KEY, JSON.stringify(state));
   render();
@@ -1546,7 +1560,7 @@ async function pollRemote(){
     if(dataJSON() !== lastSyncedJSON) return;         // local data edits pending -> don't adopt over them
     const rec = j.record;
     if(rec && rec.state && (rec.state.tribes || rec.state.squads) && rec.updatedAt > baselineUpdatedAt){
-      adoptRemoteData(migrate(rec.state), rec.updatedAt);
+      adoptRemoteData(migrate(rec.state), rec.updatedAt, rec.tribesUpdatedAt);
       setSync('Updated by ' + (rec.updatedBy||'teammate'), 'ok');
     }
   }catch(e){ /* offline: keep working locally */ }

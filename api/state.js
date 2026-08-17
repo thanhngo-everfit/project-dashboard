@@ -85,7 +85,7 @@ export default async function handler(req, res) {
         if (!rec || !rec.state) { res.status(404).json({ error: 'version_not_found' }); return; }
         const cur = await redis.get(KEY);
         if (cur && cur.state) { try { await redis.lpush(HKEY, cur); await redis.ltrim(HKEY, 0, 29); } catch (e) {} }
-        const record = { state: rec.state, updatedAt: Date.now(), updatedBy: user.email + ' (restore)' };
+        const record = { state: rec.state, updatedAt: Date.now(), updatedBy: user.email + ' (restore)', tribesUpdatedAt: Date.now() };
         await redis.set(KEY, record);
         res.status(200).json({ ok: true, restored: true, updatedAt: record.updatedAt });
         return;
@@ -99,7 +99,7 @@ export default async function handler(req, res) {
         const cur = await redis.get(KEY);
         const state = (cur && cur.state) ? cur.state : { tribes: [] };
         state.people = { ...(state.people || {}), ...patch };   // merge per-accountId (keeps others' people edits)
-        const record = { state, updatedAt: Date.now(), updatedBy: user.email };
+        const record = { state, updatedAt: Date.now(), updatedBy: user.email, tribesUpdatedAt: (cur && (cur.tribesUpdatedAt || cur.updatedAt)) || Date.now() };
         await redis.set(KEY, record);
         res.status(200).json({ ok: true, updatedAt: record.updatedAt, version: VERSION });
         return;
@@ -109,6 +109,16 @@ export default async function handler(req, res) {
         return;
       }
       const existing = await redis.get(KEY);
+      const exTribesUpdatedAt = (existing && (existing.tribesUpdatedAt || existing.updatedAt)) || 0;
+      // Optimistic concurrency (tribe-scoped): reject a save whose base predates the stored tribes, so a
+      // stale tab can't overwrite newer project changes. Only tribe changes bump tribesUpdatedAt, so the
+      // 15-min metadata heartbeat (lastJiraSync) never causes a false conflict. Enforced only when the
+      // client sends its base AND the incoming tribes actually differ from what's stored.
+      if (typeof body.baseTribesUpdatedAt === 'number' && body.baseTribesUpdatedAt > 0 && exTribesUpdatedAt > body.baseTribesUpdatedAt) {
+        let differs = true;
+        try { differs = JSON.stringify((existing && existing.state && existing.state.tribes) || null) !== JSON.stringify((body.state && body.state.tribes) || null); } catch (e) {}
+        if (differs) { res.status(409).json({ error: 'conflict', currentUpdatedAt: existing.updatedAt }); return; }
+      }
       // Anti-wipe guard: never silently replace a populated board with a near-empty one (e.g. the
       // built-in seed). Applies to everyone, including the admin. Client may resend with force:true
       // only after the user explicitly confirms.
@@ -155,15 +165,16 @@ export default async function handler(req, res) {
       // Snapshot the version we're about to replace so any bad save is recoverable (keep last 30).
       // Skip when only metadata changed (e.g. auto-sync bumping lastJiraSync with identical tribes) so
       // the 15-min auto-sync heartbeat can't churn real versions out of the history.
-      if (existing && existing.state) {
-        const tribesJSON = st => { try { return JSON.stringify((st && st.tribes) || null); } catch (e) { return null; } };
-        if (tribesJSON(existing.state) !== tribesJSON(body.state)) {
-          try { await redis.lpush(HKEY, existing); await redis.ltrim(HKEY, 0, 29); } catch (e) { /* history is best-effort */ }
-        }
+      const tribesJSON = st => { try { return JSON.stringify((st && st.tribes) || null); } catch (e) { return null; } };
+      const tribesChanged = !existing || !existing.state || tribesJSON(existing.state) !== tribesJSON(body.state);
+      if (existing && existing.state && tribesChanged) {
+        try { await redis.lpush(HKEY, existing); await redis.ltrim(HKEY, 0, 29); } catch (e) { /* history is best-effort */ }
       }
-      const record = { state: body.state, updatedAt: Date.now(), updatedBy: user.email };
+      const now = Date.now();
+      // tribesUpdatedAt only advances when the projects actually change (drives optimistic concurrency).
+      const record = { state: body.state, updatedAt: now, updatedBy: user.email, tribesUpdatedAt: tribesChanged ? now : (exTribesUpdatedAt || now) };
       await redis.set(KEY, record);
-      res.status(200).json({ ok: true, updatedAt: record.updatedAt, updatedBy: record.updatedBy });
+      res.status(200).json({ ok: true, updatedAt: record.updatedAt, tribesUpdatedAt: record.tribesUpdatedAt, updatedBy: record.updatedBy });
       return;
     }
 
