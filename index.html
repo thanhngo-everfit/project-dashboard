@@ -2124,7 +2124,9 @@ function renderGantt(){
 
   const q=(state.search||'').trim().toLowerCase();
   const anyTag=(state.tagFilters||[]).length>0;
-  const anyFilter = anyTag || q || !showCompletedOn() || (state.designFilters||[]).length>0 || (state.releaseFilters||[]).length>0 || (state.teamFilters||[]).length>0 || (state.assigneeFilters||[]).length>0;
+  // "Show completed" is intentionally excluded here: hiding completed projects should hide their rows,
+  // NOT the category header. Only real content filters collapse an empty category.
+  const anyFilter = anyTag || q || (state.designFilters||[]).length>0 || (state.releaseFilters||[]).length>0 || (state.teamFilters||[]).length>0 || (state.assigneeFilters||[]).length>0;
   squad.projects.forEach(p=>{
     const catMatch = q && p.name.toLowerCase().includes(q);
     let projs = p.phases.filter(x=>tagFilterMatch(x.tags) && designFilterMatch(x) && releaseFilterMatch(x) && teamFilterMatch(x) && assigneeFilterMatch(x) && (showCompletedOn()||!x.done));
