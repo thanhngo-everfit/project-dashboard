@@ -106,6 +106,27 @@ export default async function handler(req, res) {
         res.status(200).json({ ok: true, updatedAt: record.updatedAt, version: VERSION });
         return;
       }
+      // Targeted merge of performance evaluations only (admin/manager tool), keyed by accountId then period,
+      // so an eval save never overwrites concurrent tribe/project/people changes. value null = delete.
+      if (body.action === 'patchEvals') {
+        if ((user.email || '').toLowerCase() !== ADMIN_EMAIL) { res.status(403).json({ error: 'forbidden' }); return; }
+        const patch = (body.evals && typeof body.evals === 'object' && !Array.isArray(body.evals)) ? body.evals : null;
+        if (!patch) { res.status(400).json({ error: 'missing_evals' }); return; }
+        const cur = await redis.get(KEY);
+        const state = (cur && cur.state) ? cur.state : { tribes: [] };
+        const merged = { ...(state.evals || {}) };
+        for (const [id, periods] of Object.entries(patch)) {
+          if (periods === null) { delete merged[id]; continue; }
+          const curP = { ...(merged[id] || {}) };
+          for (const [pk, v] of Object.entries(periods)) { if (v === null) delete curP[pk]; else curP[pk] = v; }
+          if (Object.keys(curP).length) merged[id] = curP; else delete merged[id];
+        }
+        state.evals = merged;
+        const record = { state, updatedAt: Date.now(), updatedBy: user.email, tribesUpdatedAt: (cur && (cur.tribesUpdatedAt || cur.updatedAt)) || Date.now() };
+        await redis.set(KEY, record);
+        res.status(200).json({ ok: true, updatedAt: record.updatedAt, version: VERSION });
+        return;
+      }
       if (typeof body.state === 'undefined' || body.state === null) {
         res.status(400).json({ error: 'missing_state' });
         return;
@@ -163,6 +184,7 @@ export default async function handler(req, res) {
       if (existing && existing.state && body.state && typeof body.state === 'object') {
         if (body.state.people == null && existing.state.people) body.state.people = existing.state.people;
         if (body.state.tagCreators == null && existing.state.tagCreators) body.state.tagCreators = existing.state.tagCreators;
+        if (body.state.evals == null && existing.state.evals) body.state.evals = existing.state.evals;
       }
       // Snapshot the version we're about to replace so any bad save is recoverable (keep last 30).
       // Skip when only metadata changed (e.g. auto-sync bumping lastJiraSync with identical tribes) so

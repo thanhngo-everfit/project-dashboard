@@ -151,3 +151,44 @@ button (admin only) still opens the tick-to-apply review.
 - To find the field id (if auto-detect fails), the endpoint supports
   `POST /api/jira {"action":"fields","query":"eta"}` which lists matching Jira fields.
 - Local `npx serve` does not run `/api`; test on the deployed URL or with `vercel dev`.
+
+---
+
+## Step 5 — Organization view & AI performance evaluation (admin only)
+
+The **🏛️ Organization** tab shows an org chart (Squad Leads → their squads → members, from the
+People directory). Click any member to open their **detail & performance** modal:
+
+- **Working history** — Jira worklog hours, projects, and a per-day calendar, filtered by review period.
+- **Performance score + per-criterion insights** — role-based criteria, scored 1–5 with an insight and
+  your comment each, plus an overall score and summary. Reviewed **by period** (quarters).
+- **AI insights** — the **✨ Generate AI insights** button sends the member's worklog history, Slack
+  activity, your notes, and their self-evaluation to OpenAI and fills in scores + insights, which you
+  then edit before saving.
+- **Slack activity** — **💬 Pull Slack** pulls the member's recent message activity as AI evidence.
+- **CSV import** — import **your evaluation** and the member's **self-evaluation** from CSV.
+
+Everything here is **admin-only** (`thanhngo@everfit.io`); non-admins see working history only.
+Evaluations are stored in the shared record under `state.evals[accountId][period]` and saved via a
+targeted `patchEvals` merge (never clobbers project/people data).
+
+### One-time setup (Vercel env vars)
+
+**OpenAI (for AI insights):**
+- `OPENAI_API_KEY` — your OpenAI API key (`sk-...`).
+- `OPENAI_MODEL` *(optional)* — chat model id; defaults to `gpt-4o`.
+- `OPENAI_BASE_URL` *(optional)* — override base URL (Azure/proxy).
+
+**Slack (for activity signals):**
+- `SLACK_USER_TOKEN` — a **user** OAuth token (`xoxp-...`) with scopes `search:read`, `users:read`,
+  `users:read.email`. `search.messages` **requires a user token** — a bot token cannot search.
+- `SLACK_BOT_TOKEN` *(optional)* — fallback used only for user lookup if no user token is set.
+
+Redeploy after adding env vars. For reliable Slack matching, set each member's **email** in their
+detail modal (it's saved to the directory and used for `users.lookupByEmail`).
+
+### CSV format
+Header row with columns `criterion,score,comment` (one row per criterion). Optional `member` (or
+`name`) column lets one file cover several people — rows are matched to the member by name. An optional
+`summary` column/row fills the overall summary. Use **Import my eval** for your scores and **Import
+self-eval** for the member's self-assessment.

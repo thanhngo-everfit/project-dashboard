@@ -241,7 +241,8 @@
   .org-sum{font-size:12.5px;color:var(--muted);display:flex;align-items:center;justify-content:center;margin-bottom:16px;text-align:center;flex-wrap:wrap;}
   .org-divs{display:flex;justify-content:center;align-items:flex-start;gap:34px;flex-wrap:wrap;}
   .org-div{flex:1 1 460px;min-width:300px;max-width:760px;display:flex;flex-direction:column;align-items:center;}
-  .org-lead{display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,#eef2ff,#f5f0ff);border:1px solid #d7ddff;border-radius:14px;padding:12px 20px;box-shadow:0 4px 14px rgba(76,111,255,.10);}
+  .org-lead{display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,#eef2ff,#f5f0ff);border:1px solid #d7ddff;border-radius:14px;padding:12px 20px;box-shadow:0 4px 14px rgba(76,111,255,.10);cursor:pointer;transition:box-shadow .12s,transform .12s;}
+  .org-lead:hover{box-shadow:0 6px 18px rgba(76,111,255,.20);transform:translateY(-1px);}
   .org-lead .assignee-av,.org-lead .assignee-ini{width:46px;height:46px;font-size:15px;}
   .org-l-name{font-weight:800;font-size:15px;color:var(--text);}
   .org-l-title{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#5b21b6;margin-top:2px;}
@@ -255,12 +256,47 @@
   .org-sq-body{padding:10px 12px;display:flex;flex-direction:column;gap:11px;}
   .org-role-lbl{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:#98a2b3;margin-bottom:5px;display:flex;align-items:center;gap:6px;}
   .org-role-c{background:#eef1f6;border-radius:999px;padding:0 6px;font-size:9.5px;color:#667085;}
-  .org-person{display:flex;align-items:center;gap:8px;padding:3px 5px;border-radius:8px;}
-  .org-person:hover{background:#f5f7fa;}
+  .org-person{display:flex;align-items:center;gap:8px;padding:3px 5px;border-radius:8px;cursor:pointer;}
+  .org-person:hover{background:#eef4ff;box-shadow:inset 0 0 0 1px #d7e0ff;}
   .org-person .assignee-av,.org-person .assignee-ini{width:26px;height:26px;font-size:10px;}
   .org-p-name{font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .org-empty{font-size:12px;color:var(--muted);padding:6px 2px;}
   @media (max-width:820px){ .org{padding:12px;} .org-divs{gap:20px;} }
+  /* ===== Member detail / performance modal ===== */
+  .md-head{display:flex;align-items:center;gap:14px;margin-bottom:4px;}
+  .md-head .assignee-av,.md-head .assignee-ini{width:52px;height:52px;font-size:17px;flex:none;}
+  .md-h-name{font-size:19px;font-weight:800;color:var(--text);}
+  .md-h-sub{font-size:12.5px;color:var(--muted);margin-top:2px;}
+  .md-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:14px 0;padding:12px;background:#f7f9fc;border:1px solid var(--border);border-radius:10px;}
+  .md-bar label{font-size:11px;font-weight:700;color:var(--muted);display:flex;flex-direction:column;gap:4px;}
+  .md-bar select,.md-bar input{padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:#fff;}
+  .md-bar .md-actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;align-items:end;}
+  .md-cols{display:grid;grid-template-columns:1.15fr .85fr;gap:20px;align-items:start;}
+  @media (max-width:900px){ .md-cols{grid-template-columns:1fr;} }
+  .md-sec-h{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#98a2b3;margin:0 0 10px;display:flex;align-items:center;gap:8px;}
+  .md-overall{display:flex;align-items:center;gap:16px;padding:14px 16px;border:1px solid var(--border);border-radius:12px;background:linear-gradient(135deg,#f0f9ff,#eef2ff);margin-bottom:14px;}
+  .md-score-big{font-size:34px;font-weight:800;line-height:1;color:#1570ef;}
+  .md-score-out{font-size:14px;color:var(--muted);font-weight:700;}
+  .md-summary{flex:1;min-width:0;font-size:12.5px;color:#475467;line-height:1.5;}
+  .md-crit{border:1px solid var(--border);border-radius:11px;padding:11px 13px;margin-bottom:10px;background:var(--panel);}
+  .md-crit-top{display:flex;align-items:center;gap:10px;margin-bottom:7px;}
+  .md-crit-name{font-weight:700;font-size:13.5px;color:var(--text);flex:1;}
+  .md-crit-self{font-size:11px;color:#8a6d1f;background:#fef3c7;border:1px solid #fcd34d;border-radius:999px;padding:1px 8px;font-weight:700;}
+  .md-stars{display:flex;gap:3px;}
+  .md-star{cursor:pointer;font-size:17px;line-height:1;color:#d0d5dd;user-select:none;}
+  .md-star.on{color:#f59e0b;}
+  .md-crit-insight{width:100%;box-sizing:border-box;font-size:12.5px;color:#475467;line-height:1.45;border:1px dashed var(--border);border-radius:8px;padding:7px 9px;background:#fcfcfd;font-family:inherit;resize:vertical;min-height:44px;}
+  .md-crit-cmt{width:100%;box-sizing:border-box;margin-top:6px;font-size:12.5px;padding:6px 9px;border:1px solid var(--border);border-radius:8px;font-family:inherit;resize:vertical;min-height:32px;}
+  .md-note{font-size:11px;color:var(--muted);margin-top:3px;}
+  .md-proj{display:grid;grid-template-columns:9px 1fr auto;gap:9px;align-items:center;padding:5px 2px;font-size:12.5px;}
+  .md-proj .md-dot{width:9px;height:9px;border-radius:50%;}
+  .md-proj .md-pn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .md-proj .md-ph{font-weight:700;color:#344054;}
+  .md-hist-tot{font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px;}
+  .md-empty{font-size:12.5px;color:var(--muted);padding:8px 2px;}
+  .md-ai-hint{font-size:11px;color:var(--muted);margin:2px 0 10px;}
+  .md-self-box{border:1px solid var(--border);border-radius:10px;padding:11px 13px;margin-top:14px;background:#fffdf5;}
+  .md-file{display:none;}
   .assignee-av{width:22px;height:22px;border-radius:50%;object-fit:cover;border:1px solid #fff;box-shadow:0 0 0 1px var(--border);}
   .assignee-ini{width:22px;height:22px;border-radius:50%;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#fff;border:1px solid #fff;box-shadow:0 0 0 1px var(--border);}
   .links-line{display:flex;align-items:center;gap:5px;flex-wrap:wrap;}
@@ -1108,6 +1144,7 @@ function load(){
 function migrate(s){
   if(!s.people || typeof s.people!=='object' || Array.isArray(s.people)) s.people={};   // shared directory: accountId -> {name,avatar,squads[],role}
   Object.values(s.people).forEach(m=>{ if(m && typeof m==='object' && !Array.isArray(m)){ if(!Array.isArray(m.squads)) m.squads = m.squad?[m.squad]:[]; delete m.squad; } });   // squad(string) -> squads[]
+  if(!s.evals || typeof s.evals!=='object' || Array.isArray(s.evals)) s.evals={};   // performance evals: accountId -> period -> {...}
   // wrap legacy top-level squads into a single "Core Product" tribe
   if(!Array.isArray(s.tribes)){
     s.tribes = [{ id:'tribe_core', name:'Core Product', squads: Array.isArray(s.squads)?s.squads:[] }];
@@ -2532,7 +2569,7 @@ function renderOrgChart(g){
     const body=roles.map(r=>{
       const grp=members.filter(p=>(p.role||'(no role)')===r);
       return `<div class="org-role"><div class="org-role-lbl">${esc(ROLE_FULL[r]||r)} <span class="org-role-c">${grp.length}</span></div>`+
-        grp.map(p=>`<div class="org-person" title="${esc(p.name+(p.role?(' · '+p.role):''))}">${personAvatarHTML({accountId:p.id,name:p.name,avatar:p.avatar})}<span class="org-p-name">${esc(p.name)}</span></div>`).join('')+
+        grp.map(p=>`<div class="org-person" data-acc="${esc(p.id)}" title="${esc(p.name+(p.role?(' · '+p.role):''))} — click for details">${personAvatarHTML({accountId:p.id,name:p.name,avatar:p.avatar})}<span class="org-p-name">${esc(p.name)}</span></div>`).join('')+
         `</div>`;
     }).join('');
     const col=document.createElement('div'); col.className='org-squad';
@@ -2557,7 +2594,7 @@ function renderOrgChart(g){
     const cards=squads.filter(sq=>mySquads.includes(sq.name));
     cards.forEach(sq=>assigned.add(sq.id));
     const div=document.createElement('div'); div.className='org-div';
-    div.innerHTML=`<div class="org-lead" title="${esc(lp.name)}">${personAvatarHTML(lp)}<div class="org-l-id"><div class="org-l-name">${esc(lp.name)}</div><div class="org-l-title">${esc(l.title)} · ${cards.length} squad${cards.length!==1?'s':''}</div></div></div><div class="org-trunk"></div>`;
+    div.innerHTML=`<div class="org-lead" data-acc="${esc(l.accountId)}" title="${esc(lp.name)} — click for details">${personAvatarHTML(lp)}<div class="org-l-id"><div class="org-l-name">${esc(lp.name)}</div><div class="org-l-title">${esc(l.title)} · ${cards.length} squad${cards.length!==1?'s':''}</div></div></div><div class="org-trunk"></div>`;
     const grid=document.createElement('div'); grid.className='org-grid';
     if(cards.length) cards.forEach(sq=>grid.appendChild(squadCard(sq)));
     else { const em=document.createElement('div'); em.className='org-empty'; em.textContent='No squads'; grid.appendChild(em); }
@@ -2577,7 +2614,234 @@ function renderOrgChart(g){
 
   sumText.textContent=squads.length+' squad'+(squads.length!==1?'s':'')+' · '+totalMembers+' member'+(totalMembers!==1?'s':'')+' · '+ORG_LEADS.map(l=>((dir[l.accountId]||{}).name||l.name)+' ('+(l.squadKeys||[]).length+')').join(' · ');
   if(!squads.length){ const em=document.createElement('div'); em.className='org-empty'; em.style.margin='20px'; em.textContent='No squads in this tribe yet.'; wrap.appendChild(em); }
+  wrap.addEventListener('click',e=>{ const el=e.target.closest('[data-acc]'); if(el && el.dataset.acc) openMemberDetail(el.dataset.acc); });
   g.appendChild(wrap);
+}
+
+/* ============================ Member detail & performance evaluation ============================ */
+// Role-based scoring criteria (5 each). Falls back to _default for unknown/blank roles.
+const EVAL_CRITERIA = {
+  _default:  ['Delivery','Quality','Collaboration','Ownership','Communication'],
+  Backend:   ['Delivery','Code quality','Reliability','Collaboration','Ownership'],
+  Frontend:  ['Delivery','UI quality','Code quality','Collaboration','Ownership'],
+  iOS:       ['Delivery','Code quality','Reliability','Collaboration','Ownership'],
+  Android:   ['Delivery','Code quality','Reliability','Collaboration','Ownership'],
+  Fullstack: ['Delivery','Code quality','Reliability','Collaboration','Ownership'],
+  QA:        ['Defect detection','Test coverage','Delivery','Rigor','Collaboration'],
+  QC:        ['Defect detection','Test coverage','Delivery','Rigor','Collaboration'],
+  BA:        ['Requirements clarity','Stakeholder mgmt','Delivery','Documentation','Collaboration'],
+  Design:    ['Design quality','Consistency','Delivery','Collaboration','Ownership'],
+  Data:      ['Analysis','Data quality','Delivery','Collaboration','Ownership'],
+  DevOps:    ['Reliability','Automation','Delivery','Collaboration','Ownership'],
+  PM:        ['Planning','Delivery','Stakeholder mgmt','Leadership','Communication'],
+  PC:        ['Coordination','Delivery','Communication','Documentation','Ownership'],
+  SM:        ['Facilitation','Team health','Delivery','Communication','Ownership'],
+};
+function criteriaForRole(role){ return (EVAL_CRITERIA[role]||EVAL_CRITERIA._default).slice(); }
+const isoLocal=d=>{ const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), da=String(d.getDate()).padStart(2,'0'); return y+'-'+m+'-'+da; };
+function periodList(){ const now=new Date(); let y=now.getFullYear(), q=Math.floor(now.getMonth()/3)+1; const out=[]; for(let i=0;i<8;i++){ out.push(y+'-Q'+q); q--; if(q<1){q=4;y--;} } return out; }
+function periodBounds(pk){ const m=/^(\d{4})-Q([1-4])$/.exec(pk||''); if(!m) return null; const y=+m[1], q=+m[2]; return {from:isoLocal(new Date(y,(q-1)*3,1)), to:isoLocal(new Date(y,q*3,0))}; }
+// A member's worklog history (optionally bounded to a period) from delivery-ticket contributors.
+function memberWorklog(accountId, bounds){
+  let totalSec=0; const projects={}, days={};
+  allProjects().forEach(({p,cat})=>{
+    (p.contributors||[]).forEach(a=>{
+      if(!a || a.accountId!==accountId) return;
+      const pd=a.days||{}; let projSec=0;
+      if(Object.keys(pd).length){
+        Object.entries(pd).forEach(([d,s])=>{ if(bounds && (d<bounds.from||d>bounds.to)) return; const sec=Number(s)||0; if(sec<=0) return; projSec+=sec; days[d]=(days[d]||0)+sec; });
+      } else if(!bounds){ projSec += Number(a.seconds)||0; }   // no per-day data: only usable for "all time"
+      if(projSec>0){ const e=projects[p.id]||(projects[p.id]={name:p.name,cat:cat.name,color:cat.color||'#cdb4f6',seconds:0}); e.seconds+=projSec; totalSec+=projSec; }
+    });
+  });
+  return { totalSec, activeDays:Object.keys(days).length, projects:Object.values(projects).sort((a,b)=>b.seconds-a.seconds), days };
+}
+// Minimal CSV parser -> array of row objects keyed by header. Tolerates quotes and commas in quotes.
+function parseCSV(text){
+  const rows=[]; let i=0, field='', row=[], inQ=false; text=String(text).replace(/\r\n?/g,'\n');
+  const pushF=()=>{ row.push(field); field=''; }; const pushR=()=>{ pushF(); rows.push(row); row=[]; };
+  while(i<text.length){ const c=text[i];
+    if(inQ){ if(c==='"'){ if(text[i+1]==='"'){field+='"';i++;} else inQ=false; } else field+=c; }
+    else { if(c==='"') inQ=true; else if(c===',') pushF(); else if(c==='\n') pushR(); else field+=c; }
+    i++;
+  }
+  if(field.length||row.length) pushR();
+  if(!rows.length) return [];
+  const heads=rows[0].map(h=>h.trim().toLowerCase());
+  return rows.slice(1).filter(r=>r.some(c=>c.trim()!=='')).map(r=>{ const o={}; heads.forEach((h,idx)=>o[h]=(r[idx]||'').trim()); return o; });
+}
+let mdSel=null;   // {accountId, period}
+// The member performance / detail modal.
+function openMemberDetail(accountId){
+  const dir=state.people||{};
+  // resolve display info (directory first, then any contributor record)
+  const kp=knownPeople().find(p=>p.accountId===accountId)||{};
+  const meta=dir[accountId]||{};
+  const person={ accountId, name:meta.name||kp.name||'Unknown', avatar:meta.avatar||kp.avatar||'', role:meta.role||kp.role||'', squads:(meta.squads||kp.squads||[]) };
+  const admin=isAdmin();
+  let period=(mdSel&&mdSel.accountId===accountId&&mdSel.period)||periodList()[0];
+  const critNames=criteriaForRole(person.role);
+  if(!state.evals) state.evals={};
+
+  // working copy of the eval for the chosen period (deep clone)
+  let work;
+  function loadWork(){
+    const stored=(state.evals[accountId]||{})[period];
+    if(stored){ work=JSON.parse(JSON.stringify(stored)); }
+    else work={ criteria: critNames.map(n=>({name:n,score:0,insight:'',comment:''})), overall:0, summary:'', managerComment:'', self:null, ai:null, slack:null };
+    // reconcile criteria to the role's current set (keep matching by name)
+    const byName={}; (work.criteria||[]).forEach(c=>byName[(c.name||'').toLowerCase()]=c);
+    work.criteria = critNames.map(n=>byName[n.toLowerCase()]||{name:n,score:0,insight:'',comment:''});
+  }
+  loadWork();
+  const recalcOverall=()=>{ const arr=work.criteria.filter(c=>c.score>0); return arr.length? Math.round(arr.reduce((s,c)=>s+c.score,0)/arr.length*10)/10 : (work.overall||0); };
+
+  function draw(){
+    mdSel={accountId, period};
+    const bounds=periodBounds(period);
+    const wl=memberWorklog(accountId, bounds);
+    modal.style.width='940px';
+    const email=meta.email||'';
+    const periodOpts=periodList().map(p=>`<option value="${p}" ${p===period?'selected':''}>${p}</option>`).join('');
+    modal.innerHTML=`
+      <div class="md-head">${personAvatarHTML(person)}
+        <div><div class="md-h-name">${esc(person.name)}</div>
+        <div class="md-h-sub">${esc(person.role||'—')}${(person.squads&&person.squads.length)?' · '+esc(person.squads.join(', ')):''}</div></div>
+      </div>
+      <div class="md-bar">
+        <label>Review period<select id="md_period">${periodOpts}</select></label>
+        ${admin?`<label>Email (for Slack)<input id="md_email" placeholder="name@everfit.io" value="${esc(email)}" size="20"></label>`:''}
+        ${admin?`<div class="md-actions">
+          <button class="btn" id="md_ai">✨ Generate AI insights</button>
+          <button class="btn" id="md_slack">💬 Pull Slack</button>
+          <button class="btn" id="md_csv">⇪ Import my eval</button>
+          <button class="btn" id="md_csv_self">⇪ Import self-eval</button>
+        </div>`:''}
+      </div>
+      <input type="file" accept=".csv,text/csv" class="md-file" id="md_file">
+      <input type="file" accept=".csv,text/csv" class="md-file" id="md_file_self">
+      <div class="md-cols" ${admin?'':'style="grid-template-columns:1fr;"'}>
+        ${admin?`<div class="md-left">
+          <div class="md-sec-h">Performance ${esc(period)}</div>
+          <div class="md-overall"><div><div class="md-score-big" id="md_overall">${(recalcOverall()||0).toFixed(1)}</div><div class="md-score-out">/ 5.0 overall</div></div>
+            <textarea class="md-summary" id="md_summary" placeholder="Overall summary — generate with AI or write your own…">${esc(work.summary||'')}</textarea></div>
+          <div id="md_crits"></div>
+          <div class="md-sec-h" style="margin-top:16px;">Manager comment</div>
+          <textarea class="md-crit-cmt" id="md_mgr" style="min-height:60px;" placeholder="Your overall comment…">${esc(work.managerComment||'')}</textarea>
+          ${work.self?`<div class="md-self-box"><div class="md-sec-h" style="margin:0 0 8px;">Self-evaluation</div><div id="md_self"></div></div>`:''}
+          <div class="md-ai-hint" id="md_ai_hint"></div>
+        </div>`:''}
+        <div class="md-right">
+          <div class="md-sec-h">Working history <span class="md-note">${bounds?esc(bounds.from+' → '+bounds.to):'all time'}</span></div>
+          <div class="md-hist-tot">${fmtHours(wl.totalSec)} logged · ${wl.projects.length} project${wl.projects.length!==1?'s':''} · ${wl.activeDays} active day${wl.activeDays!==1?'s':''}</div>
+          <div id="md_projects"></div>
+          <div id="md_cal" style="margin-top:10px;"></div>
+        </div>
+      </div>
+      <div class="modal-actions">${admin?'<button class="btn" id="md_delete">Delete this period</button>':''}<button class="btn" id="md_close">Close</button>${admin?'<button class="btn primary" id="md_save">Save</button>':''}</div>`;
+
+    // criteria rows (admin only — evaluation data is manager-private)
+    if(admin){
+      const stars=(val,onSet)=>{ const w=document.createElement('div'); w.className='md-stars'; for(let s=1;s<=5;s++){ const st=document.createElement('span'); st.className='md-star'+(s<=val?' on':''); st.textContent='★'; st.dataset.v=s; st.onclick=()=>onSet(s===val?0:s); w.appendChild(st); } return w; };
+      const cw=modal.querySelector('#md_crits');
+      work.criteria.forEach((c)=>{
+        const selfC=work.self && (work.self.criteria||[]).find(x=>(x.name||'').toLowerCase()===c.name.toLowerCase());
+        const row=document.createElement('div'); row.className='md-crit';
+        const top=document.createElement('div'); top.className='md-crit-top';
+        top.innerHTML=`<span class="md-crit-name">${esc(c.name)}</span>${selfC&&selfC.score?`<span class="md-crit-self" title="Self score">self ${selfC.score}</span>`:''}`;
+        const stEl=stars(c.score,(v)=>{ c.score=v; work.overall=recalcOverall(); modal.querySelector('#md_overall').textContent=work.overall.toFixed(1); top.querySelectorAll('.md-star').forEach((s,i)=>s.classList.toggle('on',i<v)); });
+        top.appendChild(stEl); row.appendChild(top);
+        const ins=document.createElement('textarea'); ins.className='md-crit-insight'; ins.value=c.insight||''; ins.placeholder='Insight / evidence…'; ins.oninput=()=>c.insight=ins.value; row.appendChild(ins);
+        const cmt=document.createElement('textarea'); cmt.className='md-crit-cmt'; cmt.value=c.comment||''; cmt.placeholder='Your comment on this criterion…'; cmt.oninput=()=>c.comment=cmt.value; row.appendChild(cmt);
+        cw.appendChild(row);
+      });
+      if(work.self){ const sc=modal.querySelector('#md_self'); if(sc){ const parts=(work.self.criteria||[]).map(x=>`<div class="md-proj"><span></span><span class="md-pn">${esc(x.name)}${x.comment?` <span class="md-note">${esc(x.comment)}</span>`:''}</span><span class="md-ph">${x.score?x.score:'—'}</span></div>`).join('');
+        sc.innerHTML=(work.self.summary?`<div class="md-note" style="margin-bottom:6px;">${esc(work.self.summary)}</div>`:'')+(parts||'<div class="md-empty">No self-evaluation data.</div>'); } }
+    }
+    // projects
+    const pw=modal.querySelector('#md_projects');
+    if(wl.projects.length){ pw.innerHTML=wl.projects.map(pr=>`<div class="md-proj"><span class="md-dot" style="background:${pr.color}"></span><span class="md-pn">${esc(pr.name)} <span class="md-note">${esc(pr.cat)}</span></span><span class="md-ph">${fmtHours(pr.seconds)}</span></div>`).join(''); }
+    else pw.innerHTML='<div class="md-empty">No logged time in this period. Run a Jira sync to pull worklogs.</div>';
+    renderDayCalendar(modal.querySelector('#md_cal'), {title:person.name, sub:bounds?period:'All time', days:wl.days, sec:wl.totalSec});
+
+    // wire controls
+    modal.querySelector('#md_period').onchange=e=>{ period=e.target.value; loadWork(); draw(); };
+    modal.querySelector('#md_close').onclick=closeModal;
+    if(admin){
+      const emailEl=modal.querySelector('#md_email');
+      const sumEl=modal.querySelector('#md_summary'); sumEl.oninput=()=>work.summary=sumEl.value;
+      const mgrEl=modal.querySelector('#md_mgr'); mgrEl.oninput=()=>work.managerComment=mgrEl.value;
+      modal.querySelector('#md_save').onclick=()=>{
+        work.overall=recalcOverall(); work.updatedAt=Date.now(); work.updatedBy=currentEmail;
+        if(!state.evals[accountId]) state.evals[accountId]={};
+        state.evals[accountId][period]=JSON.parse(JSON.stringify(work));
+        // persist email onto the directory entry (best-effort) so Slack lookups are reliable
+        const em=(emailEl.value||'').trim();
+        let peoplePatch=null;
+        if(em && dir[accountId] && dir[accountId].email!==em){ dir[accountId]={...dir[accountId], email:em}; peoplePatch={[accountId]:dir[accountId]}; }
+        patchEvals({[accountId]:{[period]:state.evals[accountId][period]}});
+        if(peoplePatch) patchPeople(peoplePatch);
+        setSync('Evaluation saved','ok'); closeModal();
+      };
+      modal.querySelector('#md_delete').onclick=()=>{
+        if(!confirm('Delete the '+period+' evaluation for '+person.name+'?')) return;
+        if(state.evals[accountId]) delete state.evals[accountId][period];
+        patchEvals({[accountId]:{[period]:null}});
+        loadWork(); draw();
+      };
+      const hint=modal.querySelector('#md_ai_hint');
+      modal.querySelector('#md_ai').onclick=async()=>{
+        hint.textContent='Generating… (analyzing worklogs, Slack, notes, self-eval)';
+        try{
+          const body={ name:person.name, role:person.role, period, criteria:critNames,
+            history:{ totalHours:Math.round(wl.totalSec/360)/10, activeDays:wl.activeDays, projects:wl.projects.map(p=>({name:p.name, category:p.cat, hours:Math.round(p.seconds/360)/10})) },
+            slack: work.slack||null,
+            managerNotes: [work.managerComment, ...work.criteria.map(c=>c.comment?(c.name+': '+c.comment):'')].filter(Boolean).join('\n'),
+            selfEval: work.self||null };
+          const r=await apiFetch('/api/evaluate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+          const j=await r.json().catch(()=>({}));
+          if(!r.ok){ hint.textContent='AI error: '+(j.error||r.status)+(j.detail?(' — '+j.detail):''); return; }
+          (j.criteria||[]).forEach(ac=>{ const c=work.criteria.find(x=>x.name.toLowerCase()===(ac.name||'').toLowerCase()); if(c){ c.score=ac.score||c.score; c.insight=ac.insight||c.insight; } });
+          work.summary=j.summary||work.summary; work.overall=j.overall||recalcOverall(); work.ai={model:j.model, generatedAt:j.generatedAt};
+          draw(); modal.querySelector('#md_ai_hint').textContent='AI insights generated with '+(j.model||'OpenAI')+' — review & edit, then Save.';
+        }catch(e){ hint.textContent='AI request failed: '+e.message; }
+      };
+      modal.querySelector('#md_slack').onclick=async()=>{
+        hint.textContent='Pulling Slack activity…';
+        try{
+          const bounds2=periodBounds(period);
+          const r=await apiFetch('/api/slack',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:person.name, email:(emailEl.value||meta.email||'').trim(), from:bounds2&&bounds2.from, to:bounds2&&bounds2.to})});
+          const j=await r.json().catch(()=>({}));
+          if(!r.ok){ hint.textContent='Slack error: '+(j.error||r.status)+(j.detail?(' — '+j.detail):''); return; }
+          if(!j.found){ hint.textContent='Slack: '+(j.detail||'no matching user'); return; }
+          work.slack={ user:j.user, messageCount:j.messageCount, channels:j.channels, samples:j.samples };
+          hint.textContent='Slack: '+(j.messageCount!=null?(j.messageCount+' messages'):'user found')+(j.channels&&j.channels.length?(' across '+j.channels.length+' channels'):'')+(j.detail?(' — '+j.detail):'')+'. Included in next AI run.';
+        }catch(e){ hint.textContent='Slack request failed: '+e.message; }
+      };
+      const importCSV=(fileEl, isSelf)=>{ const f=fileEl.files&&fileEl.files[0]; if(!f) return; const rd=new FileReader(); rd.onload=()=>{
+        const rows=parseCSV(rd.result);
+        // optional member column -> filter to this person
+        const hasMember=rows.length && ('member' in rows[0] || 'name' in rows[0]);
+        const mine=hasMember? rows.filter(r=>nameLooseMatch(person.name, r.member||r.name||'')) : rows;
+        let applied=0;
+        mine.forEach(r=>{ const cn=(r.criterion||r.criteria||'').trim(); if(!cn) return; const sc=Number(r.score)||0; const cmt=(r.comment||r.note||'').trim();
+          if(isSelf){ if(!work.self) work.self={criteria:[],summary:''}; let c=work.self.criteria.find(x=>nameLooseMatch(cn,x.name)); if(!c){ c={name:cn,score:0,comment:''}; work.self.criteria.push(c);} c.score=sc||c.score; if(cmt) c.comment=cmt; applied++; }
+          else { let c=work.criteria.find(x=>nameLooseMatch(cn,x.name)); if(c){ if(sc) c.score=sc; if(cmt) c.comment=cmt; applied++; } }
+        });
+        // a lone "summary" row/column
+        const sumRow=mine.find(r=>r.summary); if(sumRow&&sumRow.summary){ if(isSelf){ if(!work.self)work.self={criteria:[],summary:''}; work.self.summary=sumRow.summary; } else work.summary=sumRow.summary; }
+        work.overall=recalcOverall(); draw();
+        modal.querySelector('#md_ai_hint').textContent=(isSelf?'Self-eval':'Your eval')+' CSV imported: '+applied+' criteria applied. Review & Save.';
+        fileEl.value='';
+      }; rd.readAsText(f); };
+      modal.querySelector('#md_csv').onclick=()=>modal.querySelector('#md_file').click();
+      modal.querySelector('#md_csv_self').onclick=()=>modal.querySelector('#md_file_self').click();
+      modal.querySelector('#md_file').onchange=()=>importCSV(modal.querySelector('#md_file'), false);
+      modal.querySelector('#md_file_self').onchange=()=>importCSV(modal.querySelector('#md_file_self'), true);
+    }
+  }
+  draw();
+  modalBg.classList.add('open');
 }
 // Day-breakdown calendar (week grid, newest week on top) for the selected person/project.
 function renderDayCalendar(container, sel){
@@ -2628,6 +2892,17 @@ async function patchPeople(patch){
     if(r.ok){ const j=await r.json().catch(()=>({})); checkVersion(j.version); setSync('People updated','ok'); }
     else { setSync('People save failed','bad'); }
   }catch(e){ setSync('People save failed — offline','bad'); }
+}
+// Save ONLY changed evaluations (merged into the current record, keyed by accountId->period). Admin only.
+async function patchEvals(patch){
+  if(!idToken || updateAvailable || saveBlocked) return;
+  setSync('Saving evaluation…');
+  try{
+    const r=await apiFetch('/api/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'patchEvals', evals:patch})});
+    if(r.status===401){ handleAuthExpired(); return; }
+    if(r.ok){ const j=await r.json().catch(()=>({})); checkVersion(j.version); setSync('Evaluation saved','ok'); }
+    else { setSync('Evaluation save failed','bad'); }
+  }catch(e){ setSync('Evaluation save failed — offline','bad'); }
 }
 // Manage People: assign a squad + role to each known person (shared directory). Admin only.
 function openPeopleManager(){
