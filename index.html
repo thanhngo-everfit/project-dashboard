@@ -195,9 +195,11 @@
   .pm-add select{flex:none;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:#fff;}
   .pm-manual{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.3px;color:#8a6d1f;background:#fef3c7;border:1px solid #fcd34d;border-radius:999px;padding:1px 6px;margin-left:6px;}
   .pm-row.sel{background:#eef4ff;}
-  .pm-head{display:grid;grid-template-columns:1fr 168px 148px;gap:10px;font-size:10.5px;font-weight:800;color:#98a2b3;text-transform:uppercase;letter-spacing:.4px;padding:0 4px 6px;}
+  .pm-head{display:grid;grid-template-columns:1fr 160px 140px 28px;gap:10px;font-size:10.5px;font-weight:800;color:#98a2b3;text-transform:uppercase;letter-spacing:.4px;padding:0 4px 6px;}
   .pm-list{max-height:54vh;overflow-y:auto;display:flex;flex-direction:column;gap:3px;}
-  .pm-row{display:grid;grid-template-columns:1fr 168px 148px;gap:10px;align-items:center;padding:4px;border-radius:8px;}
+  .pm-row{display:grid;grid-template-columns:1fr 160px 140px 28px;gap:10px;align-items:center;padding:4px;border-radius:8px;}
+  .pm-del{border:none;background:transparent;color:#c0c5cf;cursor:pointer;font-size:14px;width:24px;height:24px;border-radius:6px;line-height:1;}
+  .pm-del:hover{background:#fee4e2;color:#d92d20;}
   .pm-row:hover{background:#f7f9fc;}
   .pm-person{display:flex;align-items:center;gap:9px;min-width:0;}
   .pm-person .assignee-av,.pm-person .assignee-ini{width:28px;height:28px;font-size:11px;flex:none;}
@@ -841,6 +843,10 @@ const SQUAD_KEY_LABELS = { nutrition:'Nutrition', engagement:'Engagement', enabl
 function squadNameForKey(key){ const p=SQUAD_KEY_PATS[key]; const hit=p && curSquads().map(s=>s.name).find(n=>p.test(n)); return hit || SQUAD_KEY_LABELS[key] || key; }
 const DIACRITICS=new RegExp('['+String.fromCharCode(0x300)+'-'+String.fromCharCode(0x36f)+']','g');
 const stripAccents=s=>(s||'').normalize('NFD').replace(DIACRITICS,'').toLowerCase().trim();
+// Loose name match that tolerates Vietnamese name reordering (e.g. "Ngoc Nguyen" == "Nguyen Thi My Ngoc"):
+// every token of the shorter name must appear in the other's tokens.
+function nameTokens(s){ return stripAccents(s).split(/[^a-z0-9]+/).filter(Boolean); }
+function nameLooseMatch(a,b){ const ta=nameTokens(a), sb=new Set(nameTokens(b)); return ta.length>0 && ta.every(t=>sb.has(t)); }
 // Role display order so leads/coordinators show first among a squad's people.
 const ROLE_ORDER = ['PM','SM','PC','Fullstack','Backend','Frontend','iOS','Android','Data','BA','QA','QC','Design','DevOps'];
 const ORD_ROLE=r=>{ const i=ROLE_ORDER.indexOf(r); return i<0?99:i; };
@@ -2520,19 +2526,28 @@ function openPeopleManager(){
       <button class="btn primary" id="pm_add_btn">+ Add</button>
     </div>
     <input id="pm_search" class="pm-search" placeholder="Search name…" autocomplete="off">
-    <div class="pm-head"><span>Person</span><span>Squad</span><span>Role</span></div>
+    <div class="pm-head"><span>Person</span><span>Squad</span><span>Role</span><span></span></div>
     <div class="pm-list" id="pm_list"></div>
     <div class="modal-actions"><button class="btn" id="pm_cancel">Cancel</button><button class="btn primary" id="pm_save">Save</button></div>`;
   const listEl=modal.querySelector('#pm_list'), countEl=modal.querySelector('#pm_count');
+  const removed=new Set();   // persisted ids to delete from the directory on Save
+  function removePerson(id){
+    const i=ppl.findIndex(x=>x.accountId===id); if(i>=0) ppl.splice(i,1);
+    delete work[id];
+    if(state.people && state.people[id]) removed.add(id);   // was saved -> needs a server delete
+    renderList();
+  }
   function makeRow(p){
     const row=document.createElement('div'); row.className='pm-row'; row.dataset.id=p.accountId;
     const w=work[p.accountId]||{squad:'',role:''};
     const manual=String(p.accountId).startsWith('m:');
     row.innerHTML=`<span class="pm-person">${personAvatarHTML(p)}<span class="pm-name">${esc(p.name||'Unknown')}</span>${manual?'<span class="pm-manual">manual</span>':''}</span>`+
-      `<select class="pm-squad">${squadOpts(w.squad)}</select><select class="pm-role">${roleOpts(w.role)}</select>`;
+      `<select class="pm-squad">${squadOpts(w.squad)}</select><select class="pm-role">${roleOpts(w.role)}</select>`+
+      `<button class="pm-del" title="Remove from directory">✕</button>`;
     const ss=row.querySelector('.pm-squad'), rs=row.querySelector('.pm-role'); ss.value=w.squad||''; rs.value=w.role||'';
     ss.onchange=e=>{ work[p.accountId].squad=e.target.value; };
     rs.onchange=e=>{ work[p.accountId].role=e.target.value; };
+    row.querySelector('.pm-del').onclick=()=>removePerson(p.accountId);
     return row;
   }
   function renderList(){
@@ -2566,9 +2581,9 @@ function openPeopleManager(){
   modal.querySelector('#pm_auto').onclick=()=>{
     const taken=new Set(); let matched=0, added=0;
     SQUAD_ROSTER.forEach(([nm,role,key])=>{
-      const squad=squadNameForKey(key), norm=stripAccents(nm);
-      let p=ppl.find(x=>!String(x.accountId).startsWith('m:') && !taken.has(x.accountId) && stripAccents(x.name).startsWith(norm))
-          || ppl.find(x=>!taken.has(x.accountId) && stripAccents(x.name).startsWith(norm));
+      const squad=squadNameForKey(key);
+      let p=ppl.find(x=>!String(x.accountId).startsWith('m:') && !taken.has(x.accountId) && nameLooseMatch(nm, x.name))
+          || ppl.find(x=>!taken.has(x.accountId) && nameLooseMatch(nm, x.name));
       if(p) matched++; else { p=ensurePerson(nm); added++; }
       taken.add(p.accountId); work[p.accountId]={squad, role};
     });
@@ -2584,6 +2599,7 @@ function openPeopleManager(){
         patch[p.accountId]=state.people[p.accountId];
       }
     });
+    removed.forEach(id=>{ patch[id]=null; if(state.people) delete state.people[id]; });   // deletions
     closeModal(); render();
     if(Object.keys(patch).length) patchPeople(patch);   // targeted merge — never clobbers project data
   };

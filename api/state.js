@@ -98,7 +98,9 @@ export default async function handler(req, res) {
         if (!patch) { res.status(400).json({ error: 'missing_people' }); return; }
         const cur = await redis.get(KEY);
         const state = (cur && cur.state) ? cur.state : { tribes: [] };
-        state.people = { ...(state.people || {}), ...patch };   // merge per-accountId (keeps others' people edits)
+        const merged = { ...(state.people || {}) };            // merge per-accountId (keeps others' edits)
+        for (const [k, v] of Object.entries(patch)) { if (v === null) delete merged[k]; else merged[k] = v; }   // null = delete
+        state.people = merged;
         const record = { state, updatedAt: Date.now(), updatedBy: user.email, tribesUpdatedAt: (cur && (cur.tribesUpdatedAt || cur.updatedAt)) || Date.now() };
         await redis.set(KEY, record);
         res.status(200).json({ ok: true, updatedAt: record.updatedAt, version: VERSION });
