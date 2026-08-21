@@ -175,6 +175,12 @@
   .ppl-sqf{font-size:12px;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:6px;}
   .ppl-sqf select{font-size:13px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;font-family:inherit;background:#fff;}
   .pm-search{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;margin-bottom:10px;}
+  .pm-actions{margin-bottom:10px;}
+  .pm-add{display:flex;gap:8px;align-items:center;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border);}
+  .pm-add input{flex:1;min-width:0;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;}
+  .pm-add select{flex:none;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:#fff;}
+  .pm-manual{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.3px;color:#8a6d1f;background:#fef3c7;border:1px solid #fcd34d;border-radius:999px;padding:1px 6px;margin-left:6px;}
+  .pm-row.sel{background:#eef4ff;}
   .pm-head{display:grid;grid-template-columns:1fr 168px 148px;gap:10px;font-size:10.5px;font-weight:800;color:#98a2b3;text-transform:uppercase;letter-spacing:.4px;padding:0 4px 6px;}
   .pm-list{max-height:54vh;overflow-y:auto;display:flex;flex-direction:column;gap:3px;}
   .pm-row{display:grid;grid-template-columns:1fr 168px 148px;gap:10px;align-items:center;padding:4px;border-radius:8px;}
@@ -790,13 +796,34 @@ function tagsLineHTML(tags){
 const FEATURE_SIZES = ['Small','Medium','Big','Huge'];
 const PRIORITIES = ['Highest','High','Medium','Low'];
 const OPEN_SCALES = ['Internal','Beta','Public'];   // release scope shown in the Marketing view
-const ROLES = ['Backend','Frontend','Android','iOS','Fullstack','QA','QC','BA','Design','PM','PC','DevOps','Data'];   // people roles (PC = Project Coordinator)
-// Training & Automation squad roster (name -> role) for the one-click assign button in Manage People.
-const TA_ROSTER = [
-  ['Anh Phan','Frontend'], ['Dong Vo','Backend'], ['Duong Tran','Data'], ['Duyen Tran','PC'],
-  ['Hanh Tran','Frontend'], ['Khoa Huynh','Android'], ['Ngoc Nguyen','BA'], ['Nhat Huy','Backend'],
-  ['Thanh Ngo','PM'], ['Tran Nguyen','QA'], ['Trang Ngo','QA'], ['Tuyen Tran','iOS'],
+const ROLES = ['Backend','Frontend','Android','iOS','Fullstack','QA','QC','BA','Design','PM','PC','SM','DevOps','Data'];   // people roles (PC=Project Coordinator, SM=Scrum Master)
+// Core squad rosters from Slack user groups: [name, role, squadKey]. One primary squad per person
+// (shared coordinators/BAs/SM assigned to a home squad; adjust in the modal). squadKey resolves to the
+// tribe's actual squad name via squadNameForKey().
+const SQUAD_ROSTER = [
+  // Nutrition
+  ['Anh Van Le','PC','nutrition'],['Bao Ho','SM','nutrition'],['Dung Pham','BA','nutrition'],['Duy Le','Backend','nutrition'],
+  ['Ha Duong','Frontend','nutrition'],['Hanh Le','QA','nutrition'],['Hoai Ho','Android','nutrition'],['Hoang Nguyen','Frontend','nutrition'],
+  ['Phu Duong','Data','nutrition'],['Tan Huynh','iOS','nutrition'],['Thao Nguyen Nguyen','QA','nutrition'],['Thao Pham','PC','nutrition'],['Trung Huynh','Backend','nutrition'],
+  // Engagement
+  ['Bich Thuy','QA','engagement'],['Danh Truong','Android','engagement'],['Duc Trinh','Backend','engagement'],['Ngan Le','BA','engagement'],
+  ['Nhan Huynh','Frontend','engagement'],['Sally Phan','BA','engagement'],['Thai Bui','Frontend','engagement'],['Thanh Tran','iOS','engagement'],
+  ['Thuc Vo','Backend','engagement'],['Toan Tran','Frontend','engagement'],['Trang Le','BA','engagement'],['Van Nguyen','QA','engagement'],
+  // Enablement
+  ['Dong Truong','Frontend','enablement'],['Ha Nguyen','Fullstack','enablement'],['Lanh Ngo','QA','enablement'],['Loc Le','Fullstack','enablement'],['Thao Dinh','Fullstack','enablement'],
+  // Integration & Middleware
+  ['Dieu Kieu','BA','integration'],['Nhi Bien','PC','integration'],['Thanh Ngo','PM','integration'],['Thuong Huynh','Backend','integration'],
+  // Platform Capability
+  ['Dong Vo','Backend','platform'],['Jade Nguyen','PC','platform'],['Long Nguyen Hoang','Backend','platform'],['Long Phan','Android','platform'],
+  ['Ly Nguyen','QA','platform'],['Quang Pham Minh','Backend','platform'],['Thinh Le','iOS','platform'],['Tuan Nguyen','Backend','platform'],['Uyen Thao','QA','platform'],
+  // Training & Automation
+  ['Anh Phan','Frontend','training'],['Duong Tran Quoc','Data','training'],['Hanh Tran','Frontend','training'],['Khoa Huynh','Android','training'],
+  ['Ngoc Nguyen','BA','training'],['Nhat Huy','Backend','training'],['Duyen Tran','PC','training'],['Tran Nguyen','QA','training'],['Trang Ngo','QA','training'],['Tuyen Tran','iOS','training'],
 ];
+const SQUAD_KEY_PATS = { nutrition:/nutrition/i, engagement:/engagement/i, enablement:/enablement/i, integration:/integration|middleware/i, platform:/platform|workspace|capability/i, training:/training|automation/i };
+const SQUAD_KEY_LABELS = { nutrition:'Nutrition', engagement:'Engagement', enablement:'Enablement', integration:'Integration & Middleware', platform:'Platform Capability', training:'Training & Automation' };
+// Map a roster squadKey to the tribe's actual squad name (fuzzy), else the standard label.
+function squadNameForKey(key){ const p=SQUAD_KEY_PATS[key]; const hit=p && curSquads().map(s=>s.name).find(n=>p.test(n)); return hit || SQUAD_KEY_LABELS[key] || key; }
 const DIACRITICS=new RegExp('['+String.fromCharCode(0x300)+'-'+String.fromCharCode(0x36f)+']','g');
 const stripAccents=s=>(s||'').normalize('NFD').replace(DIACRITICS,'').toLowerCase().trim();
 // Shared people directory helpers. Person identity = Jira accountId.
@@ -2405,59 +2432,89 @@ async function patchPeople(patch){
 function openPeopleManager(){
   if(!isAdmin()) return;
   const squads=curSquads().map(s=>s.name);
-  const ppl=knownPeople().sort((a,b)=>(a.name||'zzz').localeCompare(b.name||'zzz'));
-  const work={}; ppl.forEach(p=>work[p.accountId]={squad:p.squad||'',role:p.role||''});
+  const ppl=knownPeople();                                   // mutable working list (manual adds append here)
+  const work={}, orig={};
+  ppl.forEach(p=>{ work[p.accountId]={squad:p.squad||'',role:p.role||''}; orig[p.accountId]={squad:p.squad||'',role:p.role||'',name:p.name||'',avatar:p.avatar||''}; });
   const opt=(v,sel)=>`<option value="${esc(v)}" ${sel===v?'selected':''}>${esc(v)}</option>`;
-  const rowHtml=p=>`<div class="pm-row" data-id="${esc(p.accountId)}">
-      <span class="pm-person">${personAvatarHTML(p)}<span class="pm-name">${esc(p.name||'Unknown')}</span></span>
-      <select class="pm-squad"><option value="">— Squad —</option>${squads.map(s=>opt(s,p.squad)).join('')}</select>
-      <select class="pm-role"><option value="">— Role —</option>${ROLES.map(r=>opt(r,p.role)).join('')}</select>
-    </div>`;
-  modal.style.width='700px';
+  const squadOpts=sel=>['<option value="">— Squad —</option>', ...squads.map(s=>opt(s,sel)), (sel&&!squads.includes(sel)?opt(sel,sel):'')].join('');
+  const roleOpts=sel=>['<option value="">— Role —</option>', ...ROLES.map(r=>opt(r,sel))].join('');
+  modal.style.width='720px';
   modal.innerHTML=`<h3>Manage People</h3>
-    <div style="font-size:12px;color:var(--muted);margin:-6px 0 10px;">Assign a squad and role to each person. ${ppl.length} ${ppl.length===1?'person':'people'}.</div>
-    <button class="btn" id="pm_ta" style="margin-bottom:12px;">⚡ Assign Training &amp; Automation roster</button>
+    <div style="font-size:12px;color:var(--muted);margin:-6px 0 10px;">Assign a squad + role to each person. People with a Jira accountId link to their synced activity; manually-added people are roster-only. <span id="pm_count"></span></div>
+    <div class="pm-actions"><button class="btn" id="pm_auto">⚡ Auto-assign from Slack rosters</button></div>
+    <div class="pm-add">
+      <input id="pm_add_name" placeholder="Add a person by name…" autocomplete="off">
+      <select id="pm_add_squad">${squadOpts('')}</select>
+      <select id="pm_add_role">${roleOpts('')}</select>
+      <button class="btn primary" id="pm_add_btn">+ Add</button>
+    </div>
     <input id="pm_search" class="pm-search" placeholder="Search name…" autocomplete="off">
     <div class="pm-head"><span>Person</span><span>Squad</span><span>Role</span></div>
-    <div class="pm-list" id="pm_list">${ppl.length?ppl.map(rowHtml).join(''):'<div style="padding:14px;color:var(--muted);font-size:13px;">No people yet — run a Jira sync first.</div>'}</div>
+    <div class="pm-list" id="pm_list"></div>
     <div class="modal-actions"><button class="btn" id="pm_cancel">Cancel</button><button class="btn primary" id="pm_save">Save</button></div>`;
-  const listEl=modal.querySelector('#pm_list');
-  listEl.querySelectorAll('.pm-row').forEach(row=>{
-    const id=row.dataset.id;
-    row.querySelector('.pm-squad').onchange=e=>work[id].squad=e.target.value;
-    row.querySelector('.pm-role').onchange=e=>work[id].role=e.target.value;
-  });
+  const listEl=modal.querySelector('#pm_list'), countEl=modal.querySelector('#pm_count');
+  function makeRow(p){
+    const row=document.createElement('div'); row.className='pm-row'; row.dataset.id=p.accountId;
+    const w=work[p.accountId]||{squad:'',role:''};
+    const manual=String(p.accountId).startsWith('m:');
+    row.innerHTML=`<span class="pm-person">${personAvatarHTML(p)}<span class="pm-name">${esc(p.name||'Unknown')}</span>${manual?'<span class="pm-manual">manual</span>':''}</span>`+
+      `<select class="pm-squad">${squadOpts(w.squad)}</select><select class="pm-role">${roleOpts(w.role)}</select>`;
+    const ss=row.querySelector('.pm-squad'), rs=row.querySelector('.pm-role'); ss.value=w.squad||''; rs.value=w.role||'';
+    ss.onchange=e=>{ work[p.accountId].squad=e.target.value; };
+    rs.onchange=e=>{ work[p.accountId].role=e.target.value; };
+    return row;
+  }
+  function renderList(){
+    listEl.innerHTML=''; countEl.textContent=ppl.length+' '+(ppl.length===1?'person':'people');
+    if(!ppl.length){ listEl.innerHTML='<div style="padding:14px;color:var(--muted);font-size:13px;">No people yet — run a Jira sync or add someone manually.</div>'; return; }
+    ppl.slice().sort((a,b)=>(a.name||'zzz').localeCompare(b.name||'zzz')).forEach(p=>listEl.appendChild(makeRow(p)));
+    const s=(modal.querySelector('#pm_search').value||'').trim().toLowerCase();
+    if(s) listEl.querySelectorAll('.pm-row').forEach(row=>{ row.style.display=(row.querySelector('.pm-name').textContent||'').toLowerCase().includes(s)?'':'none'; });
+  }
+  renderList();
+  // add (or find) a person in the working set
+  function ensurePerson(name, id){
+    id = id || ('m:'+stripAccents(name).replace(/\s+/g,'_'));
+    let p=ppl.find(x=>x.accountId===id);
+    if(!p){ p={accountId:id, name, avatar:''}; ppl.push(p); work[id]={squad:'',role:''}; orig[id]={squad:'',role:'',name,avatar:''}; }
+    return p;
+  }
   const sb=modal.querySelector('#pm_search');
   sb.oninput=()=>{ const s=sb.value.trim().toLowerCase(); listEl.querySelectorAll('.pm-row').forEach(row=>{ const n=(row.querySelector('.pm-name').textContent||'').toLowerCase(); row.style.display=(!s||n.includes(s))?'':'none'; }); };
-  // One-click: fill squad+role for everyone matching the Training & Automation roster (by name).
-  modal.querySelector('#pm_ta').onclick=()=>{
-    const sqObj=curSquads().find(s=>/training/i.test(s.name)&&/automation/i.test(s.name));
-    const squad=sqObj?sqObj.name:'Training & Automation';
-    let n=0;
-    ppl.forEach(p=>{
-      const np=stripAccents(p.name);
-      const hit=TA_ROSTER.find(([nm])=>np.startsWith(stripAccents(nm)));
-      if(!hit) return;
-      work[p.accountId]={squad, role:hit[1]}; n++;
-      const row=listEl.querySelector('.pm-row[data-id="'+CSS.escape(p.accountId)+'"]');
-      if(row){ const ss=row.querySelector('.pm-squad'), rs=row.querySelector('.pm-role');
-        if(![...ss.options].some(o=>o.value===squad)){ const o=document.createElement('option'); o.value=squad; o.textContent=squad; ss.appendChild(o); }
-        ss.value=squad; rs.value=hit[1];
-      }
+  // manual add
+  const addName=modal.querySelector('#pm_add_name');
+  modal.querySelector('#pm_add_btn').onclick=()=>{
+    const nm=addName.value.trim(); if(!nm){ addName.focus(); return; }
+    const p=ensurePerson(nm);
+    work[p.accountId]={squad:modal.querySelector('#pm_add_squad').value, role:modal.querySelector('#pm_add_role').value};
+    addName.value=''; renderList();
+    const row=listEl.querySelector('.pm-row[data-id="'+CSS.escape(p.accountId)+'"]'); if(row){ row.scrollIntoView({block:'center'}); row.classList.add('sel'); }
+  };
+  addName.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); modal.querySelector('#pm_add_btn').click(); } };
+  // auto-assign every squad roster: match to a Jira contributor by name (links via accountId), else add manually
+  modal.querySelector('#pm_auto').onclick=()=>{
+    const taken=new Set(); let matched=0, added=0;
+    SQUAD_ROSTER.forEach(([nm,role,key])=>{
+      const squad=squadNameForKey(key), norm=stripAccents(nm);
+      let p=ppl.find(x=>!String(x.accountId).startsWith('m:') && !taken.has(x.accountId) && stripAccents(x.name).startsWith(norm))
+          || ppl.find(x=>!taken.has(x.accountId) && stripAccents(x.name).startsWith(norm));
+      if(p) matched++; else { p=ensurePerson(nm); added++; }
+      taken.add(p.accountId); work[p.accountId]={squad, role};
     });
-    setSync('Filled '+n+' from T&A roster — review, then Save', n?'ok':'bad');
+    renderList();
+    setSync('Auto-assign: '+matched+' linked to Jira, '+added+' added manually — review & Save','ok');
   };
   modal.querySelector('#pm_cancel').onclick=closeModal;
   modal.querySelector('#pm_save').onclick=()=>{
-    const patch={};   // only the rows that actually changed
-    ppl.forEach(p=>{ const w=work[p.accountId];
-      if((w.squad||'')!==(p.squad||'') || (w.role||'')!==(p.role||'')){
+    const patch={};
+    ppl.forEach(p=>{ const w=work[p.accountId]||{squad:'',role:''}, o=orig[p.accountId]||{squad:'',role:''};
+      if((w.squad||'')!==(o.squad||'') || (w.role||'')!==(o.role||'')){
         setPersonMeta(p.accountId, p.name, p.avatar, w.squad, w.role);
         patch[p.accountId]=state.people[p.accountId];
       }
     });
     closeModal(); render();
-    if(Object.keys(patch).length) patchPeople(patch);   // targeted merge — does NOT push the whole dashboard
+    if(Object.keys(patch).length) patchPeople(patch);   // targeted merge — never clobbers project data
   };
   modalBg.classList.add('open');
 }
