@@ -64,7 +64,15 @@
   .subbar .squad-name{font-weight:800;font-size:15px;cursor:text;padding:3px 7px;border-radius:7px;outline:none;}
   .subbar .squad-name:hover{background:#f0f1f4;}
   .subbar .squad-name[contenteditable="true"]{background:#fff;box-shadow:0 0 0 2px #4c6fff;}
-  .squad-people{display:flex;align-items:center;gap:0;flex:none;margin-right:4px;}
+  .squad-people{display:flex;align-items:center;gap:0;flex:none;margin-right:4px;cursor:pointer;}
+  .squad-people:hover .sp-av{box-shadow:0 0 0 1px #4c6fff;}
+  .spp-wrap{display:flex;flex-direction:column;gap:14px;max-height:60vh;overflow-y:auto;margin-top:4px;}
+  .spp-role{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:#667085;margin-bottom:8px;}
+  .spp-role .spp-c{color:#98a2b3;margin-left:2px;}
+  .spp-people{display:flex;flex-wrap:wrap;gap:8px 18px;}
+  .spp-person{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--text);min-width:190px;}
+  .spp-av{width:26px;height:26px;font-size:10px;flex:none;}
+  .spp-sq{font-size:11px;color:var(--muted);font-weight:600;}
   .squad-people .sp-count{font-size:11px;font-weight:800;color:var(--muted);margin-right:8px;}
   .squad-people .sp-chip{margin-left:-7px;}
   .squad-people .sp-chip:first-of-type{margin-left:0;}
@@ -835,22 +843,25 @@ const DIACRITICS=new RegExp('['+String.fromCharCode(0x300)+'-'+String.fromCharCo
 const stripAccents=s=>(s||'').normalize('NFD').replace(DIACRITICS,'').toLowerCase().trim();
 // Role display order so leads/coordinators show first among a squad's people.
 const ROLE_ORDER = ['PM','SM','PC','Fullstack','Backend','Frontend','iOS','Android','Data','BA','QA','QC','Design','DevOps'];
-// Show the squad's assigned directory members (from Manage People) next to the squad name — the squad
-// roster, not the Jira contributors. Hidden on virtual views.
-function renderSquadPeople(){
-  const el=document.getElementById('squadPeople'); if(!el) return;
+const ORD_ROLE=r=>{ const i=ROLE_ORDER.indexOf(r); return i<0?99:i; };
+// The directory people to show for the current tab: a real squad's members, or (on All Squads) the
+// whole-tribe roster. Returns {label, people, allSquads}; people empty on other virtual views.
+function squadPeopleList(){
   const av=activeVirtual();
   const all=Object.entries(state.people||{}).map(([id,m])=>({id,...m}));
-  let people, allSquads=false;
+  let people=[], allSquads=false, label='';
   if(av){
-    if(av.allSquads){ allSquads=true; const set=new Set(curSquads().map(s=>s.name)); people=all.filter(p=>p.name && p.squad && set.has(p.squad)); }
-    else { el.style.display='none'; el.innerHTML=''; return; }   // tag / marketing / people views
-  } else {
-    const sq=activeSquad().name; people=all.filter(p=>p.name && p.squad===sq);
-  }
-  if(!people.length){ el.style.display='none'; el.innerHTML=''; return; }
-  const ord=r=>{ const i=ROLE_ORDER.indexOf(r); return i<0?99:i; };
-  people.sort((a,b)=> (allSquads?(a.squad||'').localeCompare(b.squad||''):0) || ord(a.role)-ord(b.role) || (a.name||'').localeCompare(b.name||''));
+    if(av.allSquads){ allSquads=true; label=av.name; const set=new Set(curSquads().map(s=>s.name)); people=all.filter(p=>p.name && p.squad && set.has(p.squad)); }
+  } else { label=activeSquad().name; people=all.filter(p=>p.name && p.squad===label); }
+  people.sort((a,b)=> (allSquads?(a.squad||'').localeCompare(b.squad||''):0) || ORD_ROLE(a.role)-ORD_ROLE(b.role) || (a.name||'').localeCompare(b.name||''));
+  return {label, people, allSquads};
+}
+// Show the squad's assigned directory members next to the squad name — the roster, not Jira contributors.
+// Clickable -> role breakdown popup. Hidden on virtual views other than All Squads.
+function renderSquadPeople(){
+  const el=document.getElementById('squadPeople'); if(!el) return;
+  const {people, allSquads}=squadPeopleList();
+  if(!people.length){ el.style.display='none'; el.innerHTML=''; el.onclick=null; return; }
   const CAP=allSquads?20:14, shown=people.slice(0,CAP), extra=people.length-shown.length;
   const chip=p=>{ const col=assigneeColor(p.id||p.name||''), ini=esc(assigneeInitials(p.name));
     const body=p.avatar
@@ -859,8 +870,31 @@ function renderSquadPeople(){
     return `<span class="assignee-chip sp-chip" data-name="${esc(p.name+(p.role?(' · '+p.role):''))}">${body}</span>`;
   };
   el.style.display='flex';
-  el.innerHTML=`<span class="sp-count" title="People assigned to this squad (Manage People)">${people.length}</span>`+
-    shown.map(chip).join('')+(extra>0?`<span class="sp-more">+${extra}</span>`:'');
+  el.title='Click for a role breakdown';
+  el.innerHTML=`<span class="sp-count">${people.length}</span>`+shown.map(chip).join('')+(extra>0?`<span class="sp-more">+${extra}</span>`:'');
+  el.onclick=openSquadPeoplePopup;
+}
+// Popup: the squad's people grouped by role (and by squad on All Squads).
+const ROLE_FULL={PM:'Product / Project Manager',SM:'Scrum Master',PC:'Project Coordinator',BA:'Business Analyst',QA:'QA Engineer',QC:'QC',Frontend:'Frontend',Backend:'Backend',iOS:'iOS',Android:'Android',Fullstack:'Fullstack',Data:'Data',Design:'Design',DevOps:'DevOps'};
+function openSquadPeoplePopup(){
+  const {label, people, allSquads}=squadPeopleList(); if(!people.length) return;
+  const personLine=p=>{ const col=assigneeColor(p.id||p.name||''), ini=esc(assigneeInitials(p.name));
+    const av=p.avatar
+      ? `<img class="assignee-av spp-av" src="${esc(p.avatar)}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'"><span class="assignee-ini spp-av" style="display:none;background:${col}">${ini}</span>`
+      : `<span class="assignee-ini spp-av" style="display:inline-flex;background:${col}">${ini}</span>`;
+    return `<span class="spp-person">${av}<span>${esc(p.name)}${allSquads&&p.squad?` <span class="spp-sq">${esc(p.squad)}</span>`:''}</span></span>`;
+  };
+  const roles=[...new Set(people.map(p=>p.role||'(no role)'))].sort((a,b)=> ORD_ROLE(a==='(no role)'?'':a)-ORD_ROLE(b==='(no role)'?'':b) || a.localeCompare(b));
+  const sections=roles.map(r=>{ const grp=people.filter(p=>(p.role||'(no role)')===r);
+    return `<div class="spp-sec"><div class="spp-role">${esc(ROLE_FULL[r]||r)} <span class="spp-c">${grp.length}</span></div><div class="spp-people">${grp.map(personLine).join('')}</div></div>`;
+  }).join('');
+  modal.style.width='640px';
+  modal.innerHTML=`<h3>${esc(label||'Squad')} · ${people.length} ${people.length===1?'person':'people'}</h3>
+    <div class="spp-wrap">${sections}</div>
+    <div class="modal-actions">${isAdmin()?'<button class="btn" id="spp_manage">Manage people</button>':''}<button class="btn primary" id="spp_close">Close</button></div>`;
+  const mng=modal.querySelector('#spp_manage'); if(mng) mng.onclick=()=>{ closeModal(); openPeopleManager(); };
+  modal.querySelector('#spp_close').onclick=closeModal;
+  modalBg.classList.add('open');
 }
 // Shared people directory helpers. Person identity = Jira accountId.
 function personMeta(id){ return (state.people && state.people[id]) || {}; }
