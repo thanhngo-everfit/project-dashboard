@@ -238,17 +238,17 @@
   @media (max-width:820px){ .ppl{padding:12px;} .ppl-prow{grid-template-columns:10px 1fr 46px;} .ppl-prow .ppl-bar{display:none;} }
   /* ===== Organization (org chart) view ===== */
   .org{padding:18px 20px 48px;overflow:auto;}
-  .org-sum{font-size:12.5px;color:var(--muted);display:flex;align-items:center;justify-content:center;margin-bottom:16px;text-align:center;}
-  .org-leads{display:flex;justify-content:center;align-items:center;gap:16px;flex-wrap:wrap;}
+  .org-sum{font-size:12.5px;color:var(--muted);display:flex;align-items:center;justify-content:center;margin-bottom:16px;text-align:center;flex-wrap:wrap;}
+  .org-divs{display:flex;justify-content:center;align-items:flex-start;gap:34px;flex-wrap:wrap;}
+  .org-div{flex:1 1 460px;min-width:300px;max-width:760px;display:flex;flex-direction:column;align-items:center;}
   .org-lead{display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,#eef2ff,#f5f0ff);border:1px solid #d7ddff;border-radius:14px;padding:12px 20px;box-shadow:0 4px 14px rgba(76,111,255,.10);}
   .org-lead .assignee-av,.org-lead .assignee-ini{width:46px;height:46px;font-size:15px;}
   .org-l-name{font-weight:800;font-size:15px;color:var(--text);}
   .org-l-title{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#5b21b6;margin-top:2px;}
-  .org-l-amp{color:#b0b6c3;font-size:16px;font-weight:700;}
-  .org-trunk{width:2px;height:26px;background:var(--border);margin:0 auto;}
-  .org-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px;align-items:start;max-width:1400px;margin:0 auto;}
+  .org-trunk{width:2px;height:24px;background:var(--border);}
+  .org-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;align-items:start;width:100%;}
+  .org-other-h{text-align:center;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#98a2b3;margin:30px 0 12px;}
   .org-squad{position:relative;border:1px solid var(--border);border-radius:14px;background:var(--panel);overflow:hidden;box-shadow:0 1px 3px rgba(16,24,40,.05);}
-  .org-squad::before{content:'';position:absolute;top:-14px;left:calc(50% - 1px);width:2px;height:14px;background:var(--border);}
   .org-sq-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;background:linear-gradient(135deg,#f7f9fc,#eef1f6);border-bottom:1px solid var(--border);}
   .org-sq-name{font-weight:800;font-size:13.5px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .org-sq-c{flex:none;font-size:11px;font-weight:800;color:var(--muted);background:#fff;border:1px solid var(--border);border-radius:999px;padding:1px 9px;}
@@ -260,7 +260,7 @@
   .org-person .assignee-av,.org-person .assignee-ini{width:26px;height:26px;font-size:10px;}
   .org-p-name{font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .org-empty{font-size:12px;color:var(--muted);padding:6px 2px;}
-  @media (max-width:820px){ .org{padding:12px;} .org-squad::before{display:none;} }
+  @media (max-width:820px){ .org{padding:12px;} .org-divs{gap:20px;} }
   .assignee-av{width:22px;height:22px;border-radius:50%;object-fit:cover;border:1px solid #fff;box-shadow:0 0 0 1px var(--border);}
   .assignee-ini{width:22px;height:22px;border-radius:50%;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#fff;border:1px solid #fff;box-shadow:0 0 0 1px var(--border);}
   .links-line{display:flex;align-items:center;gap:5px;flex-wrap:wrap;}
@@ -2504,45 +2504,26 @@ function renderByAssignee(g){
   g.appendChild(wrap);
   highlight(); renderSide();
 }
-// Organization view: an org chart driven by the shared People directory. Two Squad Leads sit at the top;
-// each squad hangs below with its directory members grouped by role.
+// Organization view: an org chart driven by the shared People directory. Each Squad Lead heads their own
+// set of squads; every squad hangs below its lead with the squad's directory members grouped by role.
 const ORG_LEADS = [
-  {accountId:'5ebe4253833be70b7e45a444', name:'Thanh Ngo', title:'Squad Lead'},
-  {accountId:'633108fda84c7f79c3865027', name:'Bao Ho',    title:'Squad Lead'},
+  {accountId:'5ebe4253833be70b7e45a444', name:'Thanh Ngo', title:'Squad Lead', squadKeys:['integration','platform','training']},
+  {accountId:'633108fda84c7f79c3865027', name:'Bao Ho',    title:'Squad Lead', squadKeys:['nutrition','engagement','enablement']},
 ];
 function renderOrgChart(g){
   const q=(state.search||'').trim().toLowerCase();
   const dir=state.people||{};
   const leadIds=new Set(ORG_LEADS.map(l=>l.accountId));
-  const wrap=document.createElement('div'); wrap.className='org';
-
-  // summary + manage
-  const sum=document.createElement('div'); sum.className='org-sum';
   const squads=curSquads();
-  const sumText=document.createElement('span'); sum.appendChild(sumText);
-  if(isAdmin()){ const b=document.createElement('button'); b.className='btn'; b.textContent='⚙ Manage people'; b.style.marginLeft='10px'; b.onclick=openPeopleManager; sum.appendChild(b); }
-  wrap.appendChild(sum);
-
-  // leadership node
-  const lead=document.createElement('div'); lead.className='org-leads';
-  lead.innerHTML=ORG_LEADS.map(l=>{
-    const meta=dir[l.accountId]||{};
-    const p={accountId:l.accountId, name:meta.name||l.name, avatar:meta.avatar||''};
-    return `<div class="org-lead" title="${esc(p.name)}">${personAvatarHTML(p)}<div class="org-l-id"><div class="org-l-name">${esc(p.name)}</div><div class="org-l-title">${esc(l.title)}</div></div></div>`;
-  }).join('<span class="org-l-amp">&amp;</span>');
-  wrap.appendChild(lead);
-  const trunk=document.createElement('div'); trunk.className='org-trunk'; wrap.appendChild(trunk);
-
-  // squad columns
-  const grid=document.createElement('div'); grid.className='org-grid';
+  const dirList=Object.entries(dir).map(([id,m])=>({id,...m}));
   let totalMembers=0;
-  squads.forEach(sq=>{
-    let members=Object.entries(dir).map(([id,m])=>({id,...m}))
-      .filter(p=>p.name && !leadIds.has(p.id) && (p.squads||[]).includes(sq.name));
+
+  // Build one squad card (header + members grouped by role). Also tallies totalMembers.
+  const squadCard=sq=>{
+    let members=dirList.filter(p=>p.name && !leadIds.has(p.id) && (p.squads||[]).includes(sq.name));
     const fullCount=members.length; totalMembers+=fullCount;
     if(q) members=members.filter(p=>(p.name||'').toLowerCase().includes(q));
     members.sort((a,b)=> ORD_ROLE(a.role)-ORD_ROLE(b.role) || (a.name||'').localeCompare(b.name||''));
-    const col=document.createElement('div'); col.className='org-squad';
     const roles=[...new Set(members.map(p=>p.role||'(no role)'))].sort((a,b)=> ORD_ROLE(a==='(no role)'?'':a)-ORD_ROLE(b==='(no role)'?'':b) || a.localeCompare(b));
     const body=roles.map(r=>{
       const grp=members.filter(p=>(p.role||'(no role)')===r);
@@ -2550,12 +2531,47 @@ function renderOrgChart(g){
         grp.map(p=>`<div class="org-person" title="${esc(p.name+(p.role?(' · '+p.role):''))}">${personAvatarHTML({accountId:p.id,name:p.name,avatar:p.avatar})}<span class="org-p-name">${esc(p.name)}</span></div>`).join('')+
         `</div>`;
     }).join('');
+    const col=document.createElement('div'); col.className='org-squad';
     col.innerHTML=`<div class="org-sq-head"><span class="org-sq-name">${esc(sq.name)}</span><span class="org-sq-c">${fullCount}</span></div>`+
       `<div class="org-sq-body">${body||'<div class="org-empty">'+(q?'No members match':'No members yet')+'</div>'}</div>`;
-    grid.appendChild(col);
+    return col;
+  };
+
+  const wrap=document.createElement('div'); wrap.className='org';
+  const sum=document.createElement('div'); sum.className='org-sum';
+  const sumText=document.createElement('span'); sum.appendChild(sumText);
+  if(isAdmin()){ const b=document.createElement('button'); b.className='btn'; b.textContent='⚙ Manage people'; b.style.marginLeft='10px'; b.onclick=openPeopleManager; sum.appendChild(b); }
+  wrap.appendChild(sum);
+
+  // One division per lead: lead card on top, a trunk, then that lead's squads.
+  const divs=document.createElement('div'); divs.className='org-divs';
+  const assigned=new Set();
+  ORG_LEADS.forEach(l=>{
+    const meta=dir[l.accountId]||{};
+    const lp={accountId:l.accountId, name:meta.name||l.name, avatar:meta.avatar||''};
+    const mySquads=(l.squadKeys||[]).map(squadNameForKey);
+    const cards=squads.filter(sq=>mySquads.includes(sq.name));
+    cards.forEach(sq=>assigned.add(sq.id));
+    const div=document.createElement('div'); div.className='org-div';
+    div.innerHTML=`<div class="org-lead" title="${esc(lp.name)}">${personAvatarHTML(lp)}<div class="org-l-id"><div class="org-l-name">${esc(lp.name)}</div><div class="org-l-title">${esc(l.title)} · ${cards.length} squad${cards.length!==1?'s':''}</div></div></div><div class="org-trunk"></div>`;
+    const grid=document.createElement('div'); grid.className='org-grid';
+    if(cards.length) cards.forEach(sq=>grid.appendChild(squadCard(sq)));
+    else { const em=document.createElement('div'); em.className='org-empty'; em.textContent='No squads'; grid.appendChild(em); }
+    div.appendChild(grid);
+    divs.appendChild(div);
   });
-  wrap.appendChild(grid);
-  sumText.textContent=squads.length+' squad'+(squads.length!==1?'s':'')+' · '+totalMembers+' member'+(totalMembers!==1?'s':'')+' · led by '+ORG_LEADS.map(l=>(dir[l.accountId]||{}).name||l.name).join(' & ');
+  wrap.appendChild(divs);
+
+  // Any squads not claimed by a lead get their own un-led section so nothing is hidden.
+  const orphans=squads.filter(sq=>!assigned.has(sq.id));
+  if(orphans.length){
+    const h=document.createElement('div'); h.className='org-other-h'; h.textContent='Other squads'; wrap.appendChild(h);
+    const grid=document.createElement('div'); grid.className='org-grid'; grid.style.maxWidth='1400px';
+    orphans.forEach(sq=>grid.appendChild(squadCard(sq)));
+    wrap.appendChild(grid);
+  }
+
+  sumText.textContent=squads.length+' squad'+(squads.length!==1?'s':'')+' · '+totalMembers+' member'+(totalMembers!==1?'s':'')+' · '+ORG_LEADS.map(l=>((dir[l.accountId]||{}).name||l.name)+' ('+(l.squadKeys||[]).length+')').join(' · ');
   if(!squads.length){ const em=document.createElement('div'); em.className='org-empty'; em.style.margin='20px'; em.textContent='No squads in this tribe yet.'; wrap.appendChild(em); }
   g.appendChild(wrap);
 }
