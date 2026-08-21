@@ -195,9 +195,22 @@
   .pm-add select{flex:none;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:#fff;}
   .pm-manual{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.3px;color:#8a6d1f;background:#fef3c7;border:1px solid #fcd34d;border-radius:999px;padding:1px 6px;margin-left:6px;}
   .pm-row.sel{background:#eef4ff;}
-  .pm-head{display:grid;grid-template-columns:1fr 160px 140px 28px;gap:10px;font-size:10.5px;font-weight:800;color:#98a2b3;text-transform:uppercase;letter-spacing:.4px;padding:0 4px 6px;}
+  .pm-head{display:grid;grid-template-columns:1fr 190px 130px 28px;gap:10px;font-size:10.5px;font-weight:800;color:#98a2b3;text-transform:uppercase;letter-spacing:.4px;padding:0 4px 6px;}
   .pm-list{max-height:54vh;overflow-y:auto;display:flex;flex-direction:column;gap:3px;}
-  .pm-row{display:grid;grid-template-columns:1fr 160px 140px 28px;gap:10px;align-items:center;padding:4px;border-radius:8px;}
+  .pm-row{display:grid;grid-template-columns:1fr 190px 130px 28px;gap:10px;align-items:center;padding:4px;border-radius:8px;}
+  /* multi-select squad picker (a <details> disclosure with checkboxes) */
+  .pm-sq{position:relative;font-size:13px;}
+  .pm-sq>summary{list-style:none;cursor:pointer;padding:6px 24px 6px 8px;border:1px solid var(--border);border-radius:8px;background:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:relative;}
+  .pm-sq>summary::-webkit-details-marker{display:none;}
+  .pm-sq>summary::after{content:'▾';position:absolute;right:8px;top:50%;transform:translateY(-50%);color:#98a2b3;font-size:11px;}
+  .pm-sq[open]>summary{box-shadow:0 0 0 2px #d7e0ff;border-color:#4c6fff;}
+  .pm-sq-ph{color:#98a2b3;}
+  .pm-sq-menu{position:absolute;z-index:20;top:calc(100% + 4px);left:0;min-width:100%;max-height:220px;overflow-y:auto;background:#fff;border:1px solid var(--border);border-radius:9px;box-shadow:0 8px 24px rgba(16,24,40,.14);padding:5px;}
+  .pm-sq.up>.pm-sq-menu{top:auto;bottom:calc(100% + 4px);}
+  .pm-sq-opt{display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:6px;cursor:pointer;white-space:nowrap;}
+  .pm-sq-opt:hover{background:#f2f5fb;}
+  .pm-sq-opt input{margin:0;flex:none;}
+  .pm-add .pm-sq{flex:none;width:180px;}
   .pm-del{border:none;background:transparent;color:#c0c5cf;cursor:pointer;font-size:14px;width:24px;height:24px;border-radius:6px;line-height:1;}
   .pm-del:hover{background:#fee4e2;color:#d92d20;}
   .pm-row:hover{background:#f7f9fc;}
@@ -823,19 +836,19 @@ const SQUAD_ROSTER = [
   ['Ha Duong','Frontend','nutrition'],['Hanh Le','QA','nutrition'],['Hoai Ho','Android','nutrition'],['Hoang Nguyen','Frontend','nutrition'],
   ['Phu Duong','Data','nutrition'],['Tan Huynh','iOS','nutrition'],['Thao Nguyen Nguyen','QA','nutrition'],['Thao Pham','PC','nutrition'],['Trung Huynh','Backend','nutrition'],
   // Engagement
-  ['Bich Thuy','QA','engagement'],['Danh Truong','Android','engagement'],['Duc Trinh','Backend','engagement'],['Ngan Le','BA','engagement'],
+  ['Anh Van Le','PC','engagement'],['Bao Ho','SM','engagement'],['Bich Thuy','QA','engagement'],['Danh Truong','Android','engagement'],['Duc Trinh','Backend','engagement'],['Ngan Le','BA','engagement'],
   ['Nhan Huynh','Frontend','engagement'],['Sally Phan','BA','engagement'],['Thai Bui','Frontend','engagement'],['Thanh Tran','iOS','engagement'],
   ['Thuc Vo','Backend','engagement'],['Toan Tran','Frontend','engagement'],['Trang Le','BA','engagement'],['Van Nguyen','QA','engagement'],
   // Enablement
-  ['Dong Truong','Frontend','enablement'],['Ha Nguyen','Fullstack','enablement'],['Lanh Ngo','QA','enablement'],['Loc Le','Fullstack','enablement'],['Thao Dinh','Fullstack','enablement'],
+  ['Bao Ho','SM','enablement'],['Dong Truong','Frontend','enablement'],['Duyen Tran','PC','enablement'],['Ha Nguyen','Fullstack','enablement'],['Lanh Ngo','QA','enablement'],['Loc Le','Fullstack','enablement'],['Thao Dinh','Fullstack','enablement'],['Trang Le','BA','enablement'],
   // Integration & Middleware
   ['Dieu Kieu','BA','integration'],['Nhi Bien','PC','integration'],['Thanh Ngo','PM','integration'],['Thuong Huynh','Backend','integration'],
   // Platform Capability
-  ['Dong Vo','Backend','platform'],['Jade Nguyen','PC','platform'],['Long Nguyen Hoang','Backend','platform'],['Long Phan','Android','platform'],
-  ['Ly Nguyen','QA','platform'],['Quang Pham Minh','Backend','platform'],['Thinh Le','iOS','platform'],['Tuan Nguyen','Backend','platform'],['Uyen Thao','QA','platform'],
+  ['Dieu Kieu','BA','platform'],['Dong Vo','Backend','platform'],['Jade Nguyen','PC','platform'],['Long Nguyen Hoang','Backend','platform'],['Long Phan','Android','platform'],
+  ['Ly Nguyen','QA','platform'],['Nhi Bien','PC','platform'],['Quang Pham Minh','Backend','platform'],['Thanh Ngo','PM','platform'],['Thinh Le','iOS','platform'],['Tuan Nguyen','Backend','platform'],['Uyen Thao','QA','platform'],
   // Training & Automation
-  ['Anh Phan','Frontend','training'],['Duong Tran Quoc','Data','training'],['Hanh Tran','Frontend','training'],['Khoa Huynh','Android','training'],
-  ['Ngoc Nguyen','BA','training'],['Nhat Huy','Backend','training'],['Duyen Tran','PC','training'],['Tran Nguyen','QA','training'],['Trang Ngo','QA','training'],['Tuyen Tran','iOS','training'],
+  ['Anh Phan','Frontend','training'],['Dong Vo','Backend','training'],['Duong Tran Quoc','Data','training'],['Duyen Tran','PC','training'],['Hanh Tran','Frontend','training'],['Khoa Huynh','Android','training'],
+  ['Ngoc Nguyen','BA','training'],['Nhat Huy','Backend','training'],['Thanh Ngo','PM','training'],['Tran Nguyen','QA','training'],['Trang Ngo','QA','training'],['Tuyen Tran','iOS','training'],
 ];
 const SQUAD_KEY_PATS = { nutrition:/nutrition/i, engagement:/engagement/i, enablement:/enablement/i, integration:/integration|middleware/i, platform:/platform|workspace|capability/i, training:/training|automation/i };
 const SQUAD_KEY_LABELS = { nutrition:'Nutrition', engagement:'Engagement', enablement:'Enablement', integration:'Integration & Middleware', platform:'Platform Capability', training:'Training & Automation' };
@@ -857,9 +870,9 @@ function squadPeopleList(){
   const all=Object.entries(state.people||{}).map(([id,m])=>({id,...m}));
   let people=[], allSquads=false, label='';
   if(av){
-    if(av.allSquads){ allSquads=true; label=av.name; const set=new Set(curSquads().map(s=>s.name)); people=all.filter(p=>p.name && p.squad && set.has(p.squad)); }
-  } else { label=activeSquad().name; people=all.filter(p=>p.name && p.squad===label); }
-  people.sort((a,b)=> (allSquads?(a.squad||'').localeCompare(b.squad||''):0) || ORD_ROLE(a.role)-ORD_ROLE(b.role) || (a.name||'').localeCompare(b.name||''));
+    if(av.allSquads){ allSquads=true; label=av.name; const set=new Set(curSquads().map(s=>s.name)); people=all.filter(p=>p.name && (p.squads||[]).some(s=>set.has(s))); }
+  } else { label=activeSquad().name; people=all.filter(p=>p.name && (p.squads||[]).includes(label)); }
+  people.sort((a,b)=> (allSquads?((a.squads||[]).join(',')).localeCompare((b.squads||[]).join(',')):0) || ORD_ROLE(a.role)-ORD_ROLE(b.role) || (a.name||'').localeCompare(b.name||''));
   return {label, people, allSquads};
 }
 // Show the squad's assigned directory members next to the squad name — the roster, not Jira contributors.
@@ -888,7 +901,7 @@ function openSquadPeoplePopup(){
     const av=p.avatar
       ? `<img class="assignee-av spp-av" src="${esc(p.avatar)}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'"><span class="assignee-ini spp-av" style="display:none;background:${col}">${ini}</span>`
       : `<span class="assignee-ini spp-av" style="display:inline-flex;background:${col}">${ini}</span>`;
-    return `<span class="spp-person">${av}<span>${esc(p.name)}${allSquads&&p.squad?` <span class="spp-sq">${esc(p.squad)}</span>`:''}</span></span>`;
+    return `<span class="spp-person">${av}<span>${esc(p.name)}${allSquads&&(p.squads&&p.squads.length)?` <span class="spp-sq">${esc(p.squads.join(', '))}</span>`:''}</span></span>`;
   };
   const roles=[...new Set(people.map(p=>p.role||'(no role)'))].sort((a,b)=> ORD_ROLE(a==='(no role)'?'':a)-ORD_ROLE(b==='(no role)'?'':b) || a.localeCompare(b));
   const sections=roles.map(r=>{ const grp=people.filter(p=>(p.role||'(no role)')===r);
@@ -904,7 +917,7 @@ function openSquadPeoplePopup(){
 }
 // Shared people directory helpers. Person identity = Jira accountId.
 function personMeta(id){ return (state.people && state.people[id]) || {}; }
-function personSquad(id){ return personMeta(id).squad || ''; }
+function personSquads(id){ const m=personMeta(id); return Array.isArray(m.squads) ? m.squads : (m.squad?[m.squad]:[]); }   // a person can be in multiple squads
 function personRole(id){ return personMeta(id).role || ''; }
 // Every person seen across the tribe's projects (contributors + assignees), merged with the directory.
 function knownPeople(){
@@ -922,12 +935,12 @@ function knownPeople(){
     const m=map[id]||(map[id]={accountId:id,name:'',avatar:''});
     if(meta.name && !m.name) m.name=meta.name; if(meta.avatar && !m.avatar) m.avatar=meta.avatar;
   });
-  return Object.values(map).map(m=>({...m, squad:personSquad(m.accountId), role:personRole(m.accountId)}));
+  return Object.values(map).map(m=>({...m, squads:personSquads(m.accountId), role:personRole(m.accountId)}));
 }
-function setPersonMeta(id, name, avatar, squad, role){
+function setPersonMeta(id, name, avatar, squads, role){
   if(!state.people) state.people={};
   const cur=state.people[id]||{};
-  state.people[id]={ name:name||cur.name||'', avatar:avatar||cur.avatar||'', squad:squad||'', role:role||'' };
+  state.people[id]={ name:name||cur.name||'', avatar:avatar||cur.avatar||'', squads:Array.isArray(squads)?squads.slice():[], role:role||'' };
 }
 // Fixed virtual squads (read-only structure)
 const VIRTUAL_VIEWS = [
@@ -1060,7 +1073,8 @@ function load(){
  * name + start/end + color); project.tasks[] = dev work.
  * Migration: older data used project.segments[] (multiple phases) -> collapse into one start/end. */
 function migrate(s){
-  if(!s.people || typeof s.people!=='object' || Array.isArray(s.people)) s.people={};   // shared directory: accountId -> {name,avatar,squad,role}
+  if(!s.people || typeof s.people!=='object' || Array.isArray(s.people)) s.people={};   // shared directory: accountId -> {name,avatar,squads[],role}
+  Object.values(s.people).forEach(m=>{ if(m && typeof m==='object' && !Array.isArray(m)){ if(!Array.isArray(m.squads)) m.squads = m.squad?[m.squad]:[]; delete m.squad; } });   // squad(string) -> squads[]
   // wrap legacy top-level squads into a single "Core Product" tribe
   if(!Array.isArray(s.tribes)){
     s.tribes = [{ id:'tribe_core', name:'Core Product', squads: Array.isArray(s.squads)?s.squads:[] }];
@@ -2385,7 +2399,7 @@ function renderByAssignee(g){
   let list=allList.slice();
   if(q) list=list.filter(m=>m.name.toLowerCase().includes(q));
   const sqf=state.peopleSquadFilter||'';   // filter by assigned squad ('' all, '__none__' unassigned)
-  if(sqf) list=list.filter(m=> sqf==='__none__' ? !personSquad(m.accountId) : personSquad(m.accountId)===sqf);
+  if(sqf) list=list.filter(m=> sqf==='__none__' ? !personSquads(m.accountId).length : personSquads(m.accountId).includes(sqf));
   list.sort((a,b)=> b.totalSec-a.totalSec || a.name.localeCompare(b.name));
   list.forEach(m=>m.projects.sort((a,b)=> b.seconds-a.seconds || a.name.localeCompare(b.name)));
   const byId={}; list.forEach(m=>byId[m.accountId]=m);
@@ -2432,7 +2446,7 @@ function renderByAssignee(g){
     const maxSec=Math.max(1,...m.projects.map(p=>p.seconds));
     const card=document.createElement('div'); card.className='ppl-card';
     const head=document.createElement('div'); head.className='ppl-head'; head.dataset.acc=m.accountId; head.title='Show all of '+m.name+"'s days";
-    const metaBits=[personRole(m.accountId), personSquad(m.accountId)].filter(Boolean).join(' · ');
+    const metaBits=[personRole(m.accountId), personSquads(m.accountId).join(', ')].filter(Boolean).join(' · ');
     const subTxt=(metaBits?esc(metaBits)+' · ':'')+m.projects.length+' project'+(m.projects.length>1?'s':'');
     head.innerHTML=`${personAvatarHTML(m)}<div class="ppl-id"><div class="ppl-name">${esc(m.name)}</div><div class="ppl-sub">${subTxt}</div></div><span class="ppl-total" title="Total time spent">${fmtHours(m.totalSec)}</span>`;
     head.onclick=()=>select({accountId:m.accountId, projId:null});
@@ -2511,25 +2525,57 @@ function openPeopleManager(){
   const squads=curSquads().map(s=>s.name);
   const ppl=knownPeople();                                   // mutable working list (manual adds append here)
   const work={}, orig={};
-  ppl.forEach(p=>{ work[p.accountId]={squad:p.squad||'',role:p.role||''}; orig[p.accountId]={squad:p.squad||'',role:p.role||'',name:p.name||'',avatar:p.avatar||''}; });
+  ppl.forEach(p=>{ work[p.accountId]={squads:(p.squads||[]).slice(),role:p.role||''}; orig[p.accountId]={squads:(p.squads||[]).slice(),role:p.role||'',name:p.name||'',avatar:p.avatar||''}; });
   const opt=(v,sel)=>`<option value="${esc(v)}" ${sel===v?'selected':''}>${esc(v)}</option>`;
-  const squadOpts=sel=>['<option value="">— Squad —</option>', ...squads.map(s=>opt(s,sel)), (sel&&!squads.includes(sel)?opt(sel,sel):'')].join('');
   const roleOpts=sel=>['<option value="">— Role —</option>', ...ROLES.map(r=>opt(r,sel))].join('');
+  // Multi-select squad picker: a <details> disclosure with a checkbox per squad. onchange gets the new array.
+  function squadPicker(selected, onchange){
+    const wrap=document.createElement('details'); wrap.className='pm-sq';
+    const sum=document.createElement('summary');
+    const menu=document.createElement('div'); menu.className='pm-sq-menu';
+    wrap.appendChild(sum); wrap.appendChild(menu);
+    const sel=new Set(selected||[]);
+    const opts=squads.slice(); sel.forEach(s=>{ if(!opts.includes(s)) opts.push(s); });   // keep legacy/unknown squads visible
+    function refresh(){ const arr=[...sel]; sum.innerHTML = arr.length ? esc(arr.join(', ')) : '<span class="pm-sq-ph">— Squads —</span>'; }
+    opts.forEach(s=>{
+      const lab=document.createElement('label'); lab.className='pm-sq-opt';
+      const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=sel.has(s);
+      cb.onchange=()=>{ if(cb.checked) sel.add(s); else sel.delete(s); refresh(); onchange([...sel]); };
+      lab.appendChild(cb); lab.appendChild(document.createTextNode(' '+s)); menu.appendChild(lab);
+    });
+    refresh();
+    // Close any other open picker, and flip the menu upward when there's more room above (the list scrolls).
+    wrap.addEventListener('toggle',()=>{
+      if(!wrap.open) return;
+      modal.querySelectorAll('details.pm-sq[open]').forEach(d=>{ if(d!==wrap) d.open=false; });
+      const list=modal.querySelector('#pm_list'); wrap.classList.remove('up');
+      if(list && wrap.closest('#pm_list')){
+        const r=wrap.getBoundingClientRect(), lr=list.getBoundingClientRect();
+        if((lr.bottom-r.bottom) < 200 && (r.top-lr.top) > (lr.bottom-r.bottom)) wrap.classList.add('up');
+      }
+    });
+    return wrap;
+  }
+  let addSquads=[];   // multi-select state for the manual-add row
   modal.style.width='720px';
   modal.innerHTML=`<h3>Manage People</h3>
-    <div style="font-size:12px;color:var(--muted);margin:-6px 0 10px;">Assign a squad + role to each person. People with a Jira accountId link to their synced activity; manually-added people are roster-only. <span id="pm_count"></span></div>
+    <div style="font-size:12px;color:var(--muted);margin:-6px 0 10px;">Assign one or more squads + a role to each person. People with a Jira accountId link to their synced activity; manually-added people are roster-only. <span id="pm_count"></span></div>
     <div class="pm-actions"><button class="btn" id="pm_auto">⚡ Auto-assign from Slack rosters</button></div>
     <div class="pm-add">
       <input id="pm_add_name" placeholder="Add a person by name…" autocomplete="off">
-      <select id="pm_add_squad">${squadOpts('')}</select>
+      <span id="pm_add_sq"></span>
       <select id="pm_add_role">${roleOpts('')}</select>
       <button class="btn primary" id="pm_add_btn">+ Add</button>
     </div>
     <input id="pm_search" class="pm-search" placeholder="Search name…" autocomplete="off">
-    <div class="pm-head"><span>Person</span><span>Squad</span><span>Role</span><span></span></div>
+    <div class="pm-head"><span>Person</span><span>Squads</span><span>Role</span><span></span></div>
     <div class="pm-list" id="pm_list"></div>
     <div class="modal-actions"><button class="btn" id="pm_cancel">Cancel</button><button class="btn primary" id="pm_save">Save</button></div>`;
   const listEl=modal.querySelector('#pm_list'), countEl=modal.querySelector('#pm_count');
+  // add-row squad picker (rebuilt after each add so the checkboxes reset)
+  let addSqSlot=modal.querySelector('#pm_add_sq');
+  function mountAddPicker(){ const w=squadPicker([], arr=>{ addSquads=arr; }); w.id='pm_add_sq'; addSqSlot.replaceWith(w); addSqSlot=w; }
+  mountAddPicker();
   const removed=new Set();   // persisted ids to delete from the directory on Save
   function removePerson(id){
     const i=ppl.findIndex(x=>x.accountId===id); if(i>=0) ppl.splice(i,1);
@@ -2539,15 +2585,16 @@ function openPeopleManager(){
   }
   function makeRow(p){
     const row=document.createElement('div'); row.className='pm-row'; row.dataset.id=p.accountId;
-    const w=work[p.accountId]||{squad:'',role:''};
+    const w=work[p.accountId]||(work[p.accountId]={squads:[],role:''});
     const manual=String(p.accountId).startsWith('m:');
-    row.innerHTML=`<span class="pm-person">${personAvatarHTML(p)}<span class="pm-name">${esc(p.name||'Unknown')}</span>${manual?'<span class="pm-manual">manual</span>':''}</span>`+
-      `<select class="pm-squad">${squadOpts(w.squad)}</select><select class="pm-role">${roleOpts(w.role)}</select>`+
-      `<button class="pm-del" title="Remove from directory">✕</button>`;
-    const ss=row.querySelector('.pm-squad'), rs=row.querySelector('.pm-role'); ss.value=w.squad||''; rs.value=w.role||'';
-    ss.onchange=e=>{ work[p.accountId].squad=e.target.value; };
+    const person=document.createElement('span'); person.className='pm-person';
+    person.innerHTML=`${personAvatarHTML(p)}<span class="pm-name">${esc(p.name||'Unknown')}</span>${manual?'<span class="pm-manual">manual</span>':''}`;
+    const picker=squadPicker(w.squads, arr=>{ work[p.accountId].squads=arr; });
+    const rs=document.createElement('select'); rs.className='pm-role'; rs.innerHTML=roleOpts(w.role); rs.value=w.role||'';
     rs.onchange=e=>{ work[p.accountId].role=e.target.value; };
-    row.querySelector('.pm-del').onclick=()=>removePerson(p.accountId);
+    const del=document.createElement('button'); del.className='pm-del'; del.title='Remove from directory'; del.textContent='✕';
+    del.onclick=()=>removePerson(p.accountId);
+    row.appendChild(person); row.appendChild(picker); row.appendChild(rs); row.appendChild(del);
     return row;
   }
   function renderList(){
@@ -2562,7 +2609,7 @@ function openPeopleManager(){
   function ensurePerson(name, id){
     id = id || ('m:'+stripAccents(name).replace(/\s+/g,'_'));
     let p=ppl.find(x=>x.accountId===id);
-    if(!p){ p={accountId:id, name, avatar:''}; ppl.push(p); work[id]={squad:'',role:''}; orig[id]={squad:'',role:'',name,avatar:''}; }
+    if(!p){ p={accountId:id, name, avatar:''}; ppl.push(p); work[id]={squads:[],role:''}; orig[id]={squads:[],role:'',name,avatar:''}; }
     return p;
   }
   const sb=modal.querySelector('#pm_search');
@@ -2572,20 +2619,30 @@ function openPeopleManager(){
   modal.querySelector('#pm_add_btn').onclick=()=>{
     const nm=addName.value.trim(); if(!nm){ addName.focus(); return; }
     const p=ensurePerson(nm);
-    work[p.accountId]={squad:modal.querySelector('#pm_add_squad').value, role:modal.querySelector('#pm_add_role').value};
-    addName.value=''; renderList();
+    work[p.accountId]={squads:addSquads.slice(), role:modal.querySelector('#pm_add_role').value};
+    addName.value=''; addSquads=[]; mountAddPicker(); renderList();
     const row=listEl.querySelector('.pm-row[data-id="'+CSS.escape(p.accountId)+'"]'); if(row){ row.scrollIntoView({block:'center'}); row.classList.add('sel'); }
   };
   addName.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); modal.querySelector('#pm_add_btn').click(); } };
   // auto-assign every squad roster: match to a Jira contributor by name (links via accountId), else add manually
   modal.querySelector('#pm_auto').onclick=()=>{
-    const taken=new Set(); let matched=0, added=0;
+    // A person can appear in the roster under several squads — resolve each roster name to ONE working
+    // person (by name) and UNION their squads, so shared people end up in every squad they serve.
+    const byName={}; let matched=0, added=0; const seen=new Set();
     SQUAD_ROSTER.forEach(([nm,role,key])=>{
       const squad=squadNameForKey(key);
-      let p=ppl.find(x=>!String(x.accountId).startsWith('m:') && !taken.has(x.accountId) && nameLooseMatch(nm, x.name))
-          || ppl.find(x=>!taken.has(x.accountId) && nameLooseMatch(nm, x.name));
-      if(p) matched++; else { p=ensurePerson(nm); added++; }
-      taken.add(p.accountId); work[p.accountId]={squad, role};
+      let p=byName[nm];
+      if(!p){
+        p=ppl.find(x=>!String(x.accountId).startsWith('m:') && nameLooseMatch(nm, x.name))
+          || ppl.find(x=>nameLooseMatch(nm, x.name));
+        if(p){ matched++; } else { p=ensurePerson(nm); added++; }
+        byName[nm]=p;
+      }
+      const id=p.accountId;
+      if(!seen.has(id)){ work[id]={squads:[], role}; seen.add(id); }   // reset once, first time this person is touched
+      const w=work[id];
+      if(!w.squads.includes(squad)) w.squads.push(squad);
+      if(role && !w.role) w.role=role;
     });
     renderList();
     setSync('Auto-assign: '+matched+' linked to Jira, '+added+' added manually — review & Save','ok');
@@ -2593,9 +2650,10 @@ function openPeopleManager(){
   modal.querySelector('#pm_cancel').onclick=closeModal;
   modal.querySelector('#pm_save').onclick=()=>{
     const patch={};
-    ppl.forEach(p=>{ const w=work[p.accountId]||{squad:'',role:''}, o=orig[p.accountId]||{squad:'',role:''};
-      if((w.squad||'')!==(o.squad||'') || (w.role||'')!==(o.role||'')){
-        setPersonMeta(p.accountId, p.name, p.avatar, w.squad, w.role);
+    const sameSquads=(a,b)=>{ a=a||[]; b=b||[]; if(a.length!==b.length) return false; const B=new Set(b); return a.every(x=>B.has(x)); };
+    ppl.forEach(p=>{ const w=work[p.accountId]||{squads:[],role:''}, o=orig[p.accountId]||{squads:[],role:''};
+      if(!sameSquads(w.squads,o.squads) || (w.role||'')!==(o.role||'')){
+        setPersonMeta(p.accountId, p.name, p.avatar, w.squads, w.role);
         patch[p.accountId]=state.people[p.accountId];
       }
     });
