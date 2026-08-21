@@ -64,6 +64,12 @@
   .subbar .squad-name{font-weight:800;font-size:15px;cursor:text;padding:3px 7px;border-radius:7px;outline:none;}
   .subbar .squad-name:hover{background:#f0f1f4;}
   .subbar .squad-name[contenteditable="true"]{background:#fff;box-shadow:0 0 0 2px #4c6fff;}
+  .squad-people{display:flex;align-items:center;gap:0;flex:none;margin-right:4px;}
+  .squad-people .sp-count{font-size:11px;font-weight:800;color:var(--muted);margin-right:8px;}
+  .squad-people .sp-chip{margin-left:-7px;}
+  .squad-people .sp-chip:first-of-type{margin-left:0;}
+  .sp-av{width:26px;height:26px;font-size:10px;border:2px solid #fff;box-shadow:0 0 0 1px var(--border);}
+  .squad-people .sp-more{margin-left:2px;font-size:11px;font-weight:800;color:var(--muted);}
   .subbar .spacer{flex:1;}
   .btn{border:1px solid var(--border);background:#fff;color:var(--text);padding:7px 12px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;}
   .btn:hover{background:#f5f7fa;}
@@ -624,6 +630,7 @@
 
   <div class="subbar">
     <span class="squad-name" id="squadName"></span>
+    <span class="squad-people" id="squadPeople" style="display:none"></span>
     <input id="searchBox" class="searchbox" type="search" placeholder="Search projects…" autocomplete="off">
     <div class="tagfilter-wrap" id="tagFilterWrap" style="margin-left:6px;">
       <span style="font-size:12px;color:var(--muted);font-weight:600;">Tag</span>
@@ -826,6 +833,29 @@ const SQUAD_KEY_LABELS = { nutrition:'Nutrition', engagement:'Engagement', enabl
 function squadNameForKey(key){ const p=SQUAD_KEY_PATS[key]; const hit=p && curSquads().map(s=>s.name).find(n=>p.test(n)); return hit || SQUAD_KEY_LABELS[key] || key; }
 const DIACRITICS=new RegExp('['+String.fromCharCode(0x300)+'-'+String.fromCharCode(0x36f)+']','g');
 const stripAccents=s=>(s||'').normalize('NFD').replace(DIACRITICS,'').toLowerCase().trim();
+// Role display order so leads/coordinators show first among a squad's people.
+const ROLE_ORDER = ['PM','SM','PC','Fullstack','Backend','Frontend','iOS','Android','Data','BA','QA','QC','Design','DevOps'];
+// Show the squad's assigned directory members (from Manage People) next to the squad name — the squad
+// roster, not the Jira contributors. Hidden on virtual views.
+function renderSquadPeople(){
+  const el=document.getElementById('squadPeople'); if(!el) return;
+  if(inVirtual()){ el.style.display='none'; el.innerHTML=''; return; }
+  const sq=activeSquad().name;
+  const people=Object.entries(state.people||{}).map(([id,m])=>({id,...m})).filter(p=>p && p.squad===sq && p.name);
+  if(!people.length){ el.style.display='none'; el.innerHTML=''; return; }
+  const ord=r=>{ const i=ROLE_ORDER.indexOf(r); return i<0?99:i; };
+  people.sort((a,b)=> ord(a.role)-ord(b.role) || (a.name||'').localeCompare(b.name||''));
+  const CAP=14, shown=people.slice(0,CAP), extra=people.length-shown.length;
+  const chip=p=>{ const col=assigneeColor(p.id||p.name||''), ini=esc(assigneeInitials(p.name));
+    const body=p.avatar
+      ? `<img class="assignee-av sp-av" src="${esc(p.avatar)}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'"><span class="assignee-ini sp-av" style="display:none;background:${col}">${ini}</span>`
+      : `<span class="assignee-ini sp-av" style="display:inline-flex;background:${col}">${ini}</span>`;
+    return `<span class="assignee-chip sp-chip" data-name="${esc(p.name+(p.role?(' · '+p.role):''))}">${body}</span>`;
+  };
+  el.style.display='flex';
+  el.innerHTML=`<span class="sp-count" title="People assigned to this squad (Manage People)">${people.length}</span>`+
+    shown.map(chip).join('')+(extra>0?`<span class="sp-more">+${extra}</span>`:'');
+}
 // Shared people directory helpers. Person identity = Jira accountId.
 function personMeta(id){ return (state.people && state.people[id]) || {}; }
 function personSquad(id){ return personMeta(id).squad || ''; }
@@ -1759,6 +1789,7 @@ function render(){
   renderTribes();
   renderTabs();
   document.getElementById('squadName').textContent=activeSquad().name;
+  renderSquadPeople();
   document.querySelectorAll('#viewToggle button').forEach(b=>b.classList.toggle('active',b.dataset.view===curView()));
   renderTagFilter();
   renderDesignFilter();
