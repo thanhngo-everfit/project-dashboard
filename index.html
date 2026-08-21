@@ -839,13 +839,19 @@ const ROLE_ORDER = ['PM','SM','PC','Fullstack','Backend','Frontend','iOS','Andro
 // roster, not the Jira contributors. Hidden on virtual views.
 function renderSquadPeople(){
   const el=document.getElementById('squadPeople'); if(!el) return;
-  if(inVirtual()){ el.style.display='none'; el.innerHTML=''; return; }
-  const sq=activeSquad().name;
-  const people=Object.entries(state.people||{}).map(([id,m])=>({id,...m})).filter(p=>p && p.squad===sq && p.name);
+  const av=activeVirtual();
+  const all=Object.entries(state.people||{}).map(([id,m])=>({id,...m}));
+  let people, allSquads=false;
+  if(av){
+    if(av.allSquads){ allSquads=true; const set=new Set(curSquads().map(s=>s.name)); people=all.filter(p=>p.name && p.squad && set.has(p.squad)); }
+    else { el.style.display='none'; el.innerHTML=''; return; }   // tag / marketing / people views
+  } else {
+    const sq=activeSquad().name; people=all.filter(p=>p.name && p.squad===sq);
+  }
   if(!people.length){ el.style.display='none'; el.innerHTML=''; return; }
   const ord=r=>{ const i=ROLE_ORDER.indexOf(r); return i<0?99:i; };
-  people.sort((a,b)=> ord(a.role)-ord(b.role) || (a.name||'').localeCompare(b.name||''));
-  const CAP=14, shown=people.slice(0,CAP), extra=people.length-shown.length;
+  people.sort((a,b)=> (allSquads?(a.squad||'').localeCompare(b.squad||''):0) || ord(a.role)-ord(b.role) || (a.name||'').localeCompare(b.name||''));
+  const CAP=allSquads?20:14, shown=people.slice(0,CAP), extra=people.length-shown.length;
   const chip=p=>{ const col=assigneeColor(p.id||p.name||''), ini=esc(assigneeInitials(p.name));
     const body=p.avatar
       ? `<img class="assignee-av sp-av" src="${esc(p.avatar)}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'"><span class="assignee-ini sp-av" style="display:none;background:${col}">${ini}</span>`
