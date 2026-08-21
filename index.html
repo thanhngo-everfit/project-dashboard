@@ -850,6 +850,12 @@ const SQUAD_ROSTER = [
   ['Anh Phan','Frontend','training'],['Dong Vo','Backend','training'],['Duong Tran Quoc','Data','training'],['Duyen Tran','PC','training'],['Hanh Tran','Frontend','training'],['Khoa Huynh','Android','training'],
   ['Ngoc Nguyen','BA','training'],['Nhat Huy','Backend','training'],['Thanh Ngo','PM','training'],['Tran Nguyen','QA','training'],['Trang Ngo','QA','training'],['Tuyen Tran','iOS','training'],
 ];
+// Roster people whose Jira account never shows up as a contributor (they don't log work or get assigned
+// tickets — e.g. Scrum Masters, PCs) still get linked to their REAL Jira accountId here, so auto-assign
+// creates a proper Jira-linked directory entry instead of a disconnected synthetic "m:" one.
+const ROSTER_ACCOUNTS = {
+  'Bao Ho':'633108fda84c7f79c3865027',
+};
 const SQUAD_KEY_PATS = { nutrition:/nutrition/i, engagement:/engagement/i, enablement:/enablement/i, integration:/integration|middleware/i, platform:/platform|workspace|capability/i, training:/training|automation/i };
 const SQUAD_KEY_LABELS = { nutrition:'Nutrition', engagement:'Engagement', enablement:'Enablement', integration:'Integration & Middleware', platform:'Platform Capability', training:'Training & Automation' };
 // Map a roster squadKey to the tribe's actual squad name (fuzzy), else the standard label.
@@ -2633,9 +2639,12 @@ function openPeopleManager(){
       const squad=squadNameForKey(key);
       let p=byName[nm];
       if(!p){
-        p=ppl.find(x=>!String(x.accountId).startsWith('m:') && nameLooseMatch(nm, x.name))
-          || ppl.find(x=>nameLooseMatch(nm, x.name));
-        if(p){ matched++; } else { p=ensurePerson(nm); added++; }
+        const acct=ROSTER_ACCOUNTS[nm];
+        p=(acct && ppl.find(x=>x.accountId===acct))                                           // already linked
+          || ppl.find(x=>!String(x.accountId).startsWith('m:') && nameLooseMatch(nm, x.name)) // Jira contributor by name
+          || (!acct && ppl.find(x=>nameLooseMatch(nm, x.name)));                              // any (incl. manual) — only if no known acct
+        if(p){ matched++; }
+        else { p=ensurePerson(nm, acct); if(acct) matched++; else added++; }   // known acct -> Jira-linked entry
         byName[nm]=p;
       }
       const id=p.accountId;
