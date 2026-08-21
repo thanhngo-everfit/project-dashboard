@@ -2514,13 +2514,17 @@ function renderOrgChart(g){
   const q=(state.search||'').trim().toLowerCase();
   const dir=state.people||{};
   const leadIds=new Set(ORG_LEADS.map(l=>l.accountId));
+  const leadNames=ORG_LEADS.map(l=>(dir[l.accountId]||{}).name||l.name);
+  // A lead can have a stale duplicate directory entry (e.g. a synthetic "m:" one from before account
+  // linking) — exclude by accountId OR by loose name match so they never appear inside their own squads.
+  const isLead=p=>leadIds.has(p.id) || leadNames.some(n=>nameLooseMatch(n, p.name));
   const squads=curSquads();
   const dirList=Object.entries(dir).map(([id,m])=>({id,...m}));
   let totalMembers=0;
 
   // Build one squad card (header + members grouped by role). Also tallies totalMembers.
   const squadCard=sq=>{
-    let members=dirList.filter(p=>p.name && !leadIds.has(p.id) && (p.squads||[]).includes(sq.name));
+    let members=dirList.filter(p=>p.name && !isLead(p) && (p.squads||[]).includes(sq.name));
     const fullCount=members.length; totalMembers+=fullCount;
     if(q) members=members.filter(p=>(p.name||'').toLowerCase().includes(q));
     members.sort((a,b)=> ORD_ROLE(a.role)-ORD_ROLE(b.role) || (a.name||'').localeCompare(b.name||''));
