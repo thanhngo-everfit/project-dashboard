@@ -61,6 +61,8 @@
 
   /* ---------- Toolbar under tabs ---------- */
   .subbar{display:flex;align-items:center;gap:10px;padding:8px 16px;background:var(--panel);border-bottom:1px solid var(--border);}
+  .filterbar{display:flex;align-items:center;gap:10px;padding:7px 16px;background:var(--panel);border-bottom:1px solid var(--border);flex-wrap:wrap;}
+  .filterbar .spacer{flex:1;}
   .subbar .squad-name{font-weight:800;font-size:15px;cursor:text;padding:3px 7px;border-radius:7px;outline:none;}
   .subbar .squad-name:hover{background:#f0f1f4;}
   .subbar .squad-name[contenteditable="true"]{background:#fff;box-shadow:0 0 0 2px #4c6fff;}
@@ -793,42 +795,6 @@
     <span class="squad-name" id="squadName"></span>
     <span class="squad-people" id="squadPeople" style="display:none"></span>
     <input id="searchBox" class="searchbox" type="search" placeholder="Search projects…" autocomplete="off">
-    <div class="tagfilter-wrap" id="tagFilterWrap" style="margin-left:6px;">
-      <span style="font-size:12px;color:var(--muted);font-weight:600;">Tag</span>
-      <button id="tagFilterBtn" class="tagfilter">All tags</button>
-      <div id="tagFilterMenu" class="tagfilter-menu" style="display:none"></div>
-    </div>
-    <div class="tagfilter-wrap" id="designFilterWrap" style="margin-left:6px;">
-      <span style="font-size:12px;color:var(--muted);font-weight:600;">Design</span>
-      <button id="designFilterBtn" class="tagfilter">All statuses</button>
-      <div id="designFilterMenu" class="tagfilter-menu" style="display:none"></div>
-    </div>
-    <div class="tagfilter-wrap" id="releaseFilterWrap" style="margin-left:6px;">
-      <span style="font-size:12px;color:var(--muted);font-weight:600;">Release</span>
-      <button id="releaseFilterBtn" class="tagfilter">All</button>
-      <div id="releaseFilterMenu" class="tagfilter-menu" style="display:none"></div>
-    </div>
-    <div class="tagfilter-wrap" id="teamFilterWrap" style="margin-left:6px;">
-      <span style="font-size:12px;color:var(--muted);font-weight:600;">Team</span>
-      <button id="teamFilterBtn" class="tagfilter">All teams</button>
-      <div id="teamFilterMenu" class="tagfilter-menu" style="display:none"></div>
-    </div>
-    <div class="tagfilter-wrap" id="assigneeFilterWrap" style="margin-left:6px;">
-      <span style="font-size:12px;color:var(--muted);font-weight:600;">Assignee</span>
-      <button id="assigneeFilterBtn" class="tagfilter">All</button>
-      <div id="assigneeFilterMenu" class="tagfilter-menu" style="display:none"></div>
-    </div>
-    <div class="tagfilter-wrap" id="categoryFilterWrap" style="margin-left:6px;display:none;">
-      <span style="font-size:12px;color:var(--muted);font-weight:600;">Category</span>
-      <button id="categoryFilterBtn" class="tagfilter">All categories</button>
-      <div id="categoryFilterMenu" class="tagfilter-menu" style="display:none"></div>
-    </div>
-    <div class="tagfilter-wrap" id="promoFilterWrap" style="margin-left:6px;display:none;">
-      <span style="font-size:12px;color:var(--muted);font-weight:600;">Promotion</span>
-      <button id="promoFilterBtn" class="tagfilter">All</button>
-      <div id="promoFilterMenu" class="tagfilter-menu" style="display:none"></div>
-    </div>
-    <button class="btn" id="jumpToday" title="Scroll the timeline to today"><span style="color:#f04438;">●</span> Jump to Today</button>
     <div class="spacer"></div>
     <div class="jira-sync" id="jiraSyncWrap" style="display:none;align-items:center;gap:8px;margin-right:8px;">
       <span id="jiraSyncTime" style="font-size:11px;color:var(--muted);white-space:nowrap;"></span>
@@ -873,6 +839,46 @@
         </div>
       </div>
     </div>
+  </div>
+
+  <div class="filterbar" id="filterbar">
+    <div class="tagfilter-wrap" id="tagFilterWrap">
+      <span style="font-size:12px;color:var(--muted);font-weight:600;">Tag</span>
+      <button id="tagFilterBtn" class="tagfilter">All tags</button>
+      <div id="tagFilterMenu" class="tagfilter-menu" style="display:none"></div>
+    </div>
+    <div class="tagfilter-wrap" id="designFilterWrap">
+      <span style="font-size:12px;color:var(--muted);font-weight:600;">Design</span>
+      <button id="designFilterBtn" class="tagfilter">All statuses</button>
+      <div id="designFilterMenu" class="tagfilter-menu" style="display:none"></div>
+    </div>
+    <div class="tagfilter-wrap" id="releaseFilterWrap">
+      <span style="font-size:12px;color:var(--muted);font-weight:600;">Release</span>
+      <button id="releaseFilterBtn" class="tagfilter">All</button>
+      <div id="releaseFilterMenu" class="tagfilter-menu" style="display:none"></div>
+    </div>
+    <div class="tagfilter-wrap" id="teamFilterWrap">
+      <span style="font-size:12px;color:var(--muted);font-weight:600;">Team</span>
+      <button id="teamFilterBtn" class="tagfilter">All teams</button>
+      <div id="teamFilterMenu" class="tagfilter-menu" style="display:none"></div>
+    </div>
+    <div class="tagfilter-wrap" id="assigneeFilterWrap">
+      <span style="font-size:12px;color:var(--muted);font-weight:600;">Assignee</span>
+      <button id="assigneeFilterBtn" class="tagfilter">All</button>
+      <div id="assigneeFilterMenu" class="tagfilter-menu" style="display:none"></div>
+    </div>
+    <div class="tagfilter-wrap" id="categoryFilterWrap" style="display:none;">
+      <span style="font-size:12px;color:var(--muted);font-weight:600;">Category</span>
+      <button id="categoryFilterBtn" class="tagfilter">All categories</button>
+      <div id="categoryFilterMenu" class="tagfilter-menu" style="display:none"></div>
+    </div>
+    <div class="tagfilter-wrap" id="promoFilterWrap" style="display:none;">
+      <span style="font-size:12px;color:var(--muted);font-weight:600;">Promotion</span>
+      <button id="promoFilterBtn" class="tagfilter">All</button>
+      <div id="promoFilterMenu" class="tagfilter-menu" style="display:none"></div>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn" id="jumpToday" title="Scroll the timeline to today"><span style="color:#f04438;">●</span> Jump to Today</button>
   </div>
 
   <div class="gantt" id="gantt"></div>
@@ -2035,6 +2041,7 @@ function render(){
   const peopleView = !!(activeVirtual() && activeVirtual().byAssignee);   // "People" view: only the search box applies
   const orgView = !!(activeVirtual() && activeVirtual().orgChart);        // "Organization" view: org chart, only search applies
   const setDisp=(sel,show)=>{ const el=document.querySelector(sel); if(el) el.style.display = show?'':'none'; };
+  setDisp('#filterbar', !peopleView && !orgView);   // whole filter row hidden where no filters apply
   setDisp('#jumpToday', !listView && !peopleView && !orgView);
   setDisp('.settings-wrap', !listView && !peopleView && !orgView);
   setDisp('#viewToggle', !listView && !peopleView && !orgView);
