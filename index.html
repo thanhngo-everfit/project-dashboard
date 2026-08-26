@@ -355,6 +355,18 @@
   .pp-isub{flex:none;font-size:9px;color:#98a2b3;text-transform:uppercase;font-weight:700;}
   .pp-loading,.pp-empty{font-size:12.5px;color:var(--muted);padding:8px 0;}
   .pp-note{font-size:13px;color:#475467;line-height:1.55;white-space:pre-wrap;background:#fffdf5;border:1px solid #fcecc9;border-radius:9px;padding:11px 13px;}
+  /* click-to-edit affordances */
+  .pp-editable{cursor:pointer;border-radius:6px;padding:2px 6px;margin:-2px -6px;transition:background .1s,box-shadow .1s;}
+  .pp-editable:hover{background:#eef4ff;box-shadow:inset 0 0 0 1px #d7e0ff;}
+  .pp-title.pp-editable{padding:2px 6px;margin:-2px -6px;}
+  .pp-add{color:#98a2b3;font-style:italic;}
+  .pp-editable:hover .pp-add{color:#4c6fff;font-style:normal;}
+  .pp-ed-inp{width:100%;box-sizing:border-box;padding:6px 9px;border:1.5px solid #4c6fff;border-radius:8px;font-size:13px;font-family:inherit;background:#fff;box-shadow:0 0 0 3px rgba(76,111,255,.14);}
+  .pp-title .pp-ed-inp{font-size:16px;font-weight:800;}
+  .pp-ed-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+  .pp-ed-row input[type=date]{flex:1;min-width:0;padding:6px 8px;border:1.5px solid #4c6fff;border-radius:8px;font-family:inherit;font-size:13px;}
+  .pp-ed-btns{display:flex;gap:6px;margin-top:7px;}
+  .pp-ed-btns .btn{padding:5px 11px;font-size:12px;}
   .assignee-av{width:22px;height:22px;border-radius:50%;object-fit:cover;border:1px solid #fff;box-shadow:0 0 0 1px var(--border);}
   .assignee-ini{width:22px;height:22px;border-radius:50%;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#fff;border:1px solid #fff;box-shadow:0 0 0 1px var(--border);}
   .links-line{display:flex;align-items:center;gap:5px;flex-wrap:wrap;}
@@ -3795,6 +3807,7 @@ function openProjectModal(p){
 // Project modal: name + start + optional end (a single bar on the timeline).
 /* ============================ Project detail slide-over (Jira-style) ============================ */
 let _ppEls=null;                 // {bg, panel}
+let _ppEditField=null;           // which field is currently being edited inline (click-to-edit)
 const _ppDeliveryCache={};       // planKey -> {epics, issues, fetchedAt}
 function ensureProjPanel(){
   if(_ppEls) return _ppEls;
@@ -3850,14 +3863,13 @@ async function loadDelivery(key, container, base, force){
 }
 // Open the detail panel for an EXISTING project (create still uses the center modal). edit=true opens
 // the in-panel editor.
-function openProjectPanel(category, proj, edit){
+function openProjectPanel(category, proj){
   if(!proj) return openPhaseModal(category, proj);
   const cat = category || catOfProject(proj.id) || {name:'',color:'#cdb4f6'};
   const {bg,panel}=ensureProjPanel();
   bg.classList.add('open'); panel.classList.add('open');
-  panel.scrollTop=0;
-  if(edit) renderPanelEdit(panel, cat, proj);
-  else renderPanelView(panel, cat, proj);
+  _ppEditField=null;                       // fresh open -> no field in edit
+  renderPanelView(panel, cat, proj);       // click any field to edit it inline
 }
 function renderPanelView(panel, cat, proj){
   const key = jiraIssueKey(proj.jira);
@@ -3869,35 +3881,36 @@ function renderPanelView(panel, cat, proj){
   const chip=(txt,style)=>`<span class="tagpick sel" style="cursor:default;background:${style.bg||'#f2f4f7'};color:${style.c||'#475467'};border-color:${style.bd||'#e4e7ec'}">${esc(txt)}</span>`;
   const tagChips=(proj.tags||[]).map(t=>{ const c=tagColor(t); return `<span class="tagpick sel" style="cursor:default;background:${c.bg};color:${c.fg};border-color:${c.bd}">${esc(t)}</span>`; }).join('');
   const personChip=a=>`<span class="pp-person">${personAvatarHTML(a)}${esc(a.name||'Unknown')}${a.seconds?` · <b>${fmtHours(a.seconds)}</b>`:''}</span>`;
-  const row=(k,v)=>v?`<div class="pp-k">${esc(k)}</div><div class="pp-v">${v}</div>`:'';
+  const add='<span class="pp-add">Add…</span>';
+  const row=(k,v)=>`<div class="pp-k">${esc(k)}</div><div class="pp-v">${v||'—'}</div>`;              // read-only row
+  const erow=(fkey,k,v)=>`<div class="pp-k">${esc(k)}</div><div class="pp-v pp-editable" data-ef="${fkey}" tabindex="0" title="Click to edit">${v||add}</div>`;   // editable row
   const asg=(proj.assignees||[]), con=(proj.contributors||[]);
+  const scroll0=(panel.querySelector('.pp-body')||{}).scrollTop||0;
   panel.innerHTML=`
     <div class="pp-top">
       <span class="pp-dot" style="background:${cat.color||'#cdb4f6'}"></span>
-      <div class="pp-title">${esc(proj.name||'Project')}</div>
+      <div class="pp-title pp-editable" data-ef="name" title="Click to edit">${esc(proj.name||'Project')}</div>
       ${key?`<a class="pp-iconbtn" href="${esc(base+'/browse/'+key)}" target="_blank" rel="noopener" title="Open in Jira (${esc(key)})">↗</a>`:''}
       <button class="pp-iconbtn" id="pp_close" title="Close">✕</button>
     </div>
     <div class="pp-body">
-      <div class="pp-actions">
-        <button class="btn" id="pp_edit">✎ Edit</button>
-      </div>
       <div class="pp-sec">
-        <div class="pp-sec-h">Details</div>
+        <div class="pp-sec-h">Details <span style="margin-left:auto;font-weight:600;text-transform:none;letter-spacing:0;color:#b0b6c3;">click a field to edit</span></div>
         <div class="pp-meta">
           ${row('Category', esc(cat.name||'—'))}
-          ${row('Status', chip(relLabel, DESIGN_LABEL_STYLE[relLabel==='Released'?'Released':relLabel==='Completed'?'Completed (no release)':'Waiting For Start']||{}))}
-          ${row('Timeline', (proj.start||proj.end)?esc((fmtShort(proj.start)||'…')+' → '+(fmtShort(proj.end)||'…')):'')}
-          ${row('Priority', proj.priority?priorityChipHTML(proj):'')}
-          ${row('Team', (proj.teams||[]).map(esc).join(', '))}
-          ${row('Feature size', esc(proj.size||''))}
-          ${row('Promotion', esc(proj.promo||''))}
-          ${row('Open scale', esc(proj.openScale||''))}
+          ${erow('release','Status', chip(relLabel, DESIGN_LABEL_STYLE[relLabel==='Released'?'Released':relLabel==='Completed'?'Completed (no release)':'Waiting For Start']||{}))}
+          ${erow('timeline','Timeline', (proj.start||proj.end)?esc((fmtShort(proj.start)||'…')+' → '+(fmtShort(proj.end)||'…')):'')}
+          ${erow('priority','Priority', proj.priority?priorityChipHTML(proj):'')}
+          ${erow('team','Team', (proj.teams||[]).map(esc).join(', '))}
+          ${erow('size','Feature size', esc(proj.size||''))}
+          ${erow('promo','Promotion', esc(proj.promo||''))}
+          ${erow('scale','Open scale', esc(proj.openScale||''))}
+          ${erow('jira','Jira link', key?esc(key):'')}
         </div>
       </div>
-      ${tagChips?`<div class="pp-sec"><div class="pp-sec-h">Tags</div><div class="pp-chips">${tagChips}</div></div>`:''}
+      <div class="pp-sec"><div class="pp-sec-h">Tags</div><div class="pp-v pp-editable" data-ef="tags" title="Click to edit"><div class="pp-chips">${tagChips||add}</div></div></div>
       <div class="pp-sec">
-        <div class="pp-sec-h">Design</div>
+        <div class="pp-sec-h">Design <span style="margin-left:auto;font-weight:600;text-transform:none;letter-spacing:0;color:#c7ccd6;">from Jira</span></div>
         <div class="pp-meta">
           ${row('Design status', dlab?chip(dlab,dst):(proj.designStatus?esc(proj.designStatus):'—'))}
           ${row('Design dates', dt&&(dt.start||dt.end)?esc((fmtShort(dt.start)||'…')+' → '+(fmtShort(dt.end)||'…')):'')}
@@ -3914,105 +3927,98 @@ function renderPanelView(panel, cat, proj){
         <div id="pp_delivery"><div class="pp-loading">Loading…</div></div>
       </div>
       ${(proj.docs||[]).length?`<div class="pp-sec"><div class="pp-sec-h">Links</div><div class="pp-links">${linkIconsHTML(proj)}</div></div>`:''}
-      ${proj.note?`<div class="pp-sec"><div class="pp-sec-h">Note</div><div class="pp-note">${esc(proj.note)}</div></div>`:''}
+      <div class="pp-sec"><div class="pp-sec-h">Note</div><div class="pp-v pp-editable" data-ef="note" title="Click to edit">${proj.note?`<div class="pp-note">${esc(proj.note)}</div>`:add}</div></div>
     </div>`;
   panel.querySelector('#pp_close').onclick=closeProjPanel;
-  const editBtn=panel.querySelector('#pp_edit'); if(editBtn) editBtn.onclick=()=>openProjectPanel(cat, proj, true);
   const delEl=panel.querySelector('#pp_delivery');
   panel.querySelector('#pp_refresh').onclick=()=>loadDelivery(key, delEl, base, true);
   loadDelivery(key, delEl, base, false);
+  const body=panel.querySelector('.pp-body'); if(body) body.scrollTop=scroll0;
+
+  // ---- click-to-edit ----
+  const commit=()=>{ _ppEditField=null; render(); renderPanelView(panel, cat, proj); };
+  const cancel=()=>{ _ppEditField=null; renderPanelView(panel, cat, proj); };
+  panel.querySelectorAll('.pp-editable').forEach(el=>{ el.onclick=e=>{ if(_ppEditField) return; _ppEditField=el.dataset.ef; renderPanelView(panel, cat, proj); }; });
+  if(_ppEditField){
+    const cell = _ppEditField==='name' ? panel.querySelector('.pp-title') : panel.querySelector('[data-ef="'+_ppEditField+'"]');
+    if(cell){ cell.onclick=null; mountFieldEditor(_ppEditField, cell, proj, commit, cancel); }
+  }
 }
-// In-panel editor for an existing project (same fields as the create modal, rendered inside the slide-over).
-function renderPanelEdit(panel, cat, proj){
-  const ownSquad=squadOfProject(proj.id); const ownSquadName=ownSquad?ownSquad.name:(activeSquad()?activeSquad().name:'');
-  const teamOptions=[...new Set([...curSquads().map(s=>s.name), ...(proj.teams||[])].filter(Boolean))];
-  const showTeam=curSquads().length>1;
-  const tags=(proj.tags||[]).slice();
-  const teams=(proj.teams&&proj.teams.length)?proj.teams.slice():(ownSquadName?[ownSquadName]:[]);
-  const docs=(proj.docs||[]).slice();
-  const optList=(arr,cur)=>arr.map(s=>`<option ${cur===s?'selected':''}>${esc(s)}</option>`).join('');
-  panel.innerHTML=`
-    <div class="pp-top">
-      <span class="pp-dot" style="background:${cat.color||'#cdb4f6'}"></span>
-      <div class="pp-title">Edit project</div>
-      <button class="pp-iconbtn" id="pp_close" title="Close">✕</button>
-    </div>
-    <div class="pp-body">
-      <div class="field"><label>Project Name</label><input id="pe_name" value="${esc(proj.name||'')}"></div>
-      <div class="field row2">
-        <div style="flex:1"><label>Start</label><div class="datewrap"><input type="date" id="pe_start" value="${esc(proj.start||'')}"><button type="button" class="dateclear" data-for="pe_start">×</button></div></div>
-        <div style="flex:1"><label>End</label><div class="datewrap"><input type="date" id="pe_end" value="${esc(proj.end||'')}"><button type="button" class="dateclear" data-for="pe_end">×</button></div></div>
-      </div>
-      <div class="field row2">
-        <div style="flex:1"><label>Priority</label><select id="pe_priority"><option value="" ${!proj.priority?'selected':''}>None</option>${optList(PRIORITIES,proj.priority)}</select></div>
-        <div style="flex:1"><label>Status</label><select id="pe_release"><option value="" ${!proj.release?'selected':''}>Active</option><option value="released" ${proj.release==='released'?'selected':''}>Released</option><option value="completed" ${proj.release==='completed'?'selected':''}>Completed (no release)</option></select></div>
-      </div>
-      ${showTeam?`<div class="field"><label>Team</label><div id="pe_teams" class="tag-picker"></div></div>`:''}
-      <div class="field row2">
-        <div style="flex:1"><label>Feature size</label><select id="pe_size"><option value="" ${!proj.size?'selected':''}>None</option>${optList(FEATURE_SIZES,proj.size)}</select></div>
-        <div style="flex:1"><label>Promotion</label><select id="pe_promo"><option value="" ${!proj.promo?'selected':''}>None</option><option ${proj.promo==='Yes'?'selected':''}>Yes</option><option ${proj.promo==='No'?'selected':''}>No</option></select></div>
-      </div>
-      <div class="field"><label>Open scale</label><select id="pe_scale"><option value="" ${!proj.openScale?'selected':''}>None</option>${optList(OPEN_SCALES,proj.openScale)}</select></div>
-      <div class="field"><label>Tags</label><div id="pe_tags" class="tag-picker"></div><div class="addrow" style="margin-top:6px;"><input id="pe_tagnew" placeholder="Add custom tag…"><button type="button" class="btn" id="pe_tagadd">Add</button></div></div>
-      <div class="field"><label>Jira link</label><input id="pe_jira" value="${esc(proj.jira||'')}" placeholder="https://…"></div>
-      <div class="field"><label>Documentation</label><div id="pe_docs" class="doclist"></div><button type="button" class="btn" id="pe_adddoc" style="width:100%;">＋ Add document link</button></div>
-      <div class="field"><label>Note</label><textarea id="pe_note" style="min-height:80px;">${esc(proj.note||'')}</textarea></div>
-      <div class="pp-actions" style="position:sticky;bottom:0;background:var(--panel);padding:10px 0;border-top:1px solid var(--border);margin:0;">
-        <button class="btn" id="pe_cancel">Cancel</button>
-        <button class="btn primary" id="pe_save" style="flex:1;">Save</button>
-      </div>
-    </div>`;
-  panel.querySelectorAll('.dateclear').forEach(b=>{ const inp=panel.querySelector('#'+b.dataset.for); const sync=()=>{ b.style.display=inp.value?'flex':'none'; }; sync(); inp.addEventListener('input',sync); b.onclick=()=>{ inp.value=''; sync(); inp.focus(); }; });
-  // tags
-  const tagWrap=panel.querySelector('#pe_tags');
-  function renderTags(){ tagWrap.innerHTML='';
-    const mk=t=>{ const i=tags.indexOf(t); const chip=document.createElement('span');
-      if(i>=0){ const c=tagColor(t); chip.className='tagpick sel'; chip.style.cssText=`background:${c.bg};color:${c.fg};border-color:${c.bd}`; chip.innerHTML=esc(t)+' <b>×</b>'; chip.onclick=()=>{tags.splice(i,1);renderTags();}; }
-      else { chip.className='tagpick add'; chip.textContent='+ '+t; chip.onclick=()=>{tags.push(t);renderTags();}; }
-      return chip; };
-    const group=(label,list)=>{ if(!list.length) return; const lab=document.createElement('div'); lab.className='tp-label'; lab.textContent=label; tagWrap.appendChild(lab); const row=document.createElement('div'); row.className='tp-row'; list.forEach(t=>row.appendChild(mk(t))); tagWrap.appendChild(row); };
-    const all=[...new Set([...PREDEFINED_TAGS, ...allUsedTags(), ...tags])]; const mine=[], other=[];
-    all.forEach(t=>{ if(tagCreator(t)===currentEmail) mine.push(t); else other.push(t); });
-    group('My tags', mine); group('Other tags', other);
-  }
-  renderTags();
-  const tagNew=panel.querySelector('#pe_tagnew');
-  function addTag(){ const v=tagNew.value.trim(); if(v&&!tags.includes(v)){ const known=PREDEFINED_TAGS.includes(v)||allUsedTags().includes(v)||tagCreator(v); if(!known) recordTagCreator(v); tags.push(v); } tagNew.value=''; renderTags(); tagNew.focus(); }
-  panel.querySelector('#pe_tagadd').onclick=addTag; tagNew.onkeydown=e=>{ if(e.key==='Enter'){e.preventDefault();addTag();} };
-  // team
-  const teamWrap=panel.querySelector('#pe_teams');
-  function renderTeams(){ if(!teamWrap) return; teamWrap.innerHTML=''; const row=document.createElement('div'); row.className='tp-row'; teamWrap.appendChild(row);
-    teamOptions.forEach(name=>{ const i=teams.indexOf(name); const chip=document.createElement('span');
-      if(i>=0){ chip.className='tagpick sel'; chip.style.cssText='background:#eef4ff;color:#3538cd;border-color:#c7d7fe'; chip.innerHTML=esc(name)+' <b>×</b>'; chip.onclick=()=>{teams.splice(i,1);renderTeams();}; }
-      else { chip.className='tagpick add'; chip.textContent='+ '+name; chip.onclick=()=>{teams.push(name);renderTeams();}; }
-      row.appendChild(chip); });
-  }
-  renderTeams();
-  // docs
-  const docWrap=panel.querySelector('#pe_docs');
-  function renderDocs(){ docWrap.innerHTML=''; docs.forEach((d,i)=>{ const r=document.createElement('div'); r.className='doc-row'; r.innerHTML=`<input class="doc-url" value="${esc(d)}" placeholder="https://…"><button type="button" class="doc-del" title="Remove">✕</button>`; r.querySelector('.doc-url').oninput=e=>docs[i]=e.target.value; r.querySelector('.doc-del').onclick=()=>{docs.splice(i,1);renderDocs();}; docWrap.appendChild(r); }); }
-  renderDocs();
-  panel.querySelector('#pe_adddoc').onclick=()=>{docs.push('');renderDocs();};
-  panel.querySelector('#pp_close').onclick=closeProjPanel;
-  panel.querySelector('#pe_cancel').onclick=()=>renderPanelView(panel, cat, proj);
-  panel.querySelector('#pe_save').onclick=()=>{
-    const start=panel.querySelector('#pe_start').value, end=panel.querySelector('#pe_end').value;
-    if(start&&end&&end<start){ alert('End date must be on or after start date.'); return; }
-    proj.name=panel.querySelector('#pe_name').value.trim()||'New Project';
-    proj.start=start; proj.end=end;
-    proj.tags=tags.map(t=>t.trim()).filter(Boolean);
-    proj.priority=panel.querySelector('#pe_priority').value;
-    proj.release=panel.querySelector('#pe_release').value; proj.done=proj.release==='released'||proj.release==='completed';
-    proj.size=panel.querySelector('#pe_size').value; proj.promo=panel.querySelector('#pe_promo').value;
-    proj.openScale=panel.querySelector('#pe_scale').value;
-    proj.jira=normalizeUrl(panel.querySelector('#pe_jira').value.trim());
-    proj.docs=docs.map(d=>normalizeUrl(d.trim())).filter(Boolean);
-    proj.note=panel.querySelector('#pe_note').value;
-    const teamList=[...new Set(teams.map(t=>t.trim()).filter(Boolean))];
-    proj.teams=teamList.length?teamList:(ownSquadName?[ownSquadName]:[]);
-    render();                       // re-render timeline + persist to server
-    renderPanelView(panel, cat, proj);
+// Mount the inline editor for one field into its cell.
+function mountFieldEditor(fkey, cell, proj, commit, cancel){
+  const textEd=(val, apply, big)=>{
+    cell.innerHTML=`<input class="pp-ed-inp${big?' pp-ed-big':''}">`;
+    const inp=cell.querySelector('input'); inp.value=val||''; inp.focus(); inp.select();
+    let done=false; const fin=save=>{ if(done)return; done=true; if(save){ apply(inp.value); commit(); } else cancel(); };
+    inp.onkeydown=e=>{ if(e.key==='Enter'){e.preventDefault();fin(true);} else if(e.key==='Escape'){e.preventDefault();fin(false);} };
+    inp.onblur=()=>fin(true);
   };
+  const selectEd=(options, cur, apply)=>{
+    const sel=document.createElement('select'); sel.className='pp-ed-inp';
+    options.forEach(o=>{ const op=document.createElement('option'); op.value=o.v; op.textContent=o.l; if(o.v===(cur||'')) op.selected=true; sel.appendChild(op); });
+    cell.innerHTML=''; cell.appendChild(sel); sel.focus();
+    let done=false;
+    sel.onchange=()=>{ if(done)return; done=true; apply(sel.value); commit(); };
+    sel.onblur=()=>{ if(done)return; done=true; cancel(); };
+  };
+  const withButtons=(inner, onSave)=>{
+    cell.innerHTML=inner+`<div class="pp-ed-btns"><button class="btn primary" id="pp_ok">Save</button><button class="btn" id="pp_no">Cancel</button></div>`;
+    cell.querySelector('#pp_ok').onclick=onSave; cell.querySelector('#pp_no').onclick=cancel;
+  };
+  if(fkey==='name'){ textEd(proj.name, v=>{ proj.name=v.trim()||proj.name; }, true); return; }
+  if(fkey==='jira'){ textEd(proj.jira, v=>{ proj.jira=normalizeUrl(v.trim()); }); return; }
+  if(fkey==='release'){ selectEd([{v:'',l:'Active'},{v:'released',l:'Released'},{v:'completed',l:'Completed (no release)'}], proj.release, v=>{ proj.release=v; proj.done=(v==='released'||v==='completed'); }); return; }
+  if(fkey==='priority'){ selectEd([{v:'',l:'None'},...PRIORITIES.map(p=>({v:p,l:p}))], proj.priority, v=>proj.priority=v); return; }
+  if(fkey==='size'){ selectEd([{v:'',l:'None'},...FEATURE_SIZES.map(s=>({v:s,l:s}))], proj.size, v=>proj.size=v); return; }
+  if(fkey==='promo'){ selectEd([{v:'',l:'None'},{v:'Yes',l:'Yes'},{v:'No',l:'No'}], proj.promo, v=>proj.promo=v); return; }
+  if(fkey==='scale'){ selectEd([{v:'',l:'None'},...OPEN_SCALES.map(s=>({v:s,l:s}))], proj.openScale, v=>proj.openScale=v); return; }
+  if(fkey==='timeline'){
+    withButtons(`<div class="pp-ed-row"><input type="date" id="pp_s" value="${esc(proj.start||'')}"><span>→</span><input type="date" id="pp_e" value="${esc(proj.end||'')}"></div>`, ()=>{
+      const s=cell.querySelector('#pp_s').value, e=cell.querySelector('#pp_e').value;
+      if(s&&e&&e<s){ alert('End date must be on or after start date.'); return; }
+      proj.start=s; proj.end=e; commit();
+    });
+    cell.querySelector('#pp_s').focus(); return;
+  }
+  if(fkey==='note'){
+    withButtons(`<textarea class="pp-ed-inp" id="pp_note" style="min-height:90px;resize:vertical;">${esc(proj.note||'')}</textarea>`, ()=>{ proj.note=cell.querySelector('#pp_note').value; commit(); });
+    cell.querySelector('#pp_note').focus(); return;
+  }
+  if(fkey==='team'){
+    const ownSquad=squadOfProject(proj.id); const ownSquadName=ownSquad?ownSquad.name:(activeSquad()?activeSquad().name:'');
+    const teamOptions=[...new Set([...curSquads().map(s=>s.name), ...(proj.teams||[])].filter(Boolean))];
+    const teams=(proj.teams||[]).slice();
+    withButtons(`<div id="pp_tm" class="tag-picker"></div>`, ()=>{ const t=[...new Set(teams.map(x=>x.trim()).filter(Boolean))]; proj.teams=t.length?t:(ownSquadName?[ownSquadName]:[]); commit(); });
+    const tw=cell.querySelector('#pp_tm');
+    (function rt(){ tw.innerHTML=''; const rowEl=document.createElement('div'); rowEl.className='tp-row'; tw.appendChild(rowEl);
+      teamOptions.forEach(name=>{ const i=teams.indexOf(name); const chip=document.createElement('span');
+        if(i>=0){ chip.className='tagpick sel'; chip.style.cssText='background:#eef4ff;color:#3538cd;border-color:#c7d7fe'; chip.innerHTML=esc(name)+' <b>×</b>'; chip.onclick=()=>{teams.splice(i,1);rt();}; }
+        else { chip.className='tagpick add'; chip.textContent='+ '+name; chip.onclick=()=>{teams.push(name);rt();}; }
+        rowEl.appendChild(chip); });
+    })();
+    return;
+  }
+  if(fkey==='tags'){
+    const tags=(proj.tags||[]).slice();
+    withButtons(`<div id="pp_tp" class="tag-picker"></div><div class="addrow" style="margin-top:6px;"><input id="pp_tn" placeholder="Add custom tag…"><button type="button" class="btn" id="pp_ta">Add</button></div>`, ()=>{ proj.tags=tags.map(t=>t.trim()).filter(Boolean); commit(); });
+    const tw=cell.querySelector('#pp_tp');
+    function rt(){ tw.innerHTML='';
+      const mk=t=>{ const i=tags.indexOf(t); const chip=document.createElement('span');
+        if(i>=0){ const c=tagColor(t); chip.className='tagpick sel'; chip.style.cssText=`background:${c.bg};color:${c.fg};border-color:${c.bd}`; chip.innerHTML=esc(t)+' <b>×</b>'; chip.onclick=()=>{tags.splice(i,1);rt();}; }
+        else { chip.className='tagpick add'; chip.textContent='+ '+t; chip.onclick=()=>{tags.push(t);rt();}; }
+        return chip; };
+      const group=(label,list)=>{ if(!list.length) return; const lab=document.createElement('div'); lab.className='tp-label'; lab.textContent=label; tw.appendChild(lab); const rowEl=document.createElement('div'); rowEl.className='tp-row'; list.forEach(t=>rowEl.appendChild(mk(t))); tw.appendChild(rowEl); };
+      const all=[...new Set([...PREDEFINED_TAGS, ...allUsedTags(), ...tags])]; const mine=[], other=[];
+      all.forEach(t=>{ if(tagCreator(t)===currentEmail) mine.push(t); else other.push(t); });
+      group('My tags', mine); group('Other tags', other);
+    }
+    rt();
+    const tn=cell.querySelector('#pp_tn');
+    const addTag=()=>{ const v=tn.value.trim(); if(v&&!tags.includes(v)){ const known=PREDEFINED_TAGS.includes(v)||allUsedTags().includes(v)||tagCreator(v); if(!known) recordTagCreator(v); tags.push(v); } tn.value=''; rt(); tn.focus(); };
+    cell.querySelector('#pp_ta').onclick=addTag; tn.onkeydown=e=>{ if(e.key==='Enter'){e.preventDefault();addTag();} };
+    return;
+  }
+  cancel();
 }
 function openPhaseModal(category,proj){
   const editing=!!proj;
