@@ -137,6 +137,14 @@ To stay within the serverless function timeout while returning **complete** data
 then calls `action:'people'` in **small batches of epics** (bounded per call) and aggregates the
 assignees + worklog-author hours across all batches. No single request does enough work to time out.
 
+### Project detail panel & delivery progress
+Clicking an **existing** project (timeline bar or Marketing row) opens a **right-side detail panel**
+(Jira-style slide-over) instead of the edit modal. It shows the project's details, design status,
+people, links, and a **Delivery progress** section: an on-demand call to `POST /api/jira {action:'delivery',
+key}` resolves the JPD item's delivery epics and returns every child task/bug + sub-task with its status
+category (To Do / In Progress / Done), rendered as an overall progress bar plus a per-epic breakdown.
+Creating a new project still uses the center modal; **✎ Edit** in the panel reopens it.
+
 ### Auto-sync
 The dashboard also **auto-syncs from Jira every 15 minutes** for anyone who has it open
 (on load, then on a timer). The cadence is coordinated across all viewers via a shared

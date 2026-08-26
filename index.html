@@ -297,6 +297,64 @@
   .md-ai-hint{font-size:11px;color:var(--muted);margin:2px 0 10px;}
   .md-self-box{border:1px solid var(--border);border-radius:10px;padding:11px 13px;margin-top:14px;background:#fffdf5;}
   .md-file{display:none;}
+  /* ===== Project detail slide-over panel (Jira-style) ===== */
+  .pp-bg{position:fixed;inset:0;background:rgba(16,24,40,.35);opacity:0;pointer-events:none;transition:opacity .18s;z-index:60;}
+  .pp-bg.open{opacity:1;pointer-events:auto;}
+  .proj-panel{position:fixed;top:0;right:0;height:100vh;width:min(580px,96vw);background:var(--panel);box-shadow:-10px 0 34px rgba(16,24,40,.20);transform:translateX(100%);transition:transform .22s cubic-bezier(.4,0,.2,1);z-index:61;display:flex;flex-direction:column;overflow:hidden;}
+  .proj-panel.open{transform:none;}
+  .pp-top{display:flex;align-items:flex-start;gap:10px;padding:16px 18px 12px;border-bottom:1px solid var(--border);}
+  .pp-dot{width:12px;height:12px;border-radius:4px;flex:none;margin-top:5px;}
+  .pp-title{font-size:17px;font-weight:800;line-height:1.32;flex:1;color:var(--text);word-break:break-word;}
+  .pp-iconbtn{border:none;background:transparent;cursor:pointer;color:#98a2b3;border-radius:8px;width:32px;height:32px;font-size:18px;line-height:1;flex:none;}
+  .pp-iconbtn:hover{background:#f0f1f4;color:var(--text);}
+  .pp-body{flex:1;overflow-y:auto;padding:16px 18px 44px;}
+  .pp-actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
+  .pp-sec{margin-bottom:22px;}
+  .pp-sec-h{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#98a2b3;margin:0 0 10px;display:flex;align-items:center;gap:8px;}
+  .pp-sec-h .pp-refresh{margin-left:auto;font-size:11px;font-weight:700;text-transform:none;letter-spacing:0;color:#1570ef;cursor:pointer;background:none;border:none;}
+  .pp-meta{display:grid;grid-template-columns:110px 1fr;gap:9px 12px;font-size:13px;align-items:center;}
+  .pp-k{color:var(--muted);font-weight:600;font-size:12px;}
+  .pp-v{color:var(--text);}
+  .pp-chips{display:flex;flex-wrap:wrap;gap:6px;}
+  .pp-links{display:flex;flex-wrap:wrap;gap:8px;}
+  .pp-people{display:flex;flex-wrap:wrap;gap:10px;}
+  .pp-person{display:flex;align-items:center;gap:7px;font-size:12.5px;background:#f7f9fc;border:1px solid var(--border);border-radius:999px;padding:3px 10px 3px 4px;}
+  .pp-person .assignee-av,.pp-person .assignee-ini{width:22px;height:22px;font-size:9px;}
+  /* delivery progress */
+  .pp-prog-tot{display:flex;align-items:baseline;gap:8px;margin-bottom:8px;}
+  .pp-prog-pct{font-size:26px;font-weight:800;color:#067647;line-height:1;}
+  .pp-prog-cnt{font-size:12.5px;color:var(--muted);}
+  .pp-stack{display:flex;height:12px;border-radius:6px;overflow:hidden;background:#eef1f6;margin-bottom:8px;}
+  .pp-stack span{display:block;height:100%;}
+  .pp-seg-done{background:#12b76a;}
+  .pp-seg-prog{background:#2e90fa;}
+  .pp-seg-todo{background:#d0d5dd;}
+  .pp-legend{display:flex;gap:14px;font-size:11.5px;color:#475467;margin-bottom:14px;flex-wrap:wrap;}
+  .pp-legend b{font-weight:800;}
+  .pp-legend i{width:9px;height:9px;border-radius:2px;display:inline-block;margin-right:5px;vertical-align:middle;font-style:normal;}
+  .pp-epic{border:1px solid var(--border);border-radius:10px;margin-bottom:8px;overflow:hidden;}
+  .pp-epic-h{display:flex;align-items:center;gap:9px;padding:9px 11px;cursor:pointer;background:#fbfcfe;}
+  .pp-epic-h:hover{background:#f2f5fb;}
+  .pp-epic-name{flex:1;font-size:13px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .pp-epic-key{font-size:11px;font-weight:700;color:#6941c6;background:#f4ebff;border-radius:5px;padding:1px 6px;flex:none;}
+  .pp-epic-cnt{font-size:11px;color:var(--muted);flex:none;}
+  .pp-mini{width:90px;height:7px;border-radius:4px;overflow:hidden;background:#eef1f6;display:flex;flex:none;}
+  .pp-mini span{display:block;height:100%;}
+  .pp-epic-body{padding:4px 11px 10px;display:none;}
+  .pp-epic.open .pp-epic-body{display:block;}
+  .pp-caret{transition:transform .15s;color:#98a2b3;flex:none;}
+  .pp-epic.open .pp-caret{transform:rotate(90deg);}
+  .pp-issue{display:flex;align-items:center;gap:8px;padding:5px 2px;font-size:12.5px;border-top:1px solid #f2f4f7;}
+  .pp-issue:first-child{border-top:none;}
+  .pp-st{flex:none;font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.3px;border-radius:5px;padding:2px 6px;}
+  .pp-st.done{background:#d1fadf;color:#027a48;}
+  .pp-st.prog{background:#d1e9ff;color:#175cd3;}
+  .pp-st.todo{background:#eaecf0;color:#475467;}
+  .pp-ikey{font-size:11px;color:#1570ef;flex:none;font-weight:600;}
+  .pp-isum{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#344054;}
+  .pp-isub{flex:none;font-size:9px;color:#98a2b3;text-transform:uppercase;font-weight:700;}
+  .pp-loading,.pp-empty{font-size:12.5px;color:var(--muted);padding:8px 0;}
+  .pp-note{font-size:13px;color:#475467;line-height:1.55;white-space:pre-wrap;background:#fffdf5;border:1px solid #fcecc9;border-radius:9px;padding:11px 13px;}
   .assignee-av{width:22px;height:22px;border-radius:50%;object-fit:cover;border:1px solid #fff;box-shadow:0 0 0 1px var(--border);}
   .assignee-ini{width:22px;height:22px;border-radius:50%;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#fff;border:1px solid #fff;box-shadow:0 0 0 1px var(--border);}
   .links-line{display:flex;align-items:center;gap:5px;flex-wrap:wrap;}
@@ -2432,7 +2490,7 @@ function renderListByEnd(g){
           <span class="mkt-cell">${scale}</span>
           <span class="mkt-cell mkt-links">${linksHtml||'<span class="mkt-dash">—</span>'}</span>
           <span class="mkt-tags">${tags||'<span class="mkt-dash">—</span>'}</span>`;
-        row.onclick=()=>openPhaseModal(cat,p);
+        row.onclick=()=>openProjectPanel(cat,p);
         tbl.appendChild(row);
       });
     });
@@ -3268,7 +3326,7 @@ function phaseRow(cat,proj,units,tw){
     dStartX=dateToX(parse(dStartR),units);   // start-only (e.g. Waiting): just mark the start
   }
   if(proj.start||proj.end){
-    const bar=makeBar(barColor, proj.name, null, ()=>openPhaseModal(cat,proj), {});
+    const bar=makeBar(barColor, proj.name, null, ()=>openProjectPanel(cat,proj), {});
     placeBar(bar,proj,units);
     attachDrag(bar,proj,units,'phase',cat);
     track.appendChild(bar);
@@ -3735,6 +3793,129 @@ function openProjectModal(p){
 }
 
 // Project modal: name + start + optional end (a single bar on the timeline).
+/* ============================ Project detail slide-over (Jira-style) ============================ */
+let _ppEls=null;                 // {bg, panel}
+const _ppDeliveryCache={};       // planKey -> {epics, issues, fetchedAt}
+function ensureProjPanel(){
+  if(_ppEls) return _ppEls;
+  const bg=document.createElement('div'); bg.className='pp-bg'; bg.id='ppBg';
+  const panel=document.createElement('div'); panel.className='proj-panel'; panel.id='projPanel';
+  document.body.appendChild(bg); document.body.appendChild(panel);
+  bg.onclick=closeProjPanel;
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape' && bg.classList.contains('open')) closeProjPanel(); });
+  _ppEls={bg,panel}; return _ppEls;
+}
+function closeProjPanel(){ if(!_ppEls) return; _ppEls.panel.classList.remove('open'); _ppEls.bg.classList.remove('open'); }
+function catOfProject(projId){ const hit=allProjects().find(x=>x.p.id===projId); return hit?hit.cat:null; }
+function jiraBrowseBase(jiraUrl){ try{ return new URL(jiraUrl).origin; }catch(e){ return 'https://everfit.atlassian.net'; } }
+// Render the delivery-progress block (overall bar + per-epic breakdown of child task/sub-task statuses).
+function renderDelivery(container, data, base){
+  const issues=data.issues||[], epics=data.epics||[];
+  if(!issues.length && !epics.length){ container.innerHTML='<div class="pp-empty">No linked delivery epics found for this item.</div>'; return; }
+  const cc=c=>issues.filter(i=>i.cat===c).length;
+  const done=cc('done'), prog=cc('indeterminate'), total=issues.length, todo=total-done-prog;
+  const pct=total?Math.round(done/total*100):0, seg=n=>total?(n/total*100):0;
+  const ord={done:0,indeterminate:1,new:2};
+  let h=`<div class="pp-prog-tot"><span class="pp-prog-pct">${pct}%</span><span class="pp-prog-cnt">${done}/${total} task${total!==1?'s':''} done · ${epics.length} epic${epics.length!==1?'s':''}</span></div>`;
+  h+=`<div class="pp-stack"><span class="pp-seg-done" style="width:${seg(done)}%"></span><span class="pp-seg-prog" style="width:${seg(prog)}%"></span><span class="pp-seg-todo" style="width:${seg(todo)}%"></span></div>`;
+  h+=`<div class="pp-legend"><span><i style="background:#12b76a"></i>Done <b>${done}</b></span><span><i style="background:#2e90fa"></i>In progress <b>${prog}</b></span><span><i style="background:#d0d5dd"></i>To do <b>${todo}</b></span></div>`;
+  epics.forEach(ep=>{
+    const ei=issues.filter(i=>i.epic===ep.key);
+    const ed=ei.filter(i=>i.cat==='done').length, epg=ei.filter(i=>i.cat==='indeterminate').length, et=ei.length-ed-epg;
+    const s2=n=>ei.length?(n/ei.length*100):0;
+    const rows=ei.slice().sort((a,b)=>(ord[a.cat]-ord[b.cat])||a.key.localeCompare(b.key)).map(i=>{
+      const cls=i.cat==='done'?'done':i.cat==='indeterminate'?'prog':'todo';
+      return `<div class="pp-issue"><span class="pp-st ${cls}" title="${esc(i.status)}">${esc(i.status||cls)}</span><a class="pp-ikey" href="${esc(base+'/browse/'+i.key)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(i.key)}</a><span class="pp-isum">${esc(i.summary)}</span>${i.subtask?'<span class="pp-isub">sub</span>':''}</div>`;
+    }).join('');
+    h+=`<div class="pp-epic"><div class="pp-epic-h"><span class="pp-caret">▸</span><span class="pp-epic-key">${esc(ep.key)}</span><span class="pp-epic-name">${esc(ep.summary||'')}</span>`+
+       `<span class="pp-mini"><span class="pp-seg-done" style="width:${s2(ed)}%"></span><span class="pp-seg-prog" style="width:${s2(epg)}%"></span><span class="pp-seg-todo" style="width:${s2(et)}%"></span></span>`+
+       `<span class="pp-epic-cnt">${ed}/${ei.length}</span></div>`+
+       `<div class="pp-epic-body">${rows||'<div class="pp-empty">No child issues under this epic.</div>'}</div></div>`;
+  });
+  container.innerHTML=h;
+  container.querySelectorAll('.pp-epic-h').forEach(hd=>hd.onclick=()=>hd.parentElement.classList.toggle('open'));
+}
+async function loadDelivery(key, container, base, force){
+  if(!key){ container.innerHTML='<div class="pp-empty">Link this project to a Jira JPD item to see delivery progress.</div>'; return; }
+  if(!idToken){ container.innerHTML='<div class="pp-empty">Sign in to load delivery progress.</div>'; return; }
+  if(!force && _ppDeliveryCache[key]){ renderDelivery(container, _ppDeliveryCache[key], base); return; }
+  container.innerHTML='<div class="pp-loading">Loading delivery progress from Jira…</div>';
+  try{
+    const r=await apiFetch('/api/jira',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'delivery', key})});
+    if(r.status===401){ handleAuthExpired(); return; }
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok){ container.innerHTML='<div class="pp-empty">Could not load delivery ('+esc(j.error||('HTTP '+r.status))+').</div>'; return; }
+    _ppDeliveryCache[key]=j; renderDelivery(container, j, base);
+  }catch(e){ container.innerHTML='<div class="pp-empty">Delivery request failed: '+esc(e.message)+'</div>'; }
+}
+// Open the read-only detail panel for an EXISTING project (create still uses the center modal).
+function openProjectPanel(category, proj){
+  if(!proj) return openPhaseModal(category, proj);
+  const cat = category || catOfProject(proj.id) || {name:'',color:'#cdb4f6'};
+  const {bg,panel}=ensureProjPanel();
+  const key = jiraIssueKey(proj.jira);
+  const base = jiraBrowseBase(proj.jira);
+  const dt=(proj.tasks||[]).find(t=>t.type==='design');
+  const dlab=projectDesignLabel(proj); const dst=DESIGN_LABEL_STYLE[dlab]||{};
+  const relLabel = proj.release==='released'?'Released':proj.release==='completed'?'Completed':'Active';
+  const est=proj.estimation||{}; const estParts=EST_LABELS.filter(([k])=>est[k]!=null).map(([k,l])=>`${l} ${est[k]}p`);
+  const chip=(txt,style)=>`<span class="tagpick sel" style="cursor:default;background:${style.bg||'#f2f4f7'};color:${style.c||'#475467'};border-color:${style.bd||'#e4e7ec'}">${esc(txt)}</span>`;
+  const tagChips=(proj.tags||[]).map(t=>{ const c=tagColor(t); return `<span class="tagpick sel" style="cursor:default;background:${c.bg};color:${c.fg};border-color:${c.bd}">${esc(t)}</span>`; }).join('');
+  const personChip=a=>`<span class="pp-person">${personAvatarHTML(a)}${esc(a.name||'Unknown')}${a.seconds?` · <b>${fmtHours(a.seconds)}</b>`:''}</span>`;
+  const row=(k,v)=>v?`<div class="pp-k">${esc(k)}</div><div class="pp-v">${v}</div>`:'';
+  const asg=(proj.assignees||[]), con=(proj.contributors||[]);
+  panel.innerHTML=`
+    <div class="pp-top">
+      <span class="pp-dot" style="background:${cat.color||'#cdb4f6'}"></span>
+      <div class="pp-title">${esc(proj.name||'Project')}</div>
+      ${key?`<a class="pp-iconbtn" href="${esc(base+'/browse/'+key)}" target="_blank" rel="noopener" title="Open in Jira (${esc(key)})">↗</a>`:''}
+      <button class="pp-iconbtn" id="pp_close" title="Close">✕</button>
+    </div>
+    <div class="pp-body">
+      <div class="pp-actions">
+        <button class="btn" id="pp_edit">✎ Edit</button>
+      </div>
+      <div class="pp-sec">
+        <div class="pp-sec-h">Details</div>
+        <div class="pp-meta">
+          ${row('Category', esc(cat.name||'—'))}
+          ${row('Status', chip(relLabel, DESIGN_LABEL_STYLE[relLabel==='Released'?'Released':relLabel==='Completed'?'Completed (no release)':'Waiting For Start']||{}))}
+          ${row('Timeline', (proj.start||proj.end)?esc((fmtShort(proj.start)||'…')+' → '+(fmtShort(proj.end)||'…')):'')}
+          ${row('Priority', proj.priority?priorityChipHTML(proj):'')}
+          ${row('Team', (proj.teams||[]).map(esc).join(', '))}
+          ${row('Feature size', esc(proj.size||''))}
+          ${row('Promotion', esc(proj.promo||''))}
+          ${row('Open scale', esc(proj.openScale||''))}
+        </div>
+      </div>
+      ${tagChips?`<div class="pp-sec"><div class="pp-sec-h">Tags</div><div class="pp-chips">${tagChips}</div></div>`:''}
+      <div class="pp-sec">
+        <div class="pp-sec-h">Design</div>
+        <div class="pp-meta">
+          ${row('Design status', dlab?chip(dlab,dst):(proj.designStatus?esc(proj.designStatus):'—'))}
+          ${row('Design dates', dt&&(dt.start||dt.end)?esc((fmtShort(dt.start)||'…')+' → '+(fmtShort(dt.end)||'…')):'')}
+          ${row('Estimation', estParts.length?esc(estParts.join(' · ')):'')}
+        </div>
+      </div>
+      ${(asg.length||con.length)?`<div class="pp-sec">
+        <div class="pp-sec-h">People</div>
+        ${asg.length?`<div class="pp-k" style="margin-bottom:5px;">Assignees</div><div class="pp-people" style="margin-bottom:10px;">${asg.map(personChip).join('')}</div>`:''}
+        ${con.length?`<div class="pp-k" style="margin-bottom:5px;">Contributors (logged)</div><div class="pp-people">${con.map(personChip).join('')}</div>`:''}
+      </div>`:''}
+      <div class="pp-sec">
+        <div class="pp-sec-h">Delivery progress <button class="pp-refresh" id="pp_refresh" title="Refetch from Jira">↻ Refresh</button></div>
+        <div id="pp_delivery"><div class="pp-loading">Loading…</div></div>
+      </div>
+      ${(proj.docs||[]).length?`<div class="pp-sec"><div class="pp-sec-h">Links</div><div class="pp-links">${linkIconsHTML(proj)}</div></div>`:''}
+      ${proj.note?`<div class="pp-sec"><div class="pp-sec-h">Note</div><div class="pp-note">${esc(proj.note)}</div></div>`:''}
+    </div>`;
+  panel.querySelector('#pp_close').onclick=closeProjPanel;
+  const editBtn=panel.querySelector('#pp_edit'); if(editBtn) editBtn.onclick=()=>{ closeProjPanel(); openPhaseModal(cat, proj); };
+  const delEl=panel.querySelector('#pp_delivery');
+  panel.querySelector('#pp_refresh').onclick=()=>loadDelivery(key, delEl, base, true);
+  bg.classList.add('open'); panel.classList.add('open');
+  loadDelivery(key, delEl, base, false);
+}
 function openPhaseModal(category,proj){
   const editing=!!proj;
   const def=proj||{name:'',start:'',end:'',tags:[],size:'',promo:'',priority:'',jira:'',docs:[],note:'',release:'',teams:[],openScale:''};

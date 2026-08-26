@@ -215,6 +215,56 @@ export default async function handler(req, res) {
       res.status(200).json({ logged });
       return;
     }
+    // Delivery progress: given a PLAN (JPD) issue key, resolve its delivery epics (the "Polaris work item
+    // link" links), then return every child task/bug + sub-task under those epics with its STATUS category
+    // (new / indeterminate / done), so the client can visualize completion. Read-only; any @everfit.io user.
+    if (body.action === 'delivery') {
+      const planKey = String(body.key || '').trim();
+      let epics = [...new Set((Array.isArray(body.epics) ? body.epics : []).map(k => String(k || '').trim()).filter(Boolean))];
+      // Resolve the epics from the PLAN item's delivery links if not supplied.
+      if (!epics.length && planKey) {
+        try {
+          const r = await jfetch(base + '/rest/api/3/issue/' + encodeURIComponent(planKey) + '?fields=issuelinks', { headers: jheaders });
+          if (r.ok) {
+            const j = await r.json().catch(() => ({}));
+            const links = (j.fields && j.fields.issuelinks) || [];
+            links.forEach(l => { if (l && l.type && /polaris work item/i.test(l.type.name || '')) { const li = l.inwardIssue || l.outwardIssue; if (li && li.key) epics.push(li.key); } });
+            epics = [...new Set(epics)];
+          }
+        } catch (e) { /* fall through with no epics */ }
+      }
+      epics = epics.slice(0, 80);
+      if (!epics.length) { res.status(200).json({ epics: [], issues: [] }); return; }
+      const catOf = st => (st && st.statusCategory && st.statusCategory.key) || 'new';   // new|indeterminate|done
+      const fields = ['status', 'issuetype', 'parent', 'summary', 'assignee'];
+      const issues = [], childToEpic = {};
+      const pushIssue = (iss, epic) => {
+        const f = iss.fields || {}; const st = f.status || {};
+        issues.push({ key: iss.key, epic, type: (f.issuetype && f.issuetype.name) || '', subtask: !!(f.issuetype && f.issuetype.subtask), summary: f.summary || '', status: st.name || '', cat: catOf(st), assignee: f.assignee ? person(f.assignee) : null });
+      };
+      for (const grp of chunk(epics, 50)) {
+        await jqlEach('parent in (' + grp.join(',') + ')', fields, iss => {
+          const epic = iss.fields && iss.fields.parent && iss.fields.parent.key; if (!epic) return;
+          childToEpic[iss.key] = epic; pushIssue(iss, epic);
+        });
+      }
+      for (const grp of chunk(Object.keys(childToEpic), 50)) {
+        await jqlEach('parent in (' + grp.join(',') + ')', fields, iss => {
+          const pk = iss.fields && iss.fields.parent && iss.fields.parent.key; const epic = childToEpic[pk]; if (!epic) return;
+          pushIssue(iss, epic);
+        });
+      }
+      // Epic headers (their own status/summary).
+      const epicMeta = {};
+      for (const grp of chunk(epics, 50)) {
+        await jqlEach('key in (' + grp.join(',') + ')', ['status', 'summary', 'issuetype'], iss => {
+          const f = iss.fields || {}; const st = f.status || {};
+          epicMeta[iss.key] = { key: iss.key, summary: f.summary || '', status: st.name || '', cat: catOf(st), type: (f.issuetype && f.issuetype.name) || 'Epic' };
+        });
+      }
+      res.status(200).json({ epics: epics.map(k => epicMeta[k] || { key: k, summary: '', status: '', cat: 'new', type: 'Epic' }), issues, fetchedAt: Date.now() });
+      return;
+    }
     // list fields (helper to discover the Design ETA custom field id)
     if (body.action === 'fields') {
       const r = await fetch(base + '/rest/api/3/field', { headers: jheaders });
