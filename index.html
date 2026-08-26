@@ -1393,17 +1393,19 @@ function jiraIssueKey(url){
         || url.match(/\b([A-Za-z][A-Za-z0-9_]+-\d+)\b/);
   return m ? m[1].toUpperCase() : '';
 }
-// Delivery-progress classification into 4 buckets: done (truly shipped/closed → green), qa (dev-complete,
-// in the QA/verification phase → amber), prog (dev in progress → blue), todo (not started → grey).
-// QA-phase names are checked FIRST so e.g. "QA Completed" counts as In QA, not Done.
-const QA_STATUS_RE=/(^|[^a-z])(qa|uat|test(ing|ed)?|ready[\s_-]*for[\s_-]*(qa|test|release|deploy\w*)|ready[\s_-]*to[\s_-]*test|verif(y|ied)|staged?|staging|pending[\s_-]*release)($|[^a-z])/i;
-const DONE_STATUS_RE=/(^|[^a-z])(done|closed|resolved?|released?|complete[d]?|shipped?|live|published?|deployed?|merged?)($|[^a-z])/i;
+// Delivery-progress classification into 4 buckets: done (accepted/shipped → green), qa (dev-complete, in
+// the QA/verification phase → amber), prog (dev in progress → blue), todo (not started → grey).
+// DONE (success/terminal) names are checked FIRST so "QA Success"/"BA Success" count as Done, while the
+// QA-phase names ("QA Completed", "QA Ready", "In Test") fall through to In QA.
+const DONE_STATUS_RE=/(^|[^a-z])(done|closed|resolved|released|success|accepted|will[\s_-]*not[\s_-]*fix|won'?t[\s_-]*fix|shipped|live|published|deployed|merged)($|[^a-z])/i;
+const QA_STATUS_RE=/(^|[^a-z])(qa|qc|uat|test(ing)?|to[\s_-]*test|in[\s_-]*(qa|test)|ready[\s_-]*for[\s_-]*(qa|test|release|deploy\w*)|ready[\s_-]*to[\s_-]*test|verif(y|ied)|staged?|staging|pending[\s_-]*release)($|[^a-z])/i;
 function progressBucket(name, cat){
   name=name||'';
-  if(QA_STATUS_RE.test(name)) return 'qa';                              // in QA / verification phase
-  if(cat==='done' || DONE_STATUS_RE.test(name)) return 'done';         // truly done → green
+  if(DONE_STATUS_RE.test(name)) return 'done';   // accepted/success/terminal names win (e.g. "QA Success")
+  if(QA_STATUS_RE.test(name)) return 'qa';       // in QA / verification phase
+  if(cat==='done') return 'done';                // fall back to Jira's status category
   if(cat==='new') return 'todo';
-  return 'prog';                                                        // dev in progress
+  return 'prog';                                 // dev in progress
 }
 // Apply a synced Jira row: set design status, and the design work start/end (create the task if either date exists).
 function applyDesignSync(proj, startIso, endIso, status, est, figma, assignees, contributors, progress){
