@@ -163,7 +163,7 @@ export default async function handler(req, res) {
       const epicAssignees = {}, tickets = [], childToEpic = {};
       const catOf = st => (st && st.statusCategory && st.statusCategory.key) || 'new';   // new|indeterminate|done
       const addA = (epic, a) => { if (!epic || !a || !a.accountId) return; const m = epicAssignees[epic] || (epicAssignees[epic] = {}); if (!m[a.accountId]) m[a.accountId] = person(a); };
-      const push = (iss, epic) => { const f = iss.fields || {}; const ts = f.timespent; tickets.push({ key: iss.key, epic, ts: ts == null ? null : (Number(ts) || 0), cat: catOf(f.status) }); };
+      const push = (iss, epic) => { const f = iss.fields || {}; const ts = f.timespent; tickets.push({ key: iss.key, epic, ts: ts == null ? null : (Number(ts) || 0), cat: catOf(f.status), status: (f.status && f.status.name) || '' }); };
       for (const grp of chunk(epics, 50)) {
         await jqlEach('parent in (' + grp.join(',') + ')', ['assignee', 'parent', 'timespent', 'status'], iss => {
           const epic = iss.fields && iss.fields.parent && iss.fields.parent.key; if (!epic) return;

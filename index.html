@@ -1389,6 +1389,15 @@ function jiraIssueKey(url){
         || url.match(/\b([A-Za-z][A-Za-z0-9_]+-\d+)\b/);
   return m ? m[1].toUpperCase() : '';
 }
+// Delivery-progress classification. Jira's status *category* only marks the final green statuses as "done",
+// so dev-complete-but-not-closed statuses (e.g. "QA Ready", "Ready for QA", "Ready for Release") land in
+// "indeterminate" and looked like 0%. Treat those dev-handoff/terminal names as done as well.
+const DONE_STATUS_RE=/(^|[^a-z])(done|closed|resolved?|released?|complete[d]?|shipped?|deployed?|deploy|merged?|qa[\s_-]*ready|ready[\s_-]*for[\s_-]*qa|ready[\s_-]*to[\s_-]*test|ready[\s_-]*for[\s_-]*release|ready[\s_-]*for[\s_-]*deploy\w*|uat[\s_-]*ready|verified|passed|pass)($|[^a-z])/i;
+function progressBucket(name, cat){
+  if(cat==='done' || DONE_STATUS_RE.test(name||'')) return 'done';
+  if(cat==='new') return 'todo';
+  return 'prog';   // indeterminate / unknown -> in progress
+}
 // Apply a synced Jira row: set design status, and the design work start/end (create the task if either date exists).
 function applyDesignSync(proj, startIso, endIso, status, est, figma, assignees, contributors, progress){
   let changed=false;
@@ -1506,7 +1515,7 @@ async function jiraSync(opts){
     epicKeys.forEach(ek=>{ epicPeople[ek]={ assignees: epicAssignees[ek]||[], contributors: Object.values(epicContributors[ek]||{}) }; });
     // Per-epic delivery completion from child ticket status categories (done vs total).
     const epicProgress={};   // epicKey -> {done, total}
-    ticketList.forEach(t=>{ const e=epicProgress[t.epic]||(epicProgress[t.epic]={done:0,total:0}); e.total++; if(t.cat==='done') e.done++; });
+    ticketList.forEach(t=>{ const e=epicProgress[t.epic]||(epicProgress[t.epic]={done:0,total:0}); e.total++; if(progressBucket(t.status,t.cat)==='done') e.done++; });
     // Union a project's linked epics -> {done,total,pct} (null when there are no delivery tickets).
     const unionProgress=(linkKeys)=>{ let done=0,total=0; (linkKeys||[]).forEach(ek=>{ const p=epicProgress[ek]; if(p){ done+=p.done; total+=p.total; } }); return total? {done,total,pct:Math.round(done/total*100)} : null; };
     // Union a project's linked epics -> assignees (no hours).
@@ -3843,19 +3852,20 @@ function jiraBrowseBase(jiraUrl){ try{ return new URL(jiraUrl).origin; }catch(e)
 function renderDelivery(container, data, base){
   const issues=data.issues||[], epics=data.epics||[];
   if(!issues.length && !epics.length){ container.innerHTML='<div class="pp-empty">No linked delivery epics found for this item.</div>'; return; }
-  const cc=c=>issues.filter(i=>i.cat===c).length;
-  const done=cc('done'), prog=cc('indeterminate'), total=issues.length, todo=total-done-prog;
+  const bk=i=>progressBucket(i.status,i.cat);
+  const cc=b=>issues.filter(i=>bk(i)===b).length;
+  const done=cc('done'), prog=cc('prog'), total=issues.length, todo=total-done-prog;
   const pct=total?Math.round(done/total*100):0, seg=n=>total?(n/total*100):0;
-  const ord={done:0,indeterminate:1,new:2};
+  const ord={done:0,prog:1,todo:2};
   let h=`<div class="pp-prog-tot"><span class="pp-prog-pct">${pct}%</span><span class="pp-prog-cnt">${done}/${total} task${total!==1?'s':''} done · ${epics.length} epic${epics.length!==1?'s':''}</span></div>`;
   h+=`<div class="pp-stack"><span class="pp-seg-done" style="width:${seg(done)}%"></span><span class="pp-seg-prog" style="width:${seg(prog)}%"></span><span class="pp-seg-todo" style="width:${seg(todo)}%"></span></div>`;
   h+=`<div class="pp-legend"><span><i style="background:#12b76a"></i>Done <b>${done}</b></span><span><i style="background:#2e90fa"></i>In progress <b>${prog}</b></span><span><i style="background:#d0d5dd"></i>To do <b>${todo}</b></span></div>`;
   epics.forEach(ep=>{
     const ei=issues.filter(i=>i.epic===ep.key);
-    const ed=ei.filter(i=>i.cat==='done').length, epg=ei.filter(i=>i.cat==='indeterminate').length, et=ei.length-ed-epg;
+    const ed=ei.filter(i=>bk(i)==='done').length, epg=ei.filter(i=>bk(i)==='prog').length, et=ei.length-ed-epg;
     const s2=n=>ei.length?(n/ei.length*100):0;
-    const rows=ei.slice().sort((a,b)=>(ord[a.cat]-ord[b.cat])||a.key.localeCompare(b.key)).map(i=>{
-      const cls=i.cat==='done'?'done':i.cat==='indeterminate'?'prog':'todo';
+    const rows=ei.slice().sort((a,b)=>(ord[bk(a)]-ord[bk(b)])||a.key.localeCompare(b.key)).map(i=>{
+      const cls=bk(i);
       return `<div class="pp-issue"><span class="pp-st ${cls}" title="${esc(i.status)}">${esc(i.status||cls)}</span><a class="pp-ikey" href="${esc(base+'/browse/'+i.key)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(i.key)}</a><span class="pp-isum">${esc(i.summary)}</span>${i.subtask?'<span class="pp-isub">sub</span>':''}</div>`;
     }).join('');
     h+=`<div class="pp-epic"><div class="pp-epic-h"><span class="pp-caret">▸</span><span class="pp-epic-key">${esc(ep.key)}</span><span class="pp-epic-name">${esc(ep.summary||'')}</span>`+
