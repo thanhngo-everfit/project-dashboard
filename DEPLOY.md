@@ -147,9 +147,11 @@ In the panel you **edit inline** — click any editable field (name, status, tim
 size, promotion, open scale, tags, Jira link, note) to edit it in place; changes save on commit.
 Creating a new project, and the timeline row's **✎ Edit** action, still use the center modal.
 
-Each sync also stores a **delivery completion %** per project (done vs total child tasks/sub-tasks across
-its linked epics, by Jira status category). The timeline shows this as a **NN% badge + green progress
-line** on the project bar, refreshed on every sync.
+Each sync also stores a **delivery completion %** per project — computed by **story points** across the
+child tasks/sub-tasks in its linked epics (done+in-QA vs total points), falling back to **card count**
+when the tickets have no points. The timeline shows a **NN% badge + green (Done) / amber (In QA) line** on
+the project bar. Story-point field is auto-detected by name; override with `JIRA_STORY_POINTS_FIELD`
+(e.g. `customfield_10016`) in Vercel env vars if auto-detect picks the wrong one.
 
 ### Auto-sync
 The dashboard also **auto-syncs from Jira every 15 minutes** for anyone who has it open

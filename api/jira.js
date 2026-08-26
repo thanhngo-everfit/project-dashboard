@@ -32,6 +32,10 @@ const EST_FIELDS = [
 
 const oauth = new OAuth2Client(CLIENT_ID);
 
+// Story Points field id, resolved once and cached across warm invocations.
+// Override with env JIRA_STORY_POINTS_FIELD; otherwise auto-detected by field name.
+let _spFieldCache;   // undefined = unresolved, string = id, null = none found
+
 async function verify(req) {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
@@ -152,6 +156,22 @@ export default async function handler(req, res) {
     }
   }
   const person = a => { const av = (a && a.avatarUrls) || {}; return { accountId: a.accountId, name: a.displayName || '', avatar: av['32x32'] || av['24x24'] || av['48x48'] || '' }; };
+  // Resolve the Story Points field id (env override, else auto-detect by name), cached across invocations.
+  async function spFieldId() {
+    if (process.env.JIRA_STORY_POINTS_FIELD) return process.env.JIRA_STORY_POINTS_FIELD;
+    if (_spFieldCache !== undefined) return _spFieldCache;
+    try {
+      const r = await jfetch(base + '/rest/api/3/field', { headers: jheaders });
+      if (r.ok) {
+        const all = await r.json();
+        const cands = (Array.isArray(all) ? all : []).filter(f => /story\s*points?/i.test(f.name || ''));
+        const pick = cands.find(f => /^story points$/i.test(f.name || '')) || cands.find(f => /story point estimate/i.test(f.name || '')) || cands[0];
+        _spFieldCache = pick ? pick.id : null;
+      } else _spFieldCache = null;
+    } catch (e) { _spFieldCache = null; }
+    return _spFieldCache;
+  }
+  const spNum = (f, spf) => (spf && f && f[spf] != null) ? (Number(f[spf]) || 0) : 0;
 
   try {
     // People — step 1 (structure): for a batch of delivery epics, return per-epic assignees and the list
@@ -160,18 +180,20 @@ export default async function handler(req, res) {
     if (body.action === 'people') {
       const epics = [...new Set((Array.isArray(body.epics) ? body.epics : []).map(k => String(k || '').trim()).filter(Boolean))].slice(0, 80);
       if (!epics.length) { res.status(200).json({ assignees: {}, tickets: [] }); return; }
+      const spf = await spFieldId();
+      const pFields = ['assignee', 'parent', 'timespent', 'status'].concat(spf ? [spf] : []);
       const epicAssignees = {}, tickets = [], childToEpic = {};
       const catOf = st => (st && st.statusCategory && st.statusCategory.key) || 'new';   // new|indeterminate|done
       const addA = (epic, a) => { if (!epic || !a || !a.accountId) return; const m = epicAssignees[epic] || (epicAssignees[epic] = {}); if (!m[a.accountId]) m[a.accountId] = person(a); };
-      const push = (iss, epic) => { const f = iss.fields || {}; const ts = f.timespent; tickets.push({ key: iss.key, epic, ts: ts == null ? null : (Number(ts) || 0), cat: catOf(f.status), status: (f.status && f.status.name) || '' }); };
+      const push = (iss, epic) => { const f = iss.fields || {}; const ts = f.timespent; tickets.push({ key: iss.key, epic, ts: ts == null ? null : (Number(ts) || 0), cat: catOf(f.status), status: (f.status && f.status.name) || '', sp: spNum(f, spf) }); };
       for (const grp of chunk(epics, 50)) {
-        await jqlEach('parent in (' + grp.join(',') + ')', ['assignee', 'parent', 'timespent', 'status'], iss => {
+        await jqlEach('parent in (' + grp.join(',') + ')', pFields, iss => {
           const epic = iss.fields && iss.fields.parent && iss.fields.parent.key; if (!epic) return;
           childToEpic[iss.key] = epic; addA(epic, iss.fields.assignee); push(iss, epic);
         });
       }
       for (const grp of chunk(Object.keys(childToEpic), 50)) {
-        await jqlEach('parent in (' + grp.join(',') + ')', ['assignee', 'parent', 'timespent', 'status'], iss => {
+        await jqlEach('parent in (' + grp.join(',') + ')', pFields, iss => {
           const pk = iss.fields && iss.fields.parent && iss.fields.parent.key; const epic = childToEpic[pk]; if (!epic) return;
           addA(epic, iss.fields && iss.fields.assignee); push(iss, epic);
         });
@@ -237,11 +259,12 @@ export default async function handler(req, res) {
       epics = epics.slice(0, 80);
       if (!epics.length) { res.status(200).json({ epics: [], issues: [] }); return; }
       const catOf = st => (st && st.statusCategory && st.statusCategory.key) || 'new';   // new|indeterminate|done
-      const fields = ['status', 'issuetype', 'parent', 'summary', 'assignee'];
+      const spf = await spFieldId();
+      const fields = ['status', 'issuetype', 'parent', 'summary', 'assignee'].concat(spf ? [spf] : []);
       const issues = [], childToEpic = {};
       const pushIssue = (iss, epic) => {
         const f = iss.fields || {}; const st = f.status || {};
-        issues.push({ key: iss.key, epic, type: (f.issuetype && f.issuetype.name) || '', subtask: !!(f.issuetype && f.issuetype.subtask), summary: f.summary || '', status: st.name || '', cat: catOf(st), assignee: f.assignee ? person(f.assignee) : null });
+        issues.push({ key: iss.key, epic, type: (f.issuetype && f.issuetype.name) || '', subtask: !!(f.issuetype && f.issuetype.subtask), summary: f.summary || '', status: st.name || '', cat: catOf(st), sp: spNum(f, spf), assignee: f.assignee ? person(f.assignee) : null });
       };
       for (const grp of chunk(epics, 50)) {
         await jqlEach('parent in (' + grp.join(',') + ')', fields, iss => {

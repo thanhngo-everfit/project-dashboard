@@ -357,6 +357,8 @@
   .pp-ikey{font-size:11px;color:#1570ef;flex:none;font-weight:600;}
   .pp-isum{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#344054;}
   .pp-isub{flex:none;font-size:9px;color:#98a2b3;text-transform:uppercase;font-weight:700;}
+  .pp-pts{flex:none;font-size:10px;font-weight:800;color:#3538cd;background:#eef4ff;border:1px solid #c7d7fe;border-radius:5px;padding:1px 5px;}
+  .pp-unit{margin-left:auto;font-size:11px;color:#98a2b3;font-style:italic;}
   .pp-loading,.pp-empty{font-size:12.5px;color:var(--muted);padding:8px 0;}
   .pp-note{font-size:13px;color:#475467;line-height:1.55;white-space:pre-wrap;background:#fffdf5;border:1px solid #fcecc9;border-radius:9px;padding:11px 13px;}
   /* click-to-edit affordances */
@@ -1529,10 +1531,17 @@ async function jiraSync(opts){
     const epicPeople={};
     epicKeys.forEach(ek=>{ epicPeople[ek]={ assignees: epicAssignees[ek]||[], contributors: Object.values(epicContributors[ek]||{}) }; });
     // Per-epic delivery completion from child ticket status categories (done vs total).
-    const epicProgress={};   // epicKey -> {done, qa, total}
-    ticketList.forEach(t=>{ const e=epicProgress[t.epic]||(epicProgress[t.epic]={done:0,qa:0,total:0}); e.total++; const b=progressBucket(t.status,t.cat); if(b==='done') e.done++; else if(b==='qa') e.qa++; });
-    // Union a project's linked epics -> {done,qa,total,pct}. pct = dev-complete (done+qa)/total.
-    const unionProgress=(linkKeys)=>{ let done=0,qa=0,total=0; (linkKeys||[]).forEach(ek=>{ const p=epicProgress[ek]; if(p){ done+=p.done; qa+=p.qa; total+=p.total; } }); return total? {done,qa,total,pct:Math.round((done+qa)/total*100)} : null; };
+    // Tally both story points and card counts per epic; the union prefers points when any exist.
+    const epicProgress={};   // epicKey -> {cDone,cQa,cTotal, pDone,pQa,pTotal}
+    ticketList.forEach(t=>{ const e=epicProgress[t.epic]||(epicProgress[t.epic]={cDone:0,cQa:0,cTotal:0,pDone:0,pQa:0,pTotal:0});
+      const b=progressBucket(t.status,t.cat), sp=Number(t.sp)||0; e.cTotal++; e.pTotal+=sp;
+      if(b==='done'){ e.cDone++; e.pDone+=sp; } else if(b==='qa'){ e.cQa++; e.pQa+=sp; } });
+    // Union a project's linked epics -> {done,qa,total,pct,unit,tasks}. By STORY POINTS when the tickets have
+    // them, else by card count. pct = dev-complete (done+qa)/total.
+    const unionProgress=(linkKeys)=>{ let cd=0,cq=0,ct=0,pd=0,pq=0,pt=0;
+      (linkKeys||[]).forEach(ek=>{ const e=epicProgress[ek]; if(!e) return; cd+=e.cDone;cq+=e.cQa;ct+=e.cTotal; pd+=e.pDone;pq+=e.pQa;pt+=e.pTotal; });
+      if(!ct) return null; const usePts=pt>0; const done=usePts?pd:cd, qa=usePts?pq:cq, total=usePts?pt:ct;
+      return {done,qa,total,pct:Math.round((done+qa)/total*100),unit:usePts?'pts':'tasks',tasks:ct}; };
     // Union a project's linked epics -> assignees (no hours).
     const unionAssignees=(linkKeys)=>{
       const acc={};
@@ -3377,14 +3386,14 @@ function phaseRow(cat,proj,units,tw){
   if(proj.start||proj.end){
     const bar=makeBar(barColor, proj.name, null, ()=>openProjectPanel(cat,proj), {});
     if(proj.progress && proj.progress.total){   // delivery completion from linked Jira tickets
-      const p=proj.progress, pct=Math.max(0,Math.min(100,p.pct));
-      const donePct=p.done/p.total*100, qaPct=(p.qa||0)/p.total*100;
+      const p=proj.progress, pct=Math.max(0,Math.min(100,p.pct)), u=p.unit==='pts'?' pts':' tasks';
+      const donePct=p.total?p.done/p.total*100:0, qaPct=p.total?(p.qa||0)/p.total*100:0;
       const badge=document.createElement('span'); badge.className='pctbadge'; badge.textContent=pct+'%'; bar.appendChild(badge);
       const pf=document.createElement('div'); pf.className='pfill';
       const g=document.createElement('span'); g.className='seg-done'; g.style.width=donePct+'%';
       const a=document.createElement('span'); a.className='seg-qa'; a.style.width=qaPct+'%';
       pf.appendChild(g); pf.appendChild(a); bar.appendChild(pf);
-      bar.title='Delivery: '+p.done+' done'+(p.qa?(' · '+p.qa+' in QA'):'')+' / '+p.total+' tasks ('+pct+'% dev-complete)';
+      bar.title='Delivery: '+p.done+' done'+(p.qa?(' · '+p.qa+' in QA'):'')+' / '+p.total+u+(p.unit==='pts'?(' ('+(p.tasks||0)+' tasks)'):'')+' — '+pct+'%';
     }
     placeBar(bar,proj,units);
     attachDrag(bar,proj,units,'phase',cat);
@@ -3873,34 +3882,38 @@ function renderDelivery(container, data, base){
   const issues=data.issues||[], epics=data.epics||[];
   if(!issues.length && !epics.length){ container.innerHTML='<div class="pp-empty">No linked delivery epics found for this item.</div>'; return; }
   const bk=i=>progressBucket(i.status,i.cat);
-  const cc=b=>issues.filter(i=>bk(i)===b).length;
-  const done=cc('done'), qa=cc('qa'), prog=cc('prog'), total=issues.length, todo=total-done-qa-prog;
+  const usePts=issues.some(i=>(Number(i.sp)||0)>0), wt=i=>usePts?(Number(i.sp)||0):1, unit=usePts?'pts':'tasks';
+  const sum=(list,b)=>list.filter(i=>bk(i)===b).reduce((s,i)=>s+wt(i),0);
+  const done=sum(issues,'done'), qa=sum(issues,'qa'), prog=sum(issues,'prog');
+  const total=issues.reduce((s,i)=>s+wt(i),0), todo=total-done-qa-prog;
   const pct=total?Math.round((done+qa)/total*100):0, seg=n=>total?(n/total*100):0;
   const ord={done:0,qa:1,prog:2,todo:3};
-  let h=`<div class="pp-prog-tot"><span class="pp-prog-pct">${pct}%</span><span class="pp-prog-cnt">${done} done${qa?(' · '+qa+' in QA'):''} / ${total} task${total!==1?'s':''} · ${epics.length} epic${epics.length!==1?'s':''}</span></div>`;
+  let h=`<div class="pp-prog-tot"><span class="pp-prog-pct">${pct}%</span><span class="pp-prog-cnt">${done+qa} / ${total} ${unit}${usePts?` · ${issues.length} tasks`:''} · ${epics.length} epic${epics.length!==1?'s':''}</span></div>`;
   h+=`<div class="pp-stack"><span class="pp-seg-done" style="width:${seg(done)}%"></span><span class="pp-seg-qa" style="width:${seg(qa)}%"></span><span class="pp-seg-prog" style="width:${seg(prog)}%"></span><span class="pp-seg-todo" style="width:${seg(todo)}%"></span></div>`;
-  h+=`<div class="pp-legend"><span><i style="background:#12b76a"></i>Done <b>${done}</b></span><span><i style="background:#f79009"></i>In QA <b>${qa}</b></span><span><i style="background:#2e90fa"></i>In progress <b>${prog}</b></span><span><i style="background:#d0d5dd"></i>To do <b>${todo}</b></span></div>`;
+  h+=`<div class="pp-legend"><span><i style="background:#12b76a"></i>Done <b>${done}</b></span><span><i style="background:#f79009"></i>In QA <b>${qa}</b></span><span><i style="background:#2e90fa"></i>In progress <b>${prog}</b></span><span><i style="background:#d0d5dd"></i>To do <b>${todo}</b></span><span class="pp-unit">by ${usePts?'story points':'card count'}</span></div>`;
   epics.forEach(ep=>{
     const ei=issues.filter(i=>i.epic===ep.key);
-    const ed=ei.filter(i=>bk(i)==='done').length, eqa=ei.filter(i=>bk(i)==='qa').length, epg=ei.filter(i=>bk(i)==='prog').length, et=ei.length-ed-eqa-epg;
-    const s2=n=>ei.length?(n/ei.length*100):0;
+    const ed=sum(ei,'done'), eqa=sum(ei,'qa'), epg=sum(ei,'prog'), etot=ei.reduce((s,i)=>s+wt(i),0), et=etot-ed-eqa-epg;
+    const s2=n=>etot?(n/etot*100):0;
     const rows=ei.slice().sort((a,b)=>(ord[bk(a)]-ord[bk(b)])||a.key.localeCompare(b.key)).map(i=>{
-      const cls=bk(i);
-      return `<div class="pp-issue"><span class="pp-st ${cls}" title="${esc(i.status)}">${esc(i.status||cls)}</span><a class="pp-ikey" href="${esc(base+'/browse/'+i.key)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(i.key)}</a><span class="pp-isum">${esc(i.summary)}</span>${i.subtask?'<span class="pp-isub">sub</span>':''}</div>`;
+      const cls=bk(i); const sp=Number(i.sp)||0;
+      return `<div class="pp-issue"><span class="pp-st ${cls}" title="${esc(i.status)}">${esc(i.status||cls)}</span><a class="pp-ikey" href="${esc(base+'/browse/'+i.key)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(i.key)}</a><span class="pp-isum">${esc(i.summary)}</span>${sp?`<span class="pp-pts">${sp}p</span>`:''}${i.subtask?'<span class="pp-isub">sub</span>':''}</div>`;
     }).join('');
     h+=`<div class="pp-epic"><div class="pp-epic-h"><span class="pp-caret">▸</span><span class="pp-epic-key">${esc(ep.key)}</span><span class="pp-epic-name">${esc(ep.summary||'')}</span>`+
        `<span class="pp-mini"><span class="pp-seg-done" style="width:${s2(ed)}%"></span><span class="pp-seg-qa" style="width:${s2(eqa)}%"></span><span class="pp-seg-prog" style="width:${s2(epg)}%"></span><span class="pp-seg-todo" style="width:${s2(et)}%"></span></span>`+
-       `<span class="pp-epic-cnt">${ed+eqa}/${ei.length}</span></div>`+
+       `<span class="pp-epic-cnt">${ed+eqa}/${etot}${usePts?'p':''}</span></div>`+
        `<div class="pp-epic-body">${rows||'<div class="pp-empty">No child issues under this epic.</div>'}</div></div>`;
   });
   container.innerHTML=h;
   container.querySelectorAll('.pp-epic-h').forEach(hd=>hd.onclick=()=>hd.parentElement.classList.toggle('open'));
 }
-// Compute {done,qa,total,pct} from a delivery payload — same buckets as the sync aggregation.
+// Compute {done,qa,total,pct,unit,tasks} from a delivery payload — by story points when present, else cards.
 function progressFromDelivery(data){
   const issues=(data&&data.issues)||[]; if(!issues.length) return null;
-  let done=0, qa=0; issues.forEach(i=>{ const b=progressBucket(i.status,i.cat); if(b==='done') done++; else if(b==='qa') qa++; });
-  return {done, qa, total:issues.length, pct:Math.round((done+qa)/issues.length*100)};
+  const usePts=issues.some(i=>(Number(i.sp)||0)>0), wt=i=>usePts?(Number(i.sp)||0):1;
+  let done=0, qa=0, total=0; issues.forEach(i=>{ const b=progressBucket(i.status,i.cat), w=wt(i); total+=w; if(b==='done') done+=w; else if(b==='qa') qa+=w; });
+  if(!total) return null;
+  return {done, qa, total, pct:Math.round((done+qa)/total*100), unit:usePts?'pts':'tasks', tasks:issues.length};
 }
 // Write the freshly-fetched delivery progress back onto the project so the TIMELINE bar updates too
 // (the panel pulls live data; without this the bar would keep the last full-sync value).
