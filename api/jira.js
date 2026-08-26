@@ -161,16 +161,17 @@ export default async function handler(req, res) {
       const epics = [...new Set((Array.isArray(body.epics) ? body.epics : []).map(k => String(k || '').trim()).filter(Boolean))].slice(0, 80);
       if (!epics.length) { res.status(200).json({ assignees: {}, tickets: [] }); return; }
       const epicAssignees = {}, tickets = [], childToEpic = {};
+      const catOf = st => (st && st.statusCategory && st.statusCategory.key) || 'new';   // new|indeterminate|done
       const addA = (epic, a) => { if (!epic || !a || !a.accountId) return; const m = epicAssignees[epic] || (epicAssignees[epic] = {}); if (!m[a.accountId]) m[a.accountId] = person(a); };
-      const push = (iss, epic) => { const ts = (iss.fields && iss.fields.timespent); tickets.push({ key: iss.key, epic, ts: ts == null ? null : (Number(ts) || 0) }); };
+      const push = (iss, epic) => { const f = iss.fields || {}; const ts = f.timespent; tickets.push({ key: iss.key, epic, ts: ts == null ? null : (Number(ts) || 0), cat: catOf(f.status) }); };
       for (const grp of chunk(epics, 50)) {
-        await jqlEach('parent in (' + grp.join(',') + ')', ['assignee', 'parent', 'timespent'], iss => {
+        await jqlEach('parent in (' + grp.join(',') + ')', ['assignee', 'parent', 'timespent', 'status'], iss => {
           const epic = iss.fields && iss.fields.parent && iss.fields.parent.key; if (!epic) return;
           childToEpic[iss.key] = epic; addA(epic, iss.fields.assignee); push(iss, epic);
         });
       }
       for (const grp of chunk(Object.keys(childToEpic), 50)) {
-        await jqlEach('parent in (' + grp.join(',') + ')', ['assignee', 'parent', 'timespent'], iss => {
+        await jqlEach('parent in (' + grp.join(',') + ')', ['assignee', 'parent', 'timespent', 'status'], iss => {
           const pk = iss.fields && iss.fields.parent && iss.fields.parent.key; const epic = childToEpic[pk]; if (!epic) return;
           addA(epic, iss.fields && iss.fields.assignee); push(iss, epic);
         });

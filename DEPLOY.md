@@ -147,6 +147,10 @@ In the panel you **edit inline** — click any editable field (name, status, tim
 size, promotion, open scale, tags, Jira link, note) to edit it in place; changes save on commit.
 Creating a new project, and the timeline row's **✎ Edit** action, still use the center modal.
 
+Each sync also stores a **delivery completion %** per project (done vs total child tasks/sub-tasks across
+its linked epics, by Jira status category). The timeline shows this as a **NN% badge + green progress
+line** on the project bar, refreshed on every sync.
+
 ### Auto-sync
 The dashboard also **auto-syncs from Jira every 15 minutes** for anyone who has it open
 (on load, then on a timer). The cadence is coordinated across all viewers via a shared

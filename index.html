@@ -495,6 +495,9 @@
   .bar .fill{position:absolute;left:0;top:0;bottom:0;border-radius:9px 0 0 9px;z-index:1;}
   .bar .badge{position:relative;z-index:2;background:#101828;color:#fff;font-size:9.5px;font-weight:800;
        padding:2px 6px;border-radius:5px;letter-spacing:.3px;flex:none;}
+  .bar .pctbadge{position:relative;z-index:2;background:rgba(255,255,255,.7);color:#067647;font-size:9.5px;font-weight:800;padding:1px 6px;border-radius:999px;flex:none;margin-left:auto;}
+  .bar .pfill{position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(16,24,40,.10);z-index:2;overflow:hidden;}
+  .bar .pfill span{display:block;height:100%;background:#12b76a;}
   .bar .handle{position:absolute;top:0;bottom:0;width:8px;cursor:ew-resize;z-index:3;}
   .bar .handle.l{left:0;}
   .bar .handle.r{right:0;}
@@ -1242,6 +1245,7 @@ function migrate(s){
       if(proj.end && !validISO(proj.end)) proj.end='';
       if(!Array.isArray(proj.tags)) proj.tags = (typeof proj.tag==='string' && proj.tag) ? [proj.tag] : [];
       delete proj.tag;
+      if(proj.progress!=null && (typeof proj.progress!=='object' || typeof proj.progress.total!=='number')) proj.progress=null;   // delivery completion {done,total,pct}
       if(typeof proj.size!=='string') proj.size='';
       if(typeof proj.promo!=='string') proj.promo='';
       if(typeof proj.openScale!=='string') proj.openScale='';   // release scope: Internal | Beta | Public
@@ -1386,10 +1390,11 @@ function jiraIssueKey(url){
   return m ? m[1].toUpperCase() : '';
 }
 // Apply a synced Jira row: set design status, and the design work start/end (create the task if either date exists).
-function applyDesignSync(proj, startIso, endIso, status, est, figma, assignees, contributors){
+function applyDesignSync(proj, startIso, endIso, status, est, figma, assignees, contributors, progress){
   let changed=false;
   const st=status||'';
   if((proj.designStatus||'')!==st){ proj.designStatus=st; changed=true; }
+  if(progress!==undefined){ if(JSON.stringify(proj.progress||null)!==JSON.stringify(progress||null)){ proj.progress=progress||null; changed=true; } }   // delivery completion (done/total)
   const sortDays=o=>Object.fromEntries(Object.entries(o||{}).sort());
   const normAssignee=list=>(list||[]).map(a=>({accountId:a.accountId||'',name:a.name||'',avatar:a.avatar||''}));
   const normContrib=list=>(list||[]).map(a=>({accountId:a.accountId||'',name:a.name||'',avatar:a.avatar||'',seconds:Number(a.seconds)||0,days:sortDays(a.days)}));
@@ -1499,6 +1504,11 @@ async function jiraSync(opts){
     }
     const epicPeople={};
     epicKeys.forEach(ek=>{ epicPeople[ek]={ assignees: epicAssignees[ek]||[], contributors: Object.values(epicContributors[ek]||{}) }; });
+    // Per-epic delivery completion from child ticket status categories (done vs total).
+    const epicProgress={};   // epicKey -> {done, total}
+    ticketList.forEach(t=>{ const e=epicProgress[t.epic]||(epicProgress[t.epic]={done:0,total:0}); e.total++; if(t.cat==='done') e.done++; });
+    // Union a project's linked epics -> {done,total,pct} (null when there are no delivery tickets).
+    const unionProgress=(linkKeys)=>{ let done=0,total=0; (linkKeys||[]).forEach(ek=>{ const p=epicProgress[ek]; if(p){ done+=p.done; total+=p.total; } }); return total? {done,total,pct:Math.round(done/total*100)} : null; };
     // Union a project's linked epics -> assignees (no hours).
     const unionAssignees=(linkKeys)=>{
       const acc={};
@@ -1531,11 +1541,13 @@ async function jiraSync(opts){
       const newFigma = figma.map(u=>normalizeUrl(u)).filter(u=>u && !(proj.docs||[]).includes(u));   // Figma links not already added
       const assignees = unionAssignees(rec.linkKeys);
       const contributors = unionContribs(rec.linkKeys);
+      const progress = unionProgress(rec.linkKeys);
       const stableObj=o=>JSON.stringify(Object.fromEntries(Object.entries(o||{}).sort()));
       const asgKey=list=>JSON.stringify((list||[]).map(a=>a.accountId).sort());
       const conKey=list=>JSON.stringify((list||[]).map(a=>a.accountId+':'+(Number(a.seconds)||0)+':'+stableObj(a.days)).sort());
       const assigneeDiff = asgKey(proj.assignees)!==asgKey(assignees) || conKey(proj.contributors)!==conKey(contributors);
-      if(!newStart && !end && !status && !hasEst && !newFigma.length && !assigneeDiff){ noData++; return; }   // nothing to sync for this project
+      const progressDiff = JSON.stringify(proj.progress||null)!==JSON.stringify(progress||null);
+      if(!newStart && !end && !status && !hasEst && !newFigma.length && !assigneeDiff && !progressDiff){ noData++; return; }   // nothing to sync for this project
       const existing=(proj.tasks||[]).find(x=>x.type==='design');
       const curStart=existing?(existing.start||''):'';
       const curEnd=existing?(existing.end||''):'';
@@ -1544,9 +1556,9 @@ async function jiraSync(opts){
       const startDiff = !!newStart && curStart!==newStart;
       const statusDiff = curStatus!==status;
       const estDiff = JSON.stringify(proj.estimation||{})!==JSON.stringify(est);
-      const changed = endDiff || startDiff || statusDiff || estDiff || newFigma.length>0 || assigneeDiff || (!existing && (newStart||end));
+      const changed = endDiff || startDiff || statusDiff || estDiff || newFigma.length>0 || assigneeDiff || progressDiff || (!existing && (newStart||end));
       const label = designStatusLabel(status, end||curEnd, newStart||curStart||'', proj.start||'');
-      rows.push({proj, key:rec.key, name:proj.name, curStart, curEnd, newStart, newEnd:end, newStatus:status, est, figma, newFigma, assignees, contributors, label,
+      rows.push({proj, key:rec.key, name:proj.name, curStart, curEnd, newStart, newEnd:end, newStatus:status, est, figma, newFigma, assignees, contributors, progress, label,
         action: (!existing&&(newStart||end))?'Create':(changed?'Update':'No change'), changed});
     });
     // Diagnostics (console)
@@ -1557,7 +1569,7 @@ async function jiraSync(opts){
     if(silent){
       // auto-sync: apply every changed row straight away, then persist the new sync time
       let applied=0;
-      rows.forEach(r=>{ if(r.changed){ if(applyDesignSync(r.proj, r.newStart, r.newEnd, r.newStatus, r.est, r.figma, r.assignees, r.contributors)) applied++; } });
+      rows.forEach(r=>{ if(r.changed){ if(applyDesignSync(r.proj, r.newStart, r.newEnd, r.newStatus, r.est, r.figma, r.assignees, r.contributors, r.progress)) applied++; } });
       state.lastJiraSync = j.syncedAt || Date.now();
       lastSyncedJSON=null;   // force a save so the sync time (and any applied changes) persist + debounce other viewers
       save(); renderJiraSync(); if(applied) render();
@@ -1621,7 +1633,7 @@ function openJiraReview(rows, syncedAt, stats){
   modal.querySelector('#jr-cancel').onclick=closeModal;
   saveBtn.onclick=()=>{
     let applied=0;
-    cbs.forEach(c=>{ if(c.checked){ const r=rows[+c.dataset.i]; if(applyDesignSync(r.proj, r.newStart, r.newEnd, r.newStatus, r.est, r.figma, r.assignees, r.contributors)) applied++; } });
+    cbs.forEach(c=>{ if(c.checked){ const r=rows[+c.dataset.i]; if(applyDesignSync(r.proj, r.newStart, r.newEnd, r.newStatus, r.est, r.figma, r.assignees, r.contributors, r.progress)) applied++; } });
     state.lastJiraSync = syncedAt || Date.now();
     lastSyncedJSON=null;   // force a save even if only the timestamp changed
     closeModal(); save(); renderJiraSync(); render();
@@ -3339,6 +3351,12 @@ function phaseRow(cat,proj,units,tw){
   }
   if(proj.start||proj.end){
     const bar=makeBar(barColor, proj.name, null, ()=>openProjectPanel(cat,proj), {});
+    if(proj.progress && proj.progress.total){   // delivery completion from linked Jira tickets
+      const pct=Math.max(0,Math.min(100,proj.progress.pct));
+      const badge=document.createElement('span'); badge.className='pctbadge'; badge.textContent=pct+'%'; bar.appendChild(badge);
+      const pf=document.createElement('div'); pf.className='pfill'; const inner=document.createElement('span'); inner.style.width=pct+'%'; pf.appendChild(inner); bar.appendChild(pf);
+      bar.title='Delivery: '+proj.progress.done+'/'+proj.progress.total+' tasks done ('+pct+'%)';
+    }
     placeBar(bar,proj,units);
     attachDrag(bar,proj,units,'phase',cat);
     track.appendChild(bar);
