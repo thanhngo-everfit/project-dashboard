@@ -3893,7 +3893,11 @@ function renderDelivery(container, data, base){
   h+=`<div class="pp-legend"><span><i style="background:#12b76a"></i>Done <b>${done}</b></span><span><i style="background:#f79009"></i>In QA <b>${qa}</b></span><span><i style="background:#2e90fa"></i>In progress <b>${prog}</b></span><span><i style="background:#d0d5dd"></i>To do <b>${todo}</b></span><span class="pp-unit">by ${usePts?'story points':'card count'}</span></div>`;
   epics.forEach(ep=>{
     const ei=issues.filter(i=>i.epic===ep.key);
-    const ed=sum(ei,'done'), eqa=sum(ei,'qa'), epg=sum(ei,'prog'), etot=ei.reduce((s,i)=>s+wt(i),0), et=etot-ed-eqa-epg;
+    // Per-epic unit: use points only if THIS epic's tickets have any; else fall back to card count so a
+    // done-but-unpointed epic still shows as done (instead of an empty "0/0p").
+    const epPts=ei.some(i=>(Number(i.sp)||0)>0), ew=i=>epPts?(Number(i.sp)||0):1;
+    const esum=b=>ei.filter(i=>bk(i)===b).reduce((s,i)=>s+ew(i),0);
+    const ed=esum('done'), eqa=esum('qa'), epg=esum('prog'), etot=ei.reduce((s,i)=>s+ew(i),0), et=etot-ed-eqa-epg;
     const s2=n=>etot?(n/etot*100):0;
     const rows=ei.slice().sort((a,b)=>(ord[bk(a)]-ord[bk(b)])||a.key.localeCompare(b.key)).map(i=>{
       const cls=bk(i); const sp=Number(i.sp)||0;
@@ -3901,7 +3905,7 @@ function renderDelivery(container, data, base){
     }).join('');
     h+=`<div class="pp-epic"><div class="pp-epic-h"><span class="pp-caret">▸</span><span class="pp-epic-key">${esc(ep.key)}</span><span class="pp-epic-name">${esc(ep.summary||'')}</span>`+
        `<span class="pp-mini"><span class="pp-seg-done" style="width:${s2(ed)}%"></span><span class="pp-seg-qa" style="width:${s2(eqa)}%"></span><span class="pp-seg-prog" style="width:${s2(epg)}%"></span><span class="pp-seg-todo" style="width:${s2(et)}%"></span></span>`+
-       `<span class="pp-epic-cnt">${ed+eqa}/${etot}${usePts?'p':''}</span></div>`+
+       `<span class="pp-epic-cnt">${ed+eqa}/${etot}${epPts?'p':''}</span></div>`+
        `<div class="pp-epic-body">${rows||'<div class="pp-empty">No child issues under this epic.</div>'}</div></div>`;
   });
   container.innerHTML=h;
