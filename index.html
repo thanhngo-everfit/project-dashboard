@@ -3848,11 +3848,18 @@ async function loadDelivery(key, container, base, force){
     _ppDeliveryCache[key]=j; renderDelivery(container, j, base);
   }catch(e){ container.innerHTML='<div class="pp-empty">Delivery request failed: '+esc(e.message)+'</div>'; }
 }
-// Open the read-only detail panel for an EXISTING project (create still uses the center modal).
-function openProjectPanel(category, proj){
+// Open the detail panel for an EXISTING project (create still uses the center modal). edit=true opens
+// the in-panel editor.
+function openProjectPanel(category, proj, edit){
   if(!proj) return openPhaseModal(category, proj);
   const cat = category || catOfProject(proj.id) || {name:'',color:'#cdb4f6'};
   const {bg,panel}=ensureProjPanel();
+  bg.classList.add('open'); panel.classList.add('open');
+  panel.scrollTop=0;
+  if(edit) renderPanelEdit(panel, cat, proj);
+  else renderPanelView(panel, cat, proj);
+}
+function renderPanelView(panel, cat, proj){
   const key = jiraIssueKey(proj.jira);
   const base = jiraBrowseBase(proj.jira);
   const dt=(proj.tasks||[]).find(t=>t.type==='design');
@@ -3910,11 +3917,102 @@ function openProjectPanel(category, proj){
       ${proj.note?`<div class="pp-sec"><div class="pp-sec-h">Note</div><div class="pp-note">${esc(proj.note)}</div></div>`:''}
     </div>`;
   panel.querySelector('#pp_close').onclick=closeProjPanel;
-  const editBtn=panel.querySelector('#pp_edit'); if(editBtn) editBtn.onclick=()=>{ closeProjPanel(); openPhaseModal(cat, proj); };
+  const editBtn=panel.querySelector('#pp_edit'); if(editBtn) editBtn.onclick=()=>openProjectPanel(cat, proj, true);
   const delEl=panel.querySelector('#pp_delivery');
   panel.querySelector('#pp_refresh').onclick=()=>loadDelivery(key, delEl, base, true);
-  bg.classList.add('open'); panel.classList.add('open');
   loadDelivery(key, delEl, base, false);
+}
+// In-panel editor for an existing project (same fields as the create modal, rendered inside the slide-over).
+function renderPanelEdit(panel, cat, proj){
+  const ownSquad=squadOfProject(proj.id); const ownSquadName=ownSquad?ownSquad.name:(activeSquad()?activeSquad().name:'');
+  const teamOptions=[...new Set([...curSquads().map(s=>s.name), ...(proj.teams||[])].filter(Boolean))];
+  const showTeam=curSquads().length>1;
+  const tags=(proj.tags||[]).slice();
+  const teams=(proj.teams&&proj.teams.length)?proj.teams.slice():(ownSquadName?[ownSquadName]:[]);
+  const docs=(proj.docs||[]).slice();
+  const optList=(arr,cur)=>arr.map(s=>`<option ${cur===s?'selected':''}>${esc(s)}</option>`).join('');
+  panel.innerHTML=`
+    <div class="pp-top">
+      <span class="pp-dot" style="background:${cat.color||'#cdb4f6'}"></span>
+      <div class="pp-title">Edit project</div>
+      <button class="pp-iconbtn" id="pp_close" title="Close">✕</button>
+    </div>
+    <div class="pp-body">
+      <div class="field"><label>Project Name</label><input id="pe_name" value="${esc(proj.name||'')}"></div>
+      <div class="field row2">
+        <div style="flex:1"><label>Start</label><div class="datewrap"><input type="date" id="pe_start" value="${esc(proj.start||'')}"><button type="button" class="dateclear" data-for="pe_start">×</button></div></div>
+        <div style="flex:1"><label>End</label><div class="datewrap"><input type="date" id="pe_end" value="${esc(proj.end||'')}"><button type="button" class="dateclear" data-for="pe_end">×</button></div></div>
+      </div>
+      <div class="field row2">
+        <div style="flex:1"><label>Priority</label><select id="pe_priority"><option value="" ${!proj.priority?'selected':''}>None</option>${optList(PRIORITIES,proj.priority)}</select></div>
+        <div style="flex:1"><label>Status</label><select id="pe_release"><option value="" ${!proj.release?'selected':''}>Active</option><option value="released" ${proj.release==='released'?'selected':''}>Released</option><option value="completed" ${proj.release==='completed'?'selected':''}>Completed (no release)</option></select></div>
+      </div>
+      ${showTeam?`<div class="field"><label>Team</label><div id="pe_teams" class="tag-picker"></div></div>`:''}
+      <div class="field row2">
+        <div style="flex:1"><label>Feature size</label><select id="pe_size"><option value="" ${!proj.size?'selected':''}>None</option>${optList(FEATURE_SIZES,proj.size)}</select></div>
+        <div style="flex:1"><label>Promotion</label><select id="pe_promo"><option value="" ${!proj.promo?'selected':''}>None</option><option ${proj.promo==='Yes'?'selected':''}>Yes</option><option ${proj.promo==='No'?'selected':''}>No</option></select></div>
+      </div>
+      <div class="field"><label>Open scale</label><select id="pe_scale"><option value="" ${!proj.openScale?'selected':''}>None</option>${optList(OPEN_SCALES,proj.openScale)}</select></div>
+      <div class="field"><label>Tags</label><div id="pe_tags" class="tag-picker"></div><div class="addrow" style="margin-top:6px;"><input id="pe_tagnew" placeholder="Add custom tag…"><button type="button" class="btn" id="pe_tagadd">Add</button></div></div>
+      <div class="field"><label>Jira link</label><input id="pe_jira" value="${esc(proj.jira||'')}" placeholder="https://…"></div>
+      <div class="field"><label>Documentation</label><div id="pe_docs" class="doclist"></div><button type="button" class="btn" id="pe_adddoc" style="width:100%;">＋ Add document link</button></div>
+      <div class="field"><label>Note</label><textarea id="pe_note" style="min-height:80px;">${esc(proj.note||'')}</textarea></div>
+      <div class="pp-actions" style="position:sticky;bottom:0;background:var(--panel);padding:10px 0;border-top:1px solid var(--border);margin:0;">
+        <button class="btn" id="pe_cancel">Cancel</button>
+        <button class="btn primary" id="pe_save" style="flex:1;">Save</button>
+      </div>
+    </div>`;
+  panel.querySelectorAll('.dateclear').forEach(b=>{ const inp=panel.querySelector('#'+b.dataset.for); const sync=()=>{ b.style.display=inp.value?'flex':'none'; }; sync(); inp.addEventListener('input',sync); b.onclick=()=>{ inp.value=''; sync(); inp.focus(); }; });
+  // tags
+  const tagWrap=panel.querySelector('#pe_tags');
+  function renderTags(){ tagWrap.innerHTML='';
+    const mk=t=>{ const i=tags.indexOf(t); const chip=document.createElement('span');
+      if(i>=0){ const c=tagColor(t); chip.className='tagpick sel'; chip.style.cssText=`background:${c.bg};color:${c.fg};border-color:${c.bd}`; chip.innerHTML=esc(t)+' <b>×</b>'; chip.onclick=()=>{tags.splice(i,1);renderTags();}; }
+      else { chip.className='tagpick add'; chip.textContent='+ '+t; chip.onclick=()=>{tags.push(t);renderTags();}; }
+      return chip; };
+    const group=(label,list)=>{ if(!list.length) return; const lab=document.createElement('div'); lab.className='tp-label'; lab.textContent=label; tagWrap.appendChild(lab); const row=document.createElement('div'); row.className='tp-row'; list.forEach(t=>row.appendChild(mk(t))); tagWrap.appendChild(row); };
+    const all=[...new Set([...PREDEFINED_TAGS, ...allUsedTags(), ...tags])]; const mine=[], other=[];
+    all.forEach(t=>{ if(tagCreator(t)===currentEmail) mine.push(t); else other.push(t); });
+    group('My tags', mine); group('Other tags', other);
+  }
+  renderTags();
+  const tagNew=panel.querySelector('#pe_tagnew');
+  function addTag(){ const v=tagNew.value.trim(); if(v&&!tags.includes(v)){ const known=PREDEFINED_TAGS.includes(v)||allUsedTags().includes(v)||tagCreator(v); if(!known) recordTagCreator(v); tags.push(v); } tagNew.value=''; renderTags(); tagNew.focus(); }
+  panel.querySelector('#pe_tagadd').onclick=addTag; tagNew.onkeydown=e=>{ if(e.key==='Enter'){e.preventDefault();addTag();} };
+  // team
+  const teamWrap=panel.querySelector('#pe_teams');
+  function renderTeams(){ if(!teamWrap) return; teamWrap.innerHTML=''; const row=document.createElement('div'); row.className='tp-row'; teamWrap.appendChild(row);
+    teamOptions.forEach(name=>{ const i=teams.indexOf(name); const chip=document.createElement('span');
+      if(i>=0){ chip.className='tagpick sel'; chip.style.cssText='background:#eef4ff;color:#3538cd;border-color:#c7d7fe'; chip.innerHTML=esc(name)+' <b>×</b>'; chip.onclick=()=>{teams.splice(i,1);renderTeams();}; }
+      else { chip.className='tagpick add'; chip.textContent='+ '+name; chip.onclick=()=>{teams.push(name);renderTeams();}; }
+      row.appendChild(chip); });
+  }
+  renderTeams();
+  // docs
+  const docWrap=panel.querySelector('#pe_docs');
+  function renderDocs(){ docWrap.innerHTML=''; docs.forEach((d,i)=>{ const r=document.createElement('div'); r.className='doc-row'; r.innerHTML=`<input class="doc-url" value="${esc(d)}" placeholder="https://…"><button type="button" class="doc-del" title="Remove">✕</button>`; r.querySelector('.doc-url').oninput=e=>docs[i]=e.target.value; r.querySelector('.doc-del').onclick=()=>{docs.splice(i,1);renderDocs();}; docWrap.appendChild(r); }); }
+  renderDocs();
+  panel.querySelector('#pe_adddoc').onclick=()=>{docs.push('');renderDocs();};
+  panel.querySelector('#pp_close').onclick=closeProjPanel;
+  panel.querySelector('#pe_cancel').onclick=()=>renderPanelView(panel, cat, proj);
+  panel.querySelector('#pe_save').onclick=()=>{
+    const start=panel.querySelector('#pe_start').value, end=panel.querySelector('#pe_end').value;
+    if(start&&end&&end<start){ alert('End date must be on or after start date.'); return; }
+    proj.name=panel.querySelector('#pe_name').value.trim()||'New Project';
+    proj.start=start; proj.end=end;
+    proj.tags=tags.map(t=>t.trim()).filter(Boolean);
+    proj.priority=panel.querySelector('#pe_priority').value;
+    proj.release=panel.querySelector('#pe_release').value; proj.done=proj.release==='released'||proj.release==='completed';
+    proj.size=panel.querySelector('#pe_size').value; proj.promo=panel.querySelector('#pe_promo').value;
+    proj.openScale=panel.querySelector('#pe_scale').value;
+    proj.jira=normalizeUrl(panel.querySelector('#pe_jira').value.trim());
+    proj.docs=docs.map(d=>normalizeUrl(d.trim())).filter(Boolean);
+    proj.note=panel.querySelector('#pe_note').value;
+    const teamList=[...new Set(teams.map(t=>t.trim()).filter(Boolean))];
+    proj.teams=teamList.length?teamList:(ownSquadName?[ownSquadName]:[]);
+    render();                       // re-render timeline + persist to server
+    renderPanelView(panel, cat, proj);
+  };
 }
 function openPhaseModal(category,proj){
   const editing=!!proj;
