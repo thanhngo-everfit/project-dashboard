@@ -3896,17 +3896,30 @@ function renderDelivery(container, data, base){
   container.innerHTML=h;
   container.querySelectorAll('.pp-epic-h').forEach(hd=>hd.onclick=()=>hd.parentElement.classList.toggle('open'));
 }
-async function loadDelivery(key, container, base, force){
+// Compute {done,qa,total,pct} from a delivery payload — same buckets as the sync aggregation.
+function progressFromDelivery(data){
+  const issues=(data&&data.issues)||[]; if(!issues.length) return null;
+  let done=0, qa=0; issues.forEach(i=>{ const b=progressBucket(i.status,i.cat); if(b==='done') done++; else if(b==='qa') qa++; });
+  return {done, qa, total:issues.length, pct:Math.round((done+qa)/issues.length*100)};
+}
+// Write the freshly-fetched delivery progress back onto the project so the TIMELINE bar updates too
+// (the panel pulls live data; without this the bar would keep the last full-sync value).
+function applyDeliveryProgress(proj, data){
+  if(!proj) return;
+  const prog=progressFromDelivery(data);
+  if(JSON.stringify(proj.progress||null)!==JSON.stringify(prog||null)){ proj.progress=prog; render(); }   // render() re-draws the timeline + persists
+}
+async function loadDelivery(proj, key, container, base, force){
   if(!key){ container.innerHTML='<div class="pp-empty">Link this project to a Jira JPD item to see delivery progress.</div>'; return; }
   if(!idToken){ container.innerHTML='<div class="pp-empty">Sign in to load delivery progress.</div>'; return; }
-  if(!force && _ppDeliveryCache[key]){ renderDelivery(container, _ppDeliveryCache[key], base); return; }
+  if(!force && _ppDeliveryCache[key]){ renderDelivery(container, _ppDeliveryCache[key], base); applyDeliveryProgress(proj, _ppDeliveryCache[key]); return; }
   container.innerHTML='<div class="pp-loading">Loading delivery progress from Jira…</div>';
   try{
     const r=await apiFetch('/api/jira',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'delivery', key})});
     if(r.status===401){ handleAuthExpired(); return; }
     const j=await r.json().catch(()=>({}));
     if(!r.ok){ container.innerHTML='<div class="pp-empty">Could not load delivery ('+esc(j.error||('HTTP '+r.status))+').</div>'; return; }
-    _ppDeliveryCache[key]=j; renderDelivery(container, j, base);
+    _ppDeliveryCache[key]=j; renderDelivery(container, j, base); applyDeliveryProgress(proj, j);
   }catch(e){ container.innerHTML='<div class="pp-empty">Delivery request failed: '+esc(e.message)+'</div>'; }
 }
 // Open the detail panel for an EXISTING project (create still uses the center modal). edit=true opens
@@ -3979,8 +3992,8 @@ function renderPanelView(panel, cat, proj){
     </div>`;
   panel.querySelector('#pp_close').onclick=closeProjPanel;
   const delEl=panel.querySelector('#pp_delivery');
-  panel.querySelector('#pp_refresh').onclick=()=>loadDelivery(key, delEl, base, true);
-  loadDelivery(key, delEl, base, false);
+  panel.querySelector('#pp_refresh').onclick=()=>loadDelivery(proj, key, delEl, base, true);
+  loadDelivery(proj, key, delEl, base, false);
   const body=panel.querySelector('.pp-body'); if(body) body.scrollTop=scroll0;
 
   // ---- click-to-edit ----
