@@ -710,6 +710,46 @@
   .onb-h1{font-size:22px;font-weight:800;color:var(--text);}
   .onb-sub{font-size:13px;color:var(--muted);margin-bottom:18px;}
   .onb-actions{margin-left:auto;display:flex;gap:8px;}
+  .onb-viewsw{display:inline-flex;background:#f2f4f7;border-radius:9px;padding:3px;gap:2px;}
+  .onb-vtab{border:none;background:none;font-family:inherit;font-size:13px;font-weight:700;color:#667085;padding:6px 15px;border-radius:7px;cursor:pointer;}
+  .onb-vtab:hover{color:#101828;}
+  .onb-vtab.sel{background:#fff;color:#101828;box-shadow:0 1px 2px rgba(16,24,40,.1);}
+  /* Templates page (in-page editor) */
+  .tmp-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:6px 0 16px;flex-wrap:wrap;}
+  .tmp-baractions{display:flex;align-items:center;gap:8px;}
+  .tmp-dirty{font-size:12px;font-weight:700;color:#b54708;}
+  .tmp-wrap{display:flex;gap:16px;align-items:flex-start;}
+  .tmp-side{width:240px;flex:none;display:flex;flex-direction:column;gap:6px;}
+  .tmp-sitem{text-align:left;border:1px solid var(--border);background:var(--panel);border-radius:9px;padding:9px 11px;cursor:pointer;display:flex;flex-direction:column;gap:2px;}
+  .tmp-sitem:hover{border-color:#b2ccff;}
+  .tmp-sitem.sel{border-color:#4c6fff;background:#f5f8ff;box-shadow:0 0 0 2px rgba(76,111,255,.14);}
+  .tmp-si-name{font-size:13.5px;font-weight:700;color:#101828;}
+  .tmp-si-meta{font-size:11px;color:#98a2b3;text-transform:uppercase;letter-spacing:.3px;}
+  .tmp-addtpl{border:1px dashed var(--border);background:none;border-radius:9px;padding:9px;font-family:inherit;font-size:13px;font-weight:700;color:#3538cd;cursor:pointer;}
+  .tmp-addtpl:hover{background:#f5f8ff;border-color:#4c6fff;}
+  .tmp-main{flex:1;min-width:0;border:1px solid var(--border);border-radius:12px;padding:16px 18px;background:var(--panel);}
+  .tmp-thead{display:flex;align-items:center;gap:8px;margin-bottom:12px;}
+  .tmp-tname{flex:1;font-size:16px;font-weight:800;border:none;border-bottom:2px solid transparent;padding:4px 2px;font-family:inherit;color:#101828;background:none;}
+  .tmp-tname:focus{outline:none;border-bottom-color:#4c6fff;}
+  .tmp-steps-h{display:flex;align-items:center;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:#667085;margin:16px 0 8px;}
+  .tmp-scount{background:#eef2ff;color:#3538cd;border-radius:20px;padding:1px 8px;margin-left:6px;}
+  .tmp-step{border:1px solid var(--border);border-radius:10px;padding:8px 10px;margin-bottom:8px;background:#fcfcfd;}
+  .tmp-step-row{display:flex;align-items:center;gap:8px;}
+  .tmp-step-num{flex:none;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#667085;background:#f2f4f7;border-radius:50%;}
+  .tmp-s-text{flex:1;min-width:0;border:1px solid var(--border);border-radius:7px;padding:7px 9px;font-family:inherit;font-size:13px;}
+  .tmp-s-type{flex:none;border:1px solid var(--border);border-radius:7px;padding:7px;font-family:inherit;font-size:12px;background:#fff;}
+  .tmp-step-btns{display:flex;gap:2px;flex:none;}
+  .tmp-mv,.tmp-dup{border:1px solid var(--border);background:#fff;border-radius:6px;width:27px;height:29px;cursor:pointer;font-size:11px;color:#667085;}
+  .tmp-mv:disabled{opacity:.35;cursor:not-allowed;}
+  .tmp-mv:hover:not(:disabled),.tmp-dup:hover{background:#f2f4f7;color:#101828;}
+  .tmp-s-more{margin-top:8px;}
+  .tmp-s-more summary{font-size:11.5px;color:#667085;cursor:pointer;list-style:none;}
+  .tmp-s-more summary::-webkit-details-marker{display:none;}
+  .tmp-s-more summary:before{content:'⚙ ';}
+  .tmp-s-more input,.tmp-s-more textarea{width:100%;box-sizing:border-box;margin-top:6px;border:1px solid var(--border);border-radius:7px;padding:7px 9px;font-family:inherit;font-size:12.5px;}
+  .tmp-addstep{width:100%;border:1px dashed var(--border);background:none;border-radius:9px;padding:9px;font-family:inherit;font-size:13px;font-weight:700;color:#3538cd;cursor:pointer;margin-top:4px;}
+  .tmp-addstep:hover{background:#f5f8ff;border-color:#4c6fff;}
+  @media(max-width:720px){ .tmp-wrap{flex-direction:column;} .tmp-side{width:100%;flex-direction:row;flex-wrap:wrap;} .tmp-sitem{flex:1;min-width:150px;} }
   .onb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;}
   .onb-card.sel{box-shadow:0 0 0 2px #c7d7fe;}
   /* hire selector chips */
@@ -5088,17 +5128,24 @@ function openStepPanel(hire, step){
   };
   bg.classList.add('open'); panel.classList.add('open');
 }
+let _onbView='hires';   // 'hires' | 'templates' (templates is an admin-only in-page editor)
 function renderOnboarding(){
   const el=document.getElementById('onbPage'); if(!el) return;
   const admin=isAdmin(), onb=onbState();
+  if(!admin) _onbView='hires';
   if(_onbOpenHire && !onb.hires.some(h=>h.id===_onbOpenHire)) _onbOpenHire=null;
   if(!_onbOpenHire && onb.hires.length) _onbOpenHire=onb.hires[0].id;
   el.innerHTML=`<div class="onb-head"><div class="onb-h1">🎓 Onboarding</div>
-      ${admin?`<div class="onb-actions"><button class="btn" id="onb_tpls">⚙ Manage templates</button><button class="btn primary" id="onb_add">＋ Add hire</button></div>`:''}</div>
-    <div class="onb-sub">${onb.hires.length} ${onb.hires.length===1?'hire':'hires'} · ${onb.templates.length} template${onb.templates.length!==1?'s':''}</div>
+      ${admin?`<div class="onb-viewsw"><button class="onb-vtab${_onbView==='hires'?' sel':''}" data-v="hires">Hires</button><button class="onb-vtab${_onbView==='templates'?' sel':''}" data-v="templates">Templates</button></div>`:''}
+      <div class="onb-actions">${admin&&_onbView==='hires'?'<button class="btn primary" id="onb_add">＋ Add hire</button>':''}${admin&&_onbView==='templates'?'<button class="btn primary" id="tm_addtpl">＋ Add template</button>':''}</div></div>
+    <div id="onb_body"></div>`;
+  if(admin){ el.querySelectorAll('.onb-vtab').forEach(b=>b.onclick=()=>tmSetView(b.dataset.v)); }
+  const body=el.querySelector('#onb_body');
+  if(admin && _onbView==='templates'){ renderTemplatesPage(body); const ab=el.querySelector('#tm_addtpl'); if(ab)ab.onclick=tmAddTemplate; return; }
+  body.innerHTML=`<div class="onb-sub">${onb.hires.length} ${onb.hires.length===1?'hire':'hires'} · ${onb.templates.length} template${onb.templates.length!==1?'s':''}</div>
     <div class="onb-hires" id="onb_hires"></div>
     <div id="onb_detail"></div>`;
-  const hiresEl=el.querySelector('#onb_hires');
+  const hiresEl=body.querySelector('#onb_hires');
   if(!onb.hires.length){ hiresEl.innerHTML='<div class="onb-empty">No hires yet.'+(admin?' Click “Add hire” to onboard someone.':'')+'</div>'; }
   onb.hires.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'')).forEach(hire=>{
     const pr=hireProgress(hire);
@@ -5107,10 +5154,10 @@ function renderOnboarding(){
     chip.onclick=()=>{ _onbOpenHire=hire.id; renderOnboarding(); };
     hiresEl.appendChild(chip);
   });
-  const detail=el.querySelector('#onb_detail');
+  const detail=body.querySelector('#onb_detail');
   const hire=onb.hires.find(h=>h.id===_onbOpenHire);
   if(hire) renderHireSchedule(hire, detail, admin, onb);
-  if(admin){ const a=el.querySelector('#onb_add'); if(a)a.onclick=openAddHire; const m=el.querySelector('#onb_tpls'); if(m)m.onclick=openTemplateManager; }
+  if(admin){ const a=el.querySelector('#onb_add'); if(a)a.onclick=openAddHire; }
 }
 let _planDrag=null;
 let _onbWeek=1;   // which week of the schedule is shown
@@ -5229,48 +5276,98 @@ function openAssignTemplates(hire){
   modal.querySelector('#at_save').onclick=()=>{ hire.templates=[...sel]; saveOnboarding(); closeModal(); renderOnboarding(); };
   modalBg.classList.add('open');
 }
-function openTemplateManager(){
-  if(!isAdmin()) return; const onb=onbState();
-  const work=JSON.parse(JSON.stringify(onb.templates));
-  modal.style.width='660px';
-  function draw(){
-    modal.innerHTML=`<h3>Onboarding templates</h3>
-      <div style="font-size:12px;color:var(--muted);margin:-6px 0 12px;">Each template is a checklist. A hire can be assigned any number of templates; their list is the union.</div>
-      <div id="tm_list" style="max-height:56vh;overflow-y:auto;"></div>
-      <button class="btn" id="tm_add" style="width:100%;margin-top:8px;">＋ Add template</button>
-      <div class="modal-actions"><button class="btn" id="tm_cancel">Cancel</button><button class="btn primary" id="tm_save">Save</button></div>`;
-    const list=modal.querySelector('#tm_list');
-    work.forEach((t,ti)=>{
-      const box=document.createElement('div'); box.className='tm-tpl';
-      box.innerHTML=`<div class="tm-tpl-head"><input class="tm-name" value="${esc(t.name)}" placeholder="Template name"><input class="tm-cat" value="${esc(t.category||'')}" placeholder="Category"><button class="onb-del tm-deltpl" title="Delete template">✕</button></div><div class="tm-steps"></div><button class="tm-addstep">＋ Add step</button>`;
-      box.querySelector('.tm-name').oninput=e=>t.name=e.target.value;
-      box.querySelector('.tm-cat').oninput=e=>t.category=e.target.value;
-      box.querySelector('.tm-deltpl').onclick=()=>{ work.splice(ti,1); draw(); };
-      const steps=box.querySelector('.tm-steps');
-      (t.steps=t.steps||[]).forEach((s,si)=>{
-        const r=document.createElement('div'); r.className='tm-stepwrap';
-        const hasMore=!!(s.desc||s.link||s.media);
-        r.innerHTML=`<div class="tm-step"><input class="tm-s-text" value="${esc(s.text)}" placeholder="Step title"><select class="tm-s-type"><option value="">(auto)</option>${ONB_TYPES.map(ty=>`<option ${s.type===ty?'selected':''}>${ty}</option>`).join('')}</select><button class="onb-del tm-s-del" title="Remove step">✕</button></div>`+
-          `<details class="tm-s-more"${hasMore?' open':''}><summary>details (link / media / description)</summary>`+
-          `<input class="tm-s-link" value="${esc(s.link||'')}" placeholder="Link (optional) — https://…">`+
-          `<input class="tm-s-media" value="${esc(s.media||'')}" placeholder="Image or video URL (optional) — YouTube/Vimeo/.mp4/.png…">`+
-          `<textarea class="tm-s-desc" placeholder="Description (optional)">${esc(s.desc||'')}</textarea></details>`;
-        r.querySelector('.tm-s-text').oninput=e=>s.text=e.target.value;
-        r.querySelector('.tm-s-type').onchange=e=>s.type=e.target.value;
-        r.querySelector('.tm-s-link').oninput=e=>s.link=e.target.value;
-        r.querySelector('.tm-s-media').oninput=e=>s.media=e.target.value;
-        r.querySelector('.tm-s-desc').oninput=e=>s.desc=e.target.value;
-        r.querySelector('.tm-s-del').onclick=()=>{ t.steps.splice(si,1); draw(); };
-        steps.appendChild(r);
-      });
-      box.querySelector('.tm-addstep').onclick=()=>{ t.steps.push({id:'st_'+uid(),text:'',type:'',desc:'',link:'',media:''}); draw(); };
-      list.appendChild(box);
-    });
-    modal.querySelector('#tm_add').onclick=()=>{ work.push({id:'tpl_'+uid(),name:'New template',category:'Function',steps:[]}); draw(); };
-    modal.querySelector('#tm_cancel').onclick=closeModal;
-    modal.querySelector('#tm_save').onclick=()=>{ onb.templates=work.map(t=>({id:t.id,name:(t.name||'').trim()||'Template',category:(t.category||'').trim(),steps:(t.steps||[]).filter(s=>(s.text||'').trim()).map(s=>({id:s.id,text:s.text.trim(),type:(s.type||'').trim(),desc:(s.desc||'').trim(),link:(s.link||'').trim(),media:(s.media||'').trim()}))})); saveOnboarding(); closeModal(); renderOnboarding(); };
-  }
-  draw(); modalBg.classList.add('open');
+// ── In-page Templates editor (admin) ─────────────────────────────────────────
+// Edits a working copy (_tmWork) so navigating between templates keeps unsaved
+// edits; "Save changes" commits to state, "Discard" throws the copy away.
+let _tmWork=null, _tmSel=null, _tmDirty=false;
+function tmEnsureWork(){
+  if(!_tmWork){ _tmWork=JSON.parse(JSON.stringify(onbState().templates)); _tmDirty=false; }
+  if(!_tmSel || !_tmWork.some(t=>t.id===_tmSel)) _tmSel=_tmWork[0]?_tmWork[0].id:null;
+}
+function tmSetView(v){
+  if(v===_onbView) return;
+  if(_onbView==='templates' && _tmDirty && !confirm('Discard unsaved template changes?')) return;
+  if(v!=='templates'){ _tmWork=null; _tmDirty=false; }
+  _onbView=v; renderOnboarding();
+}
+function tmAddTemplate(){ tmEnsureWork(); const t={id:'tpl_'+uid(),name:'New template',category:'Function',desc:'',steps:[]}; _tmWork.push(t); _tmSel=t.id; _tmDirty=true; renderOnboarding(); }
+function tmSave(){
+  const onb=onbState();
+  onb.templates=_tmWork.map(t=>({id:t.id,name:(t.name||'').trim()||'Template',category:(t.category||'').trim(),desc:(t.desc||'').trim(),
+    steps:(t.steps||[]).filter(s=>(s.text||'').trim()).map(s=>({id:s.id,text:s.text.trim(),type:(s.type||'').trim(),desc:(s.desc||'').trim(),link:(s.link||'').trim(),media:(s.media||'').trim()}))}));
+  saveOnboarding(); _tmWork=null; _tmDirty=false; renderOnboarding();
+}
+function renderTemplatesPage(body){
+  tmEnsureWork(); const work=_tmWork;
+  body.innerHTML=`
+    <div class="tmp-bar">
+      <div class="onb-sub" style="margin:0;">${work.length} template${work.length!==1?'s':''} · edit the checklists new hires follow</div>
+      <div class="tmp-baractions">
+        <span class="tmp-dirty"${_tmDirty?'':' style="display:none"'}>● Unsaved changes</span>
+        <button class="btn" id="tmp_discard"${_tmDirty?'':' disabled'}>Discard</button>
+        <button class="btn primary" id="tmp_save"${_tmDirty?'':' disabled'}>Save changes</button>
+      </div>
+    </div>
+    <div class="tmp-wrap"><div class="tmp-side" id="tmp_side"></div><div class="tmp-main" id="tmp_main"></div></div>`;
+  const side=body.querySelector('#tmp_side');
+  work.forEach(t=>{
+    const n=(t.steps||[]).length;
+    const b=document.createElement('button'); b.className='tmp-sitem'+(t.id===_tmSel?' sel':'');
+    b.innerHTML=`<span class="tmp-si-name">${esc(t.name||'Untitled')}</span><span class="tmp-si-meta">${esc(t.category||'—')} · ${n} step${n!==1?'s':''}</span>`;
+    b.onclick=()=>{ _tmSel=t.id; renderOnboarding(); };
+    side.appendChild(b);
+  });
+  const addb=document.createElement('button'); addb.className='tmp-addtpl'; addb.textContent='＋ Add template'; addb.onclick=tmAddTemplate; side.appendChild(addb);
+  renderTemplateEditor(body.querySelector('#tmp_main'));
+  body.querySelector('#tmp_discard').onclick=()=>{ if(_tmDirty && !confirm('Discard unsaved changes?')) return; _tmWork=null; _tmDirty=false; renderOnboarding(); };
+  body.querySelector('#tmp_save').onclick=tmSave;
+}
+function renderTemplateEditor(main){
+  const t=_tmWork.find(x=>x.id===_tmSel);
+  if(!t){ main.innerHTML='<div class="onb-empty">Select a template on the left, or add a new one.</div>'; return; }
+  const mark=()=>{ _tmDirty=true; const d=document.querySelector('.tmp-dirty'); if(d)d.style.display=''; const sv=document.getElementById('tmp_save'); if(sv)sv.disabled=false; const ds=document.getElementById('tmp_discard'); if(ds)ds.disabled=false; };
+  main.innerHTML=`
+    <div class="tmp-thead"><input class="tmp-tname" value="${esc(t.name||'')}" placeholder="Template name"><button class="onb-del tmp-tdel" title="Delete template">✕</button></div>
+    <div class="field"><label>Category</label><input class="tmp-tcat" value="${esc(t.category||'')}" placeholder="e.g. Product · QA · Backend"></div>
+    <div class="field"><label>Description (optional)</label><textarea class="tmp-tdesc" placeholder="What this template covers…">${esc(t.desc||'')}</textarea></div>
+    <div class="tmp-steps-h"><span>Steps<span class="tmp-scount">${(t.steps||[]).length}</span></span></div>
+    <div class="tmp-steps" id="tmp_steps"></div>
+    <button class="tmp-addstep" id="tmp_addstep">＋ Add step</button>`;
+  main.querySelector('.tmp-tname').oninput=e=>{ t.name=e.target.value; mark(); const si=document.querySelector('.tmp-sitem.sel .tmp-si-name'); if(si)si.textContent=e.target.value||'Untitled'; };
+  main.querySelector('.tmp-tcat').oninput=e=>{ t.category=e.target.value; mark(); };
+  main.querySelector('.tmp-tdesc').oninput=e=>{ t.desc=e.target.value; mark(); };
+  main.querySelector('.tmp-tdel').onclick=()=>{ if(!confirm('Delete template “'+(t.name||'')+'”? Hires assigned to it will lose these steps.')) return; const i=_tmWork.findIndex(x=>x.id===t.id); _tmWork.splice(i,1); _tmSel=_tmWork[0]?_tmWork[0].id:null; _tmDirty=true; renderOnboarding(); };
+  const steps=main.querySelector('#tmp_steps');
+  (t.steps=t.steps||[]).forEach((s,si)=>{
+    const r=document.createElement('div'); r.className='tmp-step';
+    const hasMore=!!(s.desc||s.link||s.media);
+    r.innerHTML=`
+      <div class="tmp-step-row"><span class="tmp-step-num">${si+1}</span>
+        <input class="tmp-s-text" value="${esc(s.text||'')}" placeholder="Step title">
+        <select class="tmp-s-type"><option value="">(auto)</option>${ONB_TYPES.map(ty=>`<option ${s.type===ty?'selected':''}>${ty}</option>`).join('')}</select>
+        <div class="tmp-step-btns">
+          <button class="tmp-mv" data-d="-1" title="Move up"${si===0?' disabled':''}>▲</button>
+          <button class="tmp-mv" data-d="1" title="Move down"${si===t.steps.length-1?' disabled':''}>▼</button>
+          <button class="tmp-dup" title="Duplicate">⧉</button>
+          <button class="onb-del tmp-s-del" title="Remove step">✕</button>
+        </div>
+      </div>
+      <details class="tmp-s-more"${hasMore?' open':''}><summary>Link · media · description</summary>
+        <input class="tmp-s-link" value="${esc(s.link||'')}" placeholder="Link (optional) — https://…">
+        <input class="tmp-s-media" value="${esc(s.media||'')}" placeholder="Image or video URL (optional) — YouTube/Vimeo/.mp4/.png…">
+        <textarea class="tmp-s-desc" placeholder="Description (optional)">${esc(s.desc||'')}</textarea>
+      </details>`;
+    r.querySelector('.tmp-s-text').oninput=e=>{ s.text=e.target.value; mark(); };
+    r.querySelector('.tmp-s-type').onchange=e=>{ s.type=e.target.value; mark(); };
+    r.querySelector('.tmp-s-link').oninput=e=>{ s.link=e.target.value; mark(); };
+    r.querySelector('.tmp-s-media').oninput=e=>{ s.media=e.target.value; mark(); };
+    r.querySelector('.tmp-s-desc').oninput=e=>{ s.desc=e.target.value; mark(); };
+    r.querySelectorAll('.tmp-mv').forEach(btn=>btn.onclick=()=>{ const ni=si+(+btn.dataset.d); if(ni<0||ni>=t.steps.length) return; const [x]=t.steps.splice(si,1); t.steps.splice(ni,0,x); _tmDirty=true; renderOnboarding(); });
+    r.querySelector('.tmp-dup').onclick=()=>{ const c=JSON.parse(JSON.stringify(s)); c.id='st_'+uid(); t.steps.splice(si+1,0,c); _tmDirty=true; renderOnboarding(); };
+    r.querySelector('.tmp-s-del').onclick=()=>{ t.steps.splice(si,1); _tmDirty=true; renderOnboarding(); };
+    steps.appendChild(r);
+  });
+  main.querySelector('#tmp_addstep').onclick=()=>{ t.steps.push({id:'st_'+uid(),text:'',type:'',desc:'',link:'',media:''}); _tmDirty=true; renderOnboarding(); };
 }
 
 (function bootstrap(){
