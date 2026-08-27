@@ -753,16 +753,31 @@
   .oc-lane-mt .oc-lane-h{margin-bottom:0;color:#98a2b3;}
   .oc-lane-mt .oc-lane-body{display:none;}
   .oc-lane-empty{font-size:12px;color:#b0b6c3;padding:12px;border:1px dashed var(--border);border-radius:9px;width:100%;text-align:center;}
-  .oc-card{width:232px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 12px;box-shadow:0 1px 2px rgba(16,24,40,.05);}
+  .oc-card{width:232px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 12px;box-shadow:0 1px 2px rgba(16,24,40,.05);cursor:pointer;}
   .oc-card[draggable=true]{cursor:grab;}
+  .oc-card:hover{border-color:#b2ccff;box-shadow:0 2px 6px rgba(16,24,40,.09);}
   .oc-card.dragging{opacity:.4;}
   .oc-card.done{background:#f6fef9;border-color:#a6f4c5;}
   .oc-top{display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap;}
   .oc-cb{width:16px;height:16px;flex:none;cursor:pointer;accent-color:#12b76a;margin:0;}
+  .oc-check{width:16px;height:16px;flex:none;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#fff;background:#12b76a;border-radius:50%;}
   .oc-tpl{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.3px;color:#98a2b3;}
-  .oc-name{font-size:13px;line-height:1.4;color:#344054;cursor:pointer;}
+  .oc-name{font-size:13px;line-height:1.4;color:#344054;}
   .oc-card.done .oc-name{color:#98a2b3;text-decoration:line-through;}
-  .oc-name:hover{color:#1570ef;}
+  .oc-card:hover .oc-name{color:#1570ef;}
+  /* step panel: tabs + practice */
+  .sp-tabs{display:flex;gap:2px;padding:0 18px;border-bottom:1px solid var(--border);flex:none;}
+  .sp-tab{border:none;background:none;font-family:inherit;font-size:13px;font-weight:700;color:var(--muted);padding:10px 12px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;}
+  .sp-tab:hover{color:#344054;}
+  .sp-tab.sel{color:#3538cd;border-bottom-color:#4c6fff;}
+  .sp-note-hint{font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5;}
+  .sp-pq{margin-bottom:14px;}
+  .sp-pq-label{display:block;font-size:13px;font-weight:700;color:#344054;margin-bottom:6px;}
+  .sp-pq-input{width:100%;box-sizing:border-box;min-height:72px;resize:vertical;border:1px solid var(--border);border-radius:9px;padding:9px 11px;font-family:inherit;font-size:13px;line-height:1.5;color:#344054;}
+  .sp-pq-input:focus{outline:none;border-color:#4c6fff;box-shadow:0 0 0 3px rgba(76,111,255,.14);}
+  .sp-pq-input[readonly]{background:#f9fafb;color:#667085;}
+  .sp-done-hint{font-size:12px;color:#b54708;align-self:center;}
+  .btn:disabled{opacity:.5;cursor:not-allowed;}
   @media(max-width:560px){ .oc-card{width:100%;} }
   .onb-step-day{flex:none;font-size:9.5px;font-weight:800;color:#3538cd;background:#eef2ff;border:1px solid #c7d7fe;border-radius:5px;padding:1px 5px;}
   /* schedule planner */
@@ -5016,15 +5031,19 @@ function formatDocHTML(t){
   closeList(); closeTable();
   return out;
 }
+let _spTab='overview';
+const ONB_PRACTICE_Q=[
+  {k:'learn', label:'1. What did you learn?'},
+  {k:'challenges', label:'2. What are the challenges?'},
+  {k:'other', label:"3. Any other things you'd like to share?"},
+];
 function openStepPanel(hire, step){
   const {bg,panel}=ensureStepPanel();
   _spCur={hireId:hire.id, stepId:step.id};
   const admin=isAdmin(); const done=!!(hire.done&&hire.done[step.id]);
-  panel.innerHTML=`
-    <div class="pp-top"><span class="pp-dot" style="background:#6941c6"></span>
-      <div class="pp-title">${esc(step.text||'Step')}</div>
-      <button class="pp-iconbtn" id="sp_close" title="Close">✕</button></div>
-    <div class="pp-body">
+  const pr=(hire.practice&&hire.practice[step.id])||{learn:'',challenges:'',other:''};
+  const hasDetails = step.media||step.desc||step.link||(step.doc&&typeof SQUAD_WF_DOCS!=='undefined'&&SQUAD_WF_DOCS[step.doc]);
+  const overviewHTML=`
       <div class="pp-sec"><div class="pp-meta">
         <div class="pp-k">Type</div><div class="pp-v">${stepTypeBadge(step)}</div>
         ${step.tpl?`<div class="pp-k">Template</div><div class="pp-v">${esc(step.tpl)}</div>`:''}
@@ -5035,12 +5054,38 @@ function openStepPanel(hire, step){
       ${step.link?`<div class="pp-sec"><div class="pp-sec-h">Link</div><a class="sp-link" href="${esc(normalizeUrl(step.link))}" target="_blank" rel="noopener">🔗 ${esc(step.link)}</a></div>`:''}
       ${(step.doc && typeof SQUAD_WF_DOCS!=='undefined' && SQUAD_WF_DOCS[step.doc])?`<div class="pp-sec"><div class="pp-sec-h">Document</div><div class="sp-doc">${formatDocHTML(SQUAD_WF_DOCS[step.doc])}</div></div>`:''}
       ${step.desc?`<div class="pp-sec"><div class="pp-sec-h">Details</div><div class="sp-doc">${formatDocHTML(step.desc)}</div></div>`:''}
-      ${(!step.media&&!step.desc&&!step.link&&!(step.doc&&typeof SQUAD_WF_DOCS!=='undefined'&&SQUAD_WF_DOCS[step.doc]))?`<div class="pp-empty">No extra details for this step.${admin?' Add a description, link or media in Manage templates.':''}</div>`:''}
-      ${admin?`<div class="pp-actions" style="margin-top:8px;"><button class="btn ${done?'':'primary'}" id="sp_toggle">${done?'↺ Mark as not done':'✓ Mark as done'}</button></div>`:''}
+      ${!hasDetails?`<div class="pp-empty">No extra details for this step.${admin?' Add a description, link or media in Manage templates.':''}</div>`:''}`;
+  const practiceHTML=`
+      <div class="sp-note-hint">Reflect on this item. All three are required to mark it done — “No” or “N/A” is fine, but please acknowledge each.</div>
+      ${ONB_PRACTICE_Q.map(x=>`<div class="sp-pq"><label class="sp-pq-label">${esc(x.label)}</label><textarea class="sp-pq-input" data-k="${x.k}" ${admin?'':'readonly'} placeholder="Your answer…">${esc(pr[x.k]||'')}</textarea></div>`).join('')}
+      ${admin?`<div class="pp-actions"><button class="btn ${done?'':'primary'}" id="sp_toggle">${done?'↺ Mark as not done':'✓ Mark as done'}</button><span class="sp-done-hint" id="sp_hint"></span></div>`:''}`;
+  panel.innerHTML=`
+    <div class="pp-top"><span class="pp-dot" style="background:#6941c6"></span>
+      <div class="pp-title">${esc(step.text||'Step')}</div>
+      <button class="pp-iconbtn" id="sp_close" title="Close">✕</button></div>
+    <div class="sp-tabs"><button class="sp-tab" data-tab="overview">Overview</button><button class="sp-tab" data-tab="practice">Practice</button></div>
+    <div class="pp-body">
+      <div id="sp_overview">${overviewHTML}</div>
+      <div id="sp_practice" style="display:none">${practiceHTML}</div>
     </div>`;
   panel.querySelector('#sp_close').onclick=closeStepPanel;
-  const tg=panel.querySelector('#sp_toggle');
-  if(tg) tg.onclick=()=>{ if(!hire.done)hire.done={}; if(done) delete hire.done[step.id]; else hire.done[step.id]=true; saveOnboarding(); renderOnboarding(); openStepPanel(hire, step); };
+  const setTab=t=>{ _spTab=t; panel.querySelectorAll('.sp-tab').forEach(b=>b.classList.toggle('sel',b.dataset.tab===t)); panel.querySelector('#sp_overview').style.display=t==='overview'?'':'none'; panel.querySelector('#sp_practice').style.display=t==='practice'?'':'none'; };
+  panel.querySelectorAll('.sp-tab').forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
+  setTab(_spTab==='practice'?'practice':'overview');
+  const inputs=[...panel.querySelectorAll('.sp-pq-input')];
+  const vals=()=>{ const o={}; inputs.forEach(i=>o[i.dataset.k]=i.value.trim()); return o; };
+  const allFilled=()=>{ const v=vals(); return !!(v.learn && v.challenges && v.other); };
+  const tg=panel.querySelector('#sp_toggle'), hint=panel.querySelector('#sp_hint');
+  const refreshBtn=()=>{ if(!tg) return; tg.disabled = !done && !allFilled(); if(hint) hint.textContent = (!done && !allFilled())?'Fill all three to mark done':''; };
+  const savePractice=()=>{ if(!admin) return; if(!hire.practice)hire.practice={}; hire.practice[step.id]=vals(); saveOnboarding(); };
+  inputs.forEach(i=>{ i.oninput=refreshBtn; i.onblur=savePractice; });
+  refreshBtn();
+  if(tg) tg.onclick=()=>{
+    if(!hire.done)hire.done={};
+    if(done){ delete hire.done[step.id]; }
+    else { if(!allFilled()){ setTab('practice'); refreshBtn(); inputs.find(i=>!i.value.trim())?.focus(); return; } if(!hire.practice)hire.practice={}; hire.practice[step.id]=vals(); hire.done[step.id]=true; }
+    saveOnboarding(); renderOnboarding(); openStepPanel(hire, step);
+  };
   bg.classList.add('open'); panel.classList.add('open');
 }
 function renderOnboarding(){
@@ -5098,13 +5143,12 @@ function renderHireSchedule(hire, el, admin, onb){
   const updProg=()=>{ const p2=hireProgress(hire); const pct=el.querySelector('.onb-hero-pct'); if(pct)pct.textContent=p2.pct+'%'; const bar=el.querySelector('.onb-hero .onb-prog span'); if(bar)bar.style.width=p2.pct+'%'; const c=el.querySelector('.onb-hero-cnt'); if(c)c.textContent=p2.done+'/'+p2.total+' done'; };
   const card=s=>{ const done=!!(hire.done&&hire.done[s.id]);
     const c=document.createElement('div'); c.className='oc-card'+(done?' done':''); c.dataset.step=s.id; if(admin) c.draggable=true;
-    const cb=document.createElement('input'); cb.type='checkbox'; cb.className='oc-cb'; cb.checked=done; if(!admin) cb.disabled=true;
-    const top=document.createElement('div'); top.className='oc-top'; top.appendChild(cb); top.insertAdjacentHTML('beforeend', stepTypeBadge(s)+`<span class="oc-tpl">${esc(s.tpl||'')}</span>`);
+    const top=document.createElement('div'); top.className='oc-top'; top.innerHTML=(done?'<span class="oc-check">✓</span>':'')+stepTypeBadge(s)+`<span class="oc-tpl">${esc(s.tpl||'')}</span>`;
     const nm=document.createElement('div'); nm.className='oc-name'; nm.textContent=s.text;
     if(s.media||s.link||s.desc||s.doc){ const ic=document.createElement('span'); ic.className='onb-step-more'; ic.textContent=s.media?'▷':(s.doc?'📄':(s.link?'🔗':'ⓘ')); nm.appendChild(document.createTextNode(' ')); nm.appendChild(ic); }
     c.appendChild(top); c.appendChild(nm);
-    nm.onclick=()=>openStepPanel(hire,s);
-    if(admin){ cb.onchange=()=>{ if(!hire.done)hire.done={}; if(cb.checked)hire.done[s.id]=true; else delete hire.done[s.id]; c.classList.toggle('done',cb.checked); updProg(); saveOnboarding(); if(_spCur&&_spCur.stepId===s.id&&_spCur.hireId===hire.id) openStepPanel(hire,s); };
+    c.onclick=()=>openStepPanel(hire,s);
+    if(admin){
       c.ondragstart=e=>{ e.dataTransfer.setData('text/plain',s.id); e.dataTransfer.effectAllowed='move'; _planDrag=s.id; c.classList.add('dragging'); };
       c.ondragend=()=>{ c.classList.remove('dragging'); _planDrag=null; };
     }
