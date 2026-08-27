@@ -575,6 +575,7 @@
   .mkt-rel.yes{color:#085d3a;background:#d3f8df;border:1px solid #75e0a7;}
   .mkt-rel.no{color:#667085;background:#f2f4f7;border:1px solid #e4e7ec;}
   .mkt-rel.done{color:#344054;background:#eaecf0;border:1px solid #d0d5dd;}
+  .mkt-rel.wait{color:#b54708;background:#fffaeb;border:1px solid #fedf89;}
   .mkt-scale{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.3px;border-radius:999px;padding:2px 9px;white-space:nowrap;}
   .mkt-scale.s-internal{color:#475467;background:#f2f4f7;border:1px solid #e4e7ec;}
   .mkt-scale.s-beta{color:#b54708;background:#fffaeb;border:1px solid #fedf89;}
@@ -2706,6 +2707,7 @@ function renderListByEnd(g){
         const done = p.done?`<span class="mkt-check" title="${relLbl}">✓</span>`:'';
         const rel = p.release==='released' ? '<span class="mkt-rel yes">Released</span>'
                   : p.release==='completed' ? '<span class="mkt-rel done">Completed</span>'
+                  : (projStatusLabel(p)==='Waiting for Start') ? '<span class="mkt-rel wait">Waiting for Start</span>'
                   : '<span class="mkt-rel no">Not yet</span>';
         const scale = p.openScale ? `<span class="mkt-scale s-${esc(p.openScale.toLowerCase())}">${esc(p.openScale)}</span>` : '<span class="mkt-dash">—</span>';
         const linksHtml=indicatorsHTML(p);
@@ -3694,6 +3696,20 @@ function projectReleaseLabel(proj){
 function projectDesignLabel(proj){
   return projectReleaseLabel(proj) || projectDesignStatus(proj);
 }
+// Overall project status: Released / Completed are manual; otherwise auto — "Waiting for Start" while the
+// start date is still in the future, flipping to "Active" once today reaches/passes it.
+function projStatusLabel(proj){
+  if(proj.release==='released') return 'Released';
+  if(proj.release==='completed') return 'Completed';
+  if(validISO(proj.start) && proj.start > todayISO()) return 'Waiting for Start';
+  return 'Active';
+}
+const STATUS_STYLE={
+  'Active':{c:'#1849a9',bg:'#eff8ff',bd:'#b2ddff'},
+  'Waiting for Start':{c:'#b54708',bg:'#fffaeb',bd:'#fedf89'},
+  'Released':{c:'#085d3a',bg:'#d3f8df',bd:'#75e0a7'},
+  'Completed':{c:'#085d3a',bg:'#d3f8df',bd:'#75e0a7'},
+};
 // Design-status filter (personal, multi). '(none)' matches projects with no design status.
 const DESIGN_STATUSES=['Waiting For Start','Need Design Estimation','Design In Progress','Design In Review','Design Pending','Design Overdue','Design Ready','Need L/J Review','No Design'];
 // Release-status filter (personal, multi). '(none)' matches active / not-yet-released projects.
@@ -4131,7 +4147,7 @@ function renderPanelView(panel, cat, proj){
   const base = jiraBrowseBase(proj.jira);
   const dt=(proj.tasks||[]).find(t=>t.type==='design');
   const dlab=projectDesignLabel(proj); const dst=DESIGN_LABEL_STYLE[dlab]||{};
-  const relLabel = proj.release==='released'?'Released':proj.release==='completed'?'Completed':'Active';
+  const relLabel = projStatusLabel(proj);
   const est=proj.estimation||{}; const estParts=EST_LABELS.filter(([k])=>est[k]!=null).map(([k,l])=>`${l} ${est[k]}p`);
   const chip=(txt,style)=>`<span class="tagpick sel" style="cursor:default;background:${style.bg||'#f2f4f7'};color:${style.c||'#475467'};border-color:${style.bd||'#e4e7ec'}">${esc(txt)}</span>`;
   const tagChips=(proj.tags||[]).map(t=>{ const c=tagColor(t); return `<span class="tagpick sel" style="cursor:default;background:${c.bg};color:${c.fg};border-color:${c.bd}">${esc(t)}</span>`; }).join('');
@@ -4153,7 +4169,7 @@ function renderPanelView(panel, cat, proj){
         <div class="pp-sec-h">Details <span style="margin-left:auto;font-weight:600;text-transform:none;letter-spacing:0;color:#b0b6c3;">click a field to edit</span></div>
         <div class="pp-meta">
           ${row('Category', esc(cat.name||'—'))}
-          ${erow('release','Status', chip(relLabel, DESIGN_LABEL_STYLE[relLabel==='Released'?'Released':relLabel==='Completed'?'Completed (no release)':'Waiting For Start']||{}))}
+          ${erow('release','Status', chip(relLabel, STATUS_STYLE[relLabel]||{}))}
           ${erow('timeline','Timeline', (proj.start||proj.end)?esc((fmtShort(proj.start)||'…')+' → '+(fmtShort(proj.end)||'…')):'')}
           ${erow('priority','Priority', proj.priority?priorityChipHTML(proj):'')}
           ${erow('team','Team', (proj.teams||[]).map(esc).join(', '))}
