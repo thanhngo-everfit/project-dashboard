@@ -127,6 +127,19 @@ export default async function handler(req, res) {
         res.status(200).json({ ok: true, updatedAt: record.updatedAt, version: VERSION });
         return;
       }
+      // Targeted replace of the onboarding module only (admin/manager tool) — never touches tribes/people/evals.
+      if (body.action === 'patchOnboarding') {
+        if ((user.email || '').toLowerCase() !== ADMIN_EMAIL) { res.status(403).json({ error: 'forbidden' }); return; }
+        const onb = (body.onboarding && typeof body.onboarding === 'object' && !Array.isArray(body.onboarding)) ? body.onboarding : null;
+        if (!onb) { res.status(400).json({ error: 'missing_onboarding' }); return; }
+        const cur = await redis.get(KEY);
+        const state = (cur && cur.state) ? cur.state : { tribes: [] };
+        state.onboarding = onb;
+        const record = { state, updatedAt: Date.now(), updatedBy: user.email, tribesUpdatedAt: (cur && (cur.tribesUpdatedAt || cur.updatedAt)) || Date.now() };
+        await redis.set(KEY, record);
+        res.status(200).json({ ok: true, updatedAt: record.updatedAt, version: VERSION });
+        return;
+      }
       if (typeof body.state === 'undefined' || body.state === null) {
         res.status(400).json({ error: 'missing_state' });
         return;
@@ -185,6 +198,7 @@ export default async function handler(req, res) {
         if (body.state.people == null && existing.state.people) body.state.people = existing.state.people;
         if (body.state.tagCreators == null && existing.state.tagCreators) body.state.tagCreators = existing.state.tagCreators;
         if (body.state.evals == null && existing.state.evals) body.state.evals = existing.state.evals;
+        if (body.state.onboarding == null && existing.state.onboarding) body.state.onboarding = existing.state.onboarding;
       }
       // Snapshot the version we're about to replace so any bad save is recoverable (keep last 30).
       // Skip when only metadata changed (e.g. auto-sync bumping lastJiraSync with identical tribes) so

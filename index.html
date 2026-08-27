@@ -684,6 +684,69 @@
   .wiplab{display:flex;align-items:center;gap:8px;font-weight:500;text-transform:none;letter-spacing:0;padding-top:6px;}
   .wiplab input{width:auto;}
 
+  /* ---------- App sections & home hub ---------- */
+  .appnav{display:flex;align-items:center;gap:4px;margin-left:8px;}
+  .appnav-btn{border:none;background:transparent;color:var(--muted);font-size:14px;font-weight:700;padding:8px 14px;border-radius:9px;cursor:pointer;font-family:inherit;}
+  .appnav-btn:hover{background:#f0f1f4;color:var(--text);}
+  .appnav-btn.active{background:#eef2ff;color:#3538cd;}
+  .app-section{}
+  .hub{max-width:1000px;margin:0 auto;padding:56px 24px;}
+  .hub-head{text-align:center;margin-bottom:40px;}
+  .hub-title{font-size:34px;font-weight:900;letter-spacing:-.5px;color:var(--text);}
+  .hub-sub{font-size:15px;color:var(--muted);margin-top:8px;}
+  .hub-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px;}
+  .hub-card{display:flex;flex-direction:column;align-items:flex-start;gap:10px;text-align:left;background:var(--panel);border:1px solid var(--border);border-radius:18px;padding:26px 24px;cursor:pointer;font-family:inherit;transition:transform .12s,box-shadow .12s,border-color .12s;box-shadow:0 1px 3px rgba(16,24,40,.05);}
+  .hub-card:hover{transform:translateY(-3px);box-shadow:0 14px 34px rgba(16,24,40,.12);border-color:#c7d0e0;}
+  .hub-ico{font-size:38px;line-height:1;}
+  .hub-name{font-size:19px;font-weight:800;color:var(--text);}
+  .hub-desc{font-size:13px;color:var(--muted);line-height:1.5;}
+  .orgpage{padding:8px 0 40px;}
+  /* ---------- Onboarding ---------- */
+  .onb{max-width:1080px;margin:0 auto;padding:22px 24px 60px;}
+  .onb-head{display:flex;align-items:center;gap:12px;margin-bottom:6px;}
+  .onb-h1{font-size:22px;font-weight:800;color:var(--text);}
+  .onb-sub{font-size:13px;color:var(--muted);margin-bottom:18px;}
+  .onb-actions{margin-left:auto;display:flex;gap:8px;}
+  .onb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;}
+  .onb-card{border:1px solid var(--border);border-radius:14px;background:var(--panel);overflow:hidden;box-shadow:0 1px 3px rgba(16,24,40,.05);}
+  .onb-c-head{display:flex;align-items:center;gap:11px;padding:13px 15px;border-bottom:1px solid var(--border);cursor:pointer;}
+  .onb-c-head:hover{background:#f9fafb;}
+  .onb-c-head .assignee-av,.onb-c-head .assignee-ini{width:38px;height:38px;font-size:13px;flex:none;}
+  .onb-c-id{flex:1;min-width:0;}
+  .onb-c-name{font-weight:800;font-size:14.5px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .onb-c-meta{font-size:11.5px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .onb-c-pct{flex:none;font-size:15px;font-weight:800;color:#067647;}
+  .onb-prog{height:6px;background:#eef1f6;border-radius:0;overflow:hidden;}
+  .onb-prog span{display:block;height:100%;background:#12b76a;}
+  .onb-tpls{display:flex;flex-wrap:wrap;gap:5px;padding:9px 15px 0;}
+  .onb-tpl{font-size:10.5px;font-weight:700;color:#3538cd;background:#eef2ff;border:1px solid #c7d7fe;border-radius:999px;padding:1px 8px;}
+  .onb-body{padding:6px 15px 14px;display:none;}
+  .onb-card.open .onb-body{display:block;}
+  .onb-caret{color:#98a2b3;font-size:11px;flex:none;transition:transform .15s;}
+  .onb-caret::before{content:'▸';}
+  .onb-card.open .onb-caret{transform:rotate(90deg);}
+  .onb-grp{margin-top:10px;}
+  .onb-grp-h{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:#98a2b3;margin:6px 0 4px;}
+  .onb-step{display:flex;align-items:flex-start;gap:9px;padding:5px 3px;border-radius:7px;font-size:13px;}
+  .onb-step:hover{background:#f7f9fc;}
+  .onb-step input{width:17px;height:17px;flex:none;margin-top:1px;cursor:pointer;accent-color:#12b76a;}
+  .onb-step.done label{color:#98a2b3;text-decoration:line-through;}
+  .onb-step label{cursor:pointer;line-height:1.4;color:#344054;}
+  .onb-empty{font-size:13px;color:var(--muted);padding:28px 0;text-align:center;}
+  .onb-del{border:none;background:transparent;color:#c0c5cf;cursor:pointer;font-size:14px;width:26px;height:26px;border-radius:7px;flex:none;}
+  .onb-del:hover{background:#fee4e2;color:#d92d20;}
+  /* template manager rows */
+  .tm-tpl{border:1px solid var(--border);border-radius:11px;padding:11px 13px;margin-bottom:10px;}
+  .tm-tpl-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+  .tm-tpl-head input{flex:1;font-size:13px;padding:6px 9px;border:1px solid var(--border);border-radius:8px;font-family:inherit;}
+  .tm-cat{width:130px;flex:none;}
+  .tm-step{display:flex;align-items:center;gap:7px;margin:4px 0;}
+  .tm-step input{flex:1;font-size:12.5px;padding:5px 8px;border:1px solid var(--border);border-radius:7px;font-family:inherit;}
+  .tm-addstep{font-size:12px;color:#1570ef;background:none;border:none;cursor:pointer;padding:4px 2px;font-weight:600;}
+  .onb-picker{display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:9px;padding:8px;}
+  .onb-pick{display:flex;align-items:center;gap:8px;font-size:13px;padding:4px;border-radius:6px;cursor:pointer;}
+  .onb-pick:hover{background:#f2f5fb;}
+
   /* ---------- Login gate ---------- */
   .gate{position:fixed;inset:0;z-index:1000;background:#fff;display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px;text-align:center;}
   .gate h1{font-size:34px;font-weight:900;letter-spacing:-.5px;margin:0;}
@@ -755,7 +818,13 @@
   </div>
 
   <div class="topbar">
-    <h1>ROADMAP PLANNING <span>2026</span></h1>
+    <h1 id="appTitle">EVERFIT <span>HQ</span></h1>
+    <nav class="appnav" id="appnav" style="display:none">
+      <button class="appnav-btn" data-sec="home">🏠 Home</button>
+      <button class="appnav-btn" data-sec="roadmap">🗺️ Roadmap</button>
+      <button class="appnav-btn" data-sec="organization">🏛️ Organization</button>
+      <button class="appnav-btn" data-sec="onboarding">🎓 Onboarding</button>
+    </nav>
     <div class="spacer"></div>
     <div class="ctrl-group" id="viewToggle">
       <button data-view="quarter" class="active">Quarter</button>
@@ -790,6 +859,45 @@
     </div>
   </div>
 
+  <!-- ============ HOME HUB ============ -->
+  <div class="app-section" id="section-home" style="display:none">
+    <div class="hub">
+      <div class="hub-head">
+        <div class="hub-title">Everfit HQ</div>
+        <div class="hub-sub">Pick a workspace to get started.</div>
+      </div>
+      <div class="hub-grid">
+        <button class="hub-card" data-sec="roadmap">
+          <div class="hub-ico">🗺️</div>
+          <div class="hub-name">Roadmap</div>
+          <div class="hub-desc">Delivery timeline across squads, synced from Jira.</div>
+        </button>
+        <button class="hub-card" data-sec="organization">
+          <div class="hub-ico">🏛️</div>
+          <div class="hub-name">Organization</div>
+          <div class="hub-desc">Squad org chart and the people directory.</div>
+        </button>
+        <button class="hub-card" data-sec="onboarding">
+          <div class="hub-ico">🎓</div>
+          <div class="hub-name">Onboarding</div>
+          <div class="hub-desc">Onboard new hires with role-based checklists.</div>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ ORGANIZATION ============ -->
+  <div class="app-section" id="section-organization" style="display:none">
+    <div class="orgpage" id="orgPage"></div>
+  </div>
+
+  <!-- ============ ONBOARDING ============ -->
+  <div class="app-section" id="section-onboarding" style="display:none">
+    <div class="onb" id="onbPage"></div>
+  </div>
+
+  <!-- ============ ROADMAP ============ -->
+  <div class="app-section" id="section-roadmap">
   <div class="tribebar" id="tribebar"></div>
   <div class="tabbar" id="tabbar"></div>
 
@@ -884,6 +992,7 @@
   </div>
 
   <div class="gantt" id="gantt"></div>
+  </div><!-- /section-roadmap -->
 
   <!-- Modal -->
   <div class="modal-bg" id="modalBg">
@@ -1102,12 +1211,11 @@ const VIRTUAL_VIEWS = [
   {id:'view:long', name:"Long's Requests", tag:"Long's request", icon:'🏷️'},
   {id:'view:marketing', name:'Marketing', listByEnd:true, icon:'📅'},
   {id:'view:people', name:'People', byAssignee:true, icon:'👤'},
-  {id:'view:org', name:'Organization', orgChart:true, icon:'🏛️'},
 ];
 function activeVirtual(){ return VIRTUAL_VIEWS.find(v=>v.id===state.activeSquad); }
 function inVirtual(){ return !!activeVirtual(); }
 // URL <-> active tab mapping (shareable ?tribe= & ?view= params)
-const VIEW_SLUGS = {'view:all':'all-squads','view:jon':'jon-request','view:long':'long-request','view:marketing':'marketing','view:people':'people','view:org':'organization'};
+const VIEW_SLUGS = {'view:all':'all-squads','view:jon':'jon-request','view:long':'long-request','view:marketing':'marketing','view:people':'people'};
 let pendingViewSlug = null, pendingTribeSlug = null;
 function viewSlug(id){ return VIEW_SLUGS[id] || id; }   // real squads use their id
 function idFromSlug(slug){
@@ -1230,6 +1338,10 @@ function migrate(s){
   if(!s.people || typeof s.people!=='object' || Array.isArray(s.people)) s.people={};   // shared directory: accountId -> {name,avatar,squads[],role}
   Object.values(s.people).forEach(m=>{ if(m && typeof m==='object' && !Array.isArray(m)){ if(!Array.isArray(m.squads)) m.squads = m.squad?[m.squad]:[]; delete m.squad; } });   // squad(string) -> squads[]
   if(!s.evals || typeof s.evals!=='object' || Array.isArray(s.evals)) s.evals={};   // performance evals: accountId -> period -> {...}
+  if(!s.onboarding || typeof s.onboarding!=='object' || Array.isArray(s.onboarding)) s.onboarding={templates:[],hires:[]};
+  if(!Array.isArray(s.onboarding.templates)) s.onboarding.templates=[];
+  if(!Array.isArray(s.onboarding.hires)) s.onboarding.hires=[];
+  if(!s.onboarding.templates.length) s.onboarding.templates=defaultOnbTemplates();   // seed once
   // wrap legacy top-level squads into a single "Core Product" tribe
   if(!Array.isArray(s.tribes)){
     s.tribes = [{ id:'tribe_core', name:'Core Product', squads: Array.isArray(s.squads)?s.squads:[] }];
@@ -2618,12 +2730,10 @@ function renderByAssignee(g){
 
   const squads=curSquads().map(s=>s.name);
   const controls=document.createElement('div'); controls.className='ppl-controls';
-  controls.innerHTML=(isAdmin()?`<button class="btn" id="pplManage">⚙ Manage people</button>`:'')+
-    `<label class="ppl-sqf">Squad <select id="pplSqf">`+
+  controls.innerHTML=`<label class="ppl-sqf">Squad <select id="pplSqf">`+
     ['<option value="">All squads</option>', ...squads.map(s=>`<option value="${esc(s)}" ${sqf===s?'selected':''}>${esc(s)}</option>`), `<option value="__none__" ${sqf==='__none__'?'selected':''}>Unassigned</option>`].join('')+
     `</select></label>`;
   main.appendChild(controls);
-  const mng=controls.querySelector('#pplManage'); if(mng) mng.onclick=openPeopleManager;
   controls.querySelector('#pplSqf').onchange=e=>{ state.peopleSquadFilter=e.target.value; render(); };
   const totalAll=list.reduce((s,m)=>s+m.totalSec,0);
   const sum=document.createElement('div'); sum.className='ppl-sumline';
@@ -4459,7 +4569,7 @@ document.getElementById('gantt').addEventListener('scroll', ()=>{ updateTodayMar
 let _resizeTimer=null;
 window.addEventListener('resize',()=>{
   clearTimeout(_resizeTimer);
-  _resizeTimer=setTimeout(()=>{ if(document.getElementById('loginGate').style.display==='none') renderGantt(); },150);
+  _resizeTimer=setTimeout(()=>{ if(document.getElementById('loginGate').style.display==='none' && currentSection==='roadmap') renderGantt(); },150);
 });
 
 document.getElementById('exportBtn').onclick=()=>{
@@ -4551,6 +4661,8 @@ function authError(msg){const e=document.getElementById('gerr');e.textContent=ms
 function showGate(){
   document.getElementById('loginGate').style.display='flex';
   document.getElementById('acct').style.display='none';
+  document.getElementById('appnav').style.display='none';
+  document.querySelectorAll('.app-section').forEach(el=>el.style.display='none');
   initGoogle();
 }
 function showApp(auth){
@@ -4558,9 +4670,29 @@ function showApp(auth){
   currentEmail = (auth.email||'').toLowerCase();
   document.getElementById('loginGate').style.display='none';
   document.getElementById('acct').style.display='flex';
+  document.getElementById('appnav').style.display='flex';
   renderProfile(auth);
-  syncLoad().then(()=>{ startPolling(); startAutoJiraSync(); });   // pull shared copy, watch for changes, auto-sync Jira
+  syncLoad().then(()=>{ startPolling(); startAutoJiraSync();
+    const deep = pendingViewSlug || pendingTribeSlug;   // ?view= / ?tribe= deep link -> go straight to roadmap
+    showSection(deep ? 'roadmap' : (loadSection()||'home'));
+  });
 }
+const SECTION_KEY='hq_section';
+function loadSection(){ try{ return localStorage.getItem(SECTION_KEY); }catch(e){ return null; } }
+let currentSection='home';
+function showSection(name){
+  const secs=['home','roadmap','organization','onboarding'];
+  if(!secs.includes(name)) name='home';
+  currentSection=name;
+  try{ localStorage.setItem(SECTION_KEY,name); }catch(e){}
+  secs.forEach(s=>{ const el=document.getElementById('section-'+s); if(el) el.style.display=(s===name)?'':'none'; });
+  document.querySelectorAll('.appnav-btn').forEach(b=>b.classList.toggle('active', b.dataset.sec===name));
+  const vt=document.getElementById('viewToggle'); if(vt) vt.style.display = (name==='roadmap')?'':'none';   // roadmap-only control
+  if(name==='roadmap') render();
+  else if(name==='organization') renderOrgPage();
+  else if(name==='onboarding') renderOnboarding();
+}
+function renderOrgPage(){ const el=document.getElementById('orgPage'); if(el){ el.innerHTML=''; renderOrgChart(el); } }
 function renderProfile(auth){
   const name=auth.name||auth.email||'', initial=(name.trim()[0]||'?');
   const av=document.getElementById('profileAvatar'), lg=document.getElementById('pmAvatar');
@@ -4605,6 +4737,126 @@ document.getElementById('signOut').onclick=()=>{
   btn.onclick=e=>{ e.stopPropagation(); menu.style.display = menu.style.display==='none' ? 'block' : 'none'; };
   document.addEventListener('click',e=>{ if(!e.target.closest('.profile-wrap')) menu.style.display='none'; });
 })();
+// section navigation (top nav + home hub cards)
+document.querySelectorAll('.appnav-btn').forEach(b=>b.onclick=()=>showSection(b.dataset.sec));
+document.querySelectorAll('.hub-card').forEach(b=>b.onclick=()=>showSection(b.dataset.sec));
+document.getElementById('appTitle').onclick=()=>{ if(idToken) showSection('home'); };
+document.getElementById('appTitle').style.cursor='pointer';
+
+/* ============================ Onboarding ============================ */
+function defaultOnbTemplates(){
+  const t=(name,category,steps)=>({id:'tpl_'+uid(), name, category, steps:steps.map(s=>({id:'st_'+uid(), text:s}))});
+  return [
+    t('Product / General','General',['Company intro & mission','Accounts & access (email, SSO)','Slack channels & tools','Meet your squad','Set up recurring 1:1 with lead','Read the product overview','Dev environment / key logins']),
+    t('Backend','Function',['Clone repos & run locally','CI/CD walkthrough','Database & migrations overview','Coding standards & PR process','Ship a small change to staging','On-call / monitoring intro']),
+    t('Frontend','Function',['Clone web repo & run locally','Design system & component library','Coding standards & PR process','Ship a small UI change','Analytics & feature flags']),
+    t('QA','Function',['Test case management tool','Bug reporting workflow','Regression suite overview','Test environments & devices','Release sign-off process']),
+    t('BA','Function',['Requirements & spec templates','Jira / JPD workflow','Stakeholder map','Grooming & estimation process','Documentation standards']),
+    t('iOS','Function',['Clone iOS repo & build','App architecture overview','Coding standards & PR process','TestFlight & release process']),
+    t('Android','Function',['Clone Android repo & build','App architecture overview','Coding standards & PR process','Play Console & release process']),
+  ];
+}
+function onbState(){ if(!state.onboarding||typeof state.onboarding!=='object') state.onboarding={templates:[],hires:[]}; if(!Array.isArray(state.onboarding.templates)) state.onboarding.templates=[]; if(!Array.isArray(state.onboarding.hires)) state.onboarding.hires=[]; return state.onboarding; }
+async function saveOnboarding(){
+  if(!idToken||updateAvailable||saveBlocked) return;
+  setSync('Saving onboarding…');
+  try{ const r=await apiFetch('/api/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'patchOnboarding', onboarding:onbState()})});
+    if(r.status===401){ handleAuthExpired(); return; }
+    if(r.ok){ const j=await r.json().catch(()=>({})); checkVersion(j.version); setSync('Onboarding saved','ok'); } else setSync('Onboarding save failed','bad');
+  }catch(e){ setSync('Onboarding save failed — offline','bad'); }
+}
+// A hire's checklist = union of steps across their assigned templates (dedup by step id).
+function hireSteps(hire){ const tpls=onbState().templates, out=[], seen=new Set();
+  (hire.templates||[]).forEach(tid=>{ const t=tpls.find(x=>x.id===tid); if(!t) return; (t.steps||[]).forEach(s=>{ if(!seen.has(s.id)){ seen.add(s.id); out.push({...s, tpl:t.name}); } }); });
+  return out; }
+function hireProgress(hire){ const st=hireSteps(hire); const done=st.filter(s=>hire.done&&hire.done[s.id]).length; return {done,total:st.length,pct:st.length?Math.round(done/st.length*100):0}; }
+function renderOnboarding(){
+  const el=document.getElementById('onbPage'); if(!el) return;
+  const admin=isAdmin(), onb=onbState();
+  el.innerHTML=`<div class="onb-head"><div class="onb-h1">🎓 Onboarding</div>
+      ${admin?`<div class="onb-actions"><button class="btn" id="onb_tpls">⚙ Manage templates</button><button class="btn primary" id="onb_add">＋ Add hire</button></div>`:''}</div>
+    <div class="onb-sub">${onb.hires.length} ${onb.hires.length===1?'hire':'hires'} · ${onb.templates.length} template${onb.templates.length!==1?'s':''}</div>
+    <div class="onb-grid" id="onb_grid"></div>`;
+  const grid=el.querySelector('#onb_grid');
+  if(!onb.hires.length){ grid.innerHTML='<div class="onb-empty">No hires yet.'+(admin?' Click “Add hire” to onboard someone.':'')+'</div>'; }
+  onb.hires.slice().sort((a,b)=>(b.startDate||'').localeCompare(a.startDate||'')||(a.name||'').localeCompare(b.name||'')).forEach(hire=>{
+    const pr=hireProgress(hire), steps=hireSteps(hire);
+    const tplNames=(hire.templates||[]).map(tid=>{ const t=onb.templates.find(x=>x.id===tid); return t?t.name:null; }).filter(Boolean);
+    const card=document.createElement('div'); card.className='onb-card';
+    const av=personAvatarHTML({accountId:hire.accountId||hire.id, name:hire.name, avatar:hire.avatar});
+    card.innerHTML=`<div class="onb-c-head"><span class="onb-caret"></span>${av}<div class="onb-c-id"><div class="onb-c-name">${esc(hire.name||'New hire')}</div><div class="onb-c-meta"><span class="onb-c-cnt">${pr.done}/${pr.total} done</span>${hire.startDate?(' · started '+esc(fmtShort(hire.startDate))):''}${hire.role?(' · '+esc(hire.role)):''}</div></div><span class="onb-c-pct">${pr.pct}%</span>${admin?'<button class="onb-del" title="Remove hire">✕</button>':''}</div>
+      <div class="onb-prog"><span style="width:${pr.pct}%"></span></div>
+      <div class="onb-tpls">${tplNames.map(n=>`<span class="onb-tpl">${esc(n)}</span>`).join('')||'<span class="onb-c-meta">No templates assigned</span>'}</div>
+      <div class="onb-body"></div>`;
+    card.querySelector('.onb-c-head').onclick=e=>{ if(e.target.closest('.onb-del')) return; card.classList.toggle('open'); };
+    if(admin){ const del=card.querySelector('.onb-del'); if(del) del.onclick=()=>{ if(!confirm('Remove '+(hire.name||'this hire')+' from onboarding?')) return; onb.hires=onb.hires.filter(h=>h.id!==hire.id); saveOnboarding(); renderOnboarding(); }; }
+    const body=card.querySelector('.onb-body');
+    if(!steps.length){ body.innerHTML='<div class="onb-c-meta" style="padding:8px 0;">Assign a template to add steps.</div>'; }
+    else{
+      const groups={}; steps.forEach(s=>{ (groups[s.tpl]=groups[s.tpl]||[]).push(s); });
+      body.innerHTML=Object.entries(groups).map(([tpl,list])=>`<div class="onb-grp"><div class="onb-grp-h">${esc(tpl)}</div>`+
+        list.map(s=>{ const done=!!(hire.done&&hire.done[s.id]); return `<div class="onb-step${done?' done':''}"><input type="checkbox" data-s="${esc(s.id)}" ${done?'checked':''} ${admin?'':'disabled'}><label>${esc(s.text)}</label></div>`; }).join('')+`</div>`).join('');
+      body.querySelectorAll('.onb-step label').forEach(l=>l.onclick=()=>{ const cb=l.previousElementSibling; if(!cb.disabled){ cb.checked=!cb.checked; cb.onchange(); } });
+      if(admin) body.querySelectorAll('input[type=checkbox]').forEach(cb=>{ cb.onchange=()=>{ const sid=cb.dataset.s; if(!hire.done)hire.done={}; if(cb.checked)hire.done[sid]=true; else delete hire.done[sid];
+        cb.closest('.onb-step').classList.toggle('done',cb.checked);
+        const p2=hireProgress(hire); card.querySelector('.onb-c-pct').textContent=p2.pct+'%'; card.querySelector('.onb-prog span').style.width=p2.pct+'%'; const c=card.querySelector('.onb-c-cnt'); if(c)c.textContent=p2.done+'/'+p2.total+' done';
+        saveOnboarding(); }; });
+    }
+    grid.appendChild(card);
+  });
+  if(admin){ const a=el.querySelector('#onb_add'); if(a)a.onclick=openAddHire; const m=el.querySelector('#onb_tpls'); if(m)m.onclick=openTemplateManager; }
+}
+function openAddHire(){
+  if(!isAdmin()) return; const onb=onbState();
+  const dir=Object.entries(state.people||{}).map(([id,m])=>({id,name:m.name,avatar:m.avatar,role:m.role})).filter(p=>p.name);
+  const sel=new Set();
+  modal.style.width='560px';
+  modal.innerHTML=`<h3>Add hire to onboarding</h3>
+    <div class="field"><label>Name</label><input id="ah_name" placeholder="New hire name…" list="ah_people" autocomplete="off"><datalist id="ah_people">${dir.map(p=>`<option value="${esc(p.name)}">`).join('')}</datalist></div>
+    <div class="field row2"><div style="flex:1"><label>Start date</label><input type="date" id="ah_start"></div><div style="flex:1"><label>Role (optional)</label><input id="ah_role" placeholder="e.g. Backend"></div></div>
+    <div class="field"><label>Assign templates (any number)</label><div class="onb-picker" id="ah_tpls"></div></div>
+    <div class="modal-actions"><button class="btn" id="ah_cancel">Cancel</button><button class="btn primary" id="ah_save">Add hire</button></div>`;
+  const pick=modal.querySelector('#ah_tpls');
+  onb.templates.forEach(t=>{ const lab=document.createElement('label'); lab.className='onb-pick'; const cb=document.createElement('input'); cb.type='checkbox'; cb.onchange=()=>{ if(cb.checked)sel.add(t.id); else sel.delete(t.id); }; lab.appendChild(cb); lab.appendChild(document.createTextNode(' '+t.name+(t.category?(' · '+t.category):''))); pick.appendChild(lab); });
+  // prefill role from directory match as the user types (best-effort)
+  modal.querySelector('#ah_cancel').onclick=closeModal;
+  modal.querySelector('#ah_save').onclick=()=>{
+    const name=modal.querySelector('#ah_name').value.trim(); if(!name){ modal.querySelector('#ah_name').focus(); return; }
+    let accountId='', avatar='', role=modal.querySelector('#ah_role').value.trim();
+    const match=dir.find(p=>nameLooseMatch(name,p.name)); if(match){ accountId=match.id; avatar=match.avatar||''; if(!role) role=match.role||''; }
+    onb.hires.push({ id:'hire_'+uid(), name, accountId, avatar, role, startDate:modal.querySelector('#ah_start').value, templates:[...sel], done:{} });
+    saveOnboarding(); closeModal(); renderOnboarding();
+  };
+  modalBg.classList.add('open'); modal.querySelector('#ah_name').focus();
+}
+function openTemplateManager(){
+  if(!isAdmin()) return; const onb=onbState();
+  const work=JSON.parse(JSON.stringify(onb.templates));
+  modal.style.width='660px';
+  function draw(){
+    modal.innerHTML=`<h3>Onboarding templates</h3>
+      <div style="font-size:12px;color:var(--muted);margin:-6px 0 12px;">Each template is a checklist. A hire can be assigned any number of templates; their list is the union.</div>
+      <div id="tm_list" style="max-height:56vh;overflow-y:auto;"></div>
+      <button class="btn" id="tm_add" style="width:100%;margin-top:8px;">＋ Add template</button>
+      <div class="modal-actions"><button class="btn" id="tm_cancel">Cancel</button><button class="btn primary" id="tm_save">Save</button></div>`;
+    const list=modal.querySelector('#tm_list');
+    work.forEach((t,ti)=>{
+      const box=document.createElement('div'); box.className='tm-tpl';
+      box.innerHTML=`<div class="tm-tpl-head"><input class="tm-name" value="${esc(t.name)}" placeholder="Template name"><input class="tm-cat" value="${esc(t.category||'')}" placeholder="Category"><button class="onb-del tm-deltpl" title="Delete template">✕</button></div><div class="tm-steps"></div><button class="tm-addstep">＋ Add step</button>`;
+      box.querySelector('.tm-name').oninput=e=>t.name=e.target.value;
+      box.querySelector('.tm-cat').oninput=e=>t.category=e.target.value;
+      box.querySelector('.tm-deltpl').onclick=()=>{ work.splice(ti,1); draw(); };
+      const steps=box.querySelector('.tm-steps');
+      (t.steps=t.steps||[]).forEach((s,si)=>{ const r=document.createElement('div'); r.className='tm-step'; r.innerHTML=`<input value="${esc(s.text)}" placeholder="Step description"><button class="onb-del" title="Remove step">✕</button>`; r.querySelector('input').oninput=e=>s.text=e.target.value; r.querySelector('button').onclick=()=>{ t.steps.splice(si,1); draw(); }; steps.appendChild(r); });
+      box.querySelector('.tm-addstep').onclick=()=>{ t.steps.push({id:'st_'+uid(),text:''}); draw(); };
+      list.appendChild(box);
+    });
+    modal.querySelector('#tm_add').onclick=()=>{ work.push({id:'tpl_'+uid(),name:'New template',category:'Function',steps:[]}); draw(); };
+    modal.querySelector('#tm_cancel').onclick=closeModal;
+    modal.querySelector('#tm_save').onclick=()=>{ onb.templates=work.map(t=>({id:t.id,name:(t.name||'').trim()||'Template',category:(t.category||'').trim(),steps:(t.steps||[]).filter(s=>(s.text||'').trim()).map(s=>({id:s.id,text:s.text.trim()}))})); saveOnboarding(); closeModal(); renderOnboarding(); };
+  }
+  draw(); modalBg.classList.add('open');
+}
 
 (function bootstrap(){
   try{ const q=new URL(location.href).searchParams; pendingViewSlug=q.get('view'); pendingTribeSlug=q.get('tribe'); }catch(e){}

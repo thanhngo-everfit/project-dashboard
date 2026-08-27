@@ -170,6 +170,18 @@ button (admin only) still opens the tick-to-apply review.
 
 ---
 
+## App sections (Home hub)
+
+After login you land on a **Home hub** with three workspaces (top nav switches between them, click the
+title to return home):
+- **Roadmap** — the delivery timeline + Jira sync (unchanged).
+- **Organization** — the squad org chart + **Manage people** (moved out of the Roadmap).
+- **Onboarding** — onboard new hires with **stackable role-based templates** (Product/General + Function
+  templates like QA, BA, Backend…). Each template is a checklist; a hire's list is the union of their
+  assigned templates, tracked with checkboxes and a completion %. Admin (`thanhngo@everfit.io`) manages
+  templates and hires; everyone can view. Stored in `state.onboarding` and saved via a targeted
+  `patchOnboarding` merge.
+
 ## Step 5 — Organization view & AI performance evaluation (admin only)
 
 The **🏛️ Organization** tab shows an org chart (Squad Leads → their squads → members, from the
