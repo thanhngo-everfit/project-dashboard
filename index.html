@@ -2609,8 +2609,10 @@ function updateDesignReadyChips(){
 // Marketing view: all projects across squads as a release calendar, grouped by release month.
 function renderListByEnd(g){
   const q=(state.search||'').trim().toLowerCase();
-  // "Completed (no release)" projects never belong in the Marketing/release view.
-  let items=allProjects().filter(x=>x.p.release!=='completed' && teamFilterMatch(x.p) && assigneeFilterMatch(x.p) && tagFilterMatch(x.p.tags) && promoFilterMatch(x.p) && categoryFilterMatch(x.cat.name) && (showCompletedOn()||!x.p.done));
+  // Release calendar: show past releases too (so you can scroll up to earlier months). Only "Completed
+  // (no release)" projects are excluded — a released item belongs on the calendar regardless of the
+  // completed toggle (which isn't even reachable in this view).
+  let items=allProjects().filter(x=>x.p.release!=='completed' && teamFilterMatch(x.p) && assigneeFilterMatch(x.p) && tagFilterMatch(x.p.tags) && promoFilterMatch(x.p) && categoryFilterMatch(x.cat.name));
   if(q) items=items.filter(x=> x.p.name.toLowerCase().includes(q) || (x.cat.name||'').toLowerCase().includes(q) || (x.squad.name||'').toLowerCase().includes(q));
   // group by release month (YYYY-MM of the end date)
   const map=new Map();
@@ -2619,9 +2621,10 @@ function renderListByEnd(g){
   const wrap=document.createElement('div'); wrap.className='mkt';
   if(!keys.length){ const em=document.createElement('div'); em.className='empty'; em.textContent='No projects yet.'; g.appendChild(em); return; }
   const monthLabel=k=>{ if(!k) return 'No release date'; const [y,m]=k.split('-').map(Number); return MONTHS[m-1]+' '+y; };
+  const curMonthKey=(()=>{ const n=new Date(); return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0'); })();
   keys.forEach(k=>{
     const arr=map.get(k).slice().sort((a,b)=>(a.p.end||'').localeCompare(b.p.end||''));
-    const sec=document.createElement('div'); sec.className='mkt-month';
+    const sec=document.createElement('div'); sec.className='mkt-month'; if(k>=curMonthKey && k!=='') sec.dataset.cur='1';
     const h=document.createElement('div'); h.className='mkt-month-h';
     h.innerHTML=`${esc(monthLabel(k))} <span class="cnt">${arr.length} release${arr.length>1?'s':''}</span>`;
     sec.appendChild(h);
@@ -2669,7 +2672,12 @@ function renderListByEnd(g){
     wrap.appendChild(sec);
   });
   g.appendChild(wrap);
+  // On entering the view, land the scroll on the current/next month so past releases sit above (scroll up
+  // to reach them). Don't re-snap on incidental re-renders while you stay on the view.
+  const cur=wrap.querySelector('[data-cur]');
+  if(cur && _mktLastSquad!==state.activeSquad){ _mktLastSquad=state.activeSquad; requestAnimationFrame(()=>cur.scrollIntoView({block:'start'})); }
 }
+let _mktLastSquad=null;
 // Logged seconds -> compact hours label ("2h", "2.5h", "45m", "0h").
 function fmtHours(sec){ sec=Number(sec)||0; if(sec<=0) return '0h'; if(sec<3600) return Math.round(sec/60)+'m'; return (Math.round(sec/360)/10)+'h'; }
 function personAvatarHTML(a){
