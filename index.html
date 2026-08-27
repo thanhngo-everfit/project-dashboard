@@ -4905,22 +4905,23 @@ function defaultOnbTemplates(){
 }
 function onbState(){ if(!state.onboarding||typeof state.onboarding!=='object') state.onboarding={templates:[],hires:[]}; if(!Array.isArray(state.onboarding.templates)) state.onboarding.templates=[]; if(!Array.isArray(state.onboarding.hires)) state.onboarding.hires=[]; return state.onboarding; }
 // Onboarding step types (each item is categorised so a hire sees "what kind of thing" it is).
-const ONB_TYPES=['Reading','Meeting','Workflow','Setup','Task','Video','Review'];
+const ONB_TYPES=['Document','Meeting','Workflow','Setup','Task','Video','Review'];
 const ONB_TYPE_STYLE={
-  Reading:{c:'#1849a9',bg:'#eff8ff',bd:'#b2ddff'}, Meeting:{c:'#6941c6',bg:'#f4f3ff',bd:'#d9d6fe'},
+  Document:{c:'#1849a9',bg:'#eff8ff',bd:'#b2ddff'}, Meeting:{c:'#6941c6',bg:'#f4f3ff',bd:'#d9d6fe'},
   Workflow:{c:'#b54708',bg:'#fffaeb',bd:'#fedf89'}, Setup:{c:'#026aa2',bg:'#f0f9ff',bd:'#b9e6fe'},
   Task:{c:'#475467',bg:'#f2f4f7',bd:'#e4e7ec'}, Video:{c:'#c11574',bg:'#fdf2fa',bd:'#fcceee'},
   Review:{c:'#085d3a',bg:'#d3f8df',bd:'#75e0a7'},
 };
 // Explicit step.type wins; otherwise guess from the text so existing steps still show a sensible type.
 function stepType(s){
+  if(s&&s.type==='Reading') return 'Document';                 // legacy rename
   if(s&&s.type&&ONB_TYPE_STYLE[s.type]) return s.type;
   const t=((s&&s.text)||'').toLowerCase();
   if(/(^|\b)(meet|1:1|intro|introduction|sync|stand[- ]?up|kick[- ]?off)\b/.test(t)) return 'Meeting';
   if(/workflow|runbook|framework|incident|process/.test(t)) return 'Workflow';
   if(/watch|video/.test(t)) return 'Video';
   if(/\breview\b/.test(t)) return 'Review';
-  if(/\b(read|overview|guide|handbook|docs?|documentation|spec)\b/.test(t)) return 'Reading';
+  if(/\b(read|overview|guide|handbook|docs?|documentation|spec)\b/.test(t)) return 'Document';
   if(/set[- ]?up|clone|install|access|environment|build|account|logins?|tool/.test(t)) return 'Setup';
   return 'Task';
 }
