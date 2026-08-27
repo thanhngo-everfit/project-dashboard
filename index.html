@@ -3476,7 +3476,11 @@ function projectRow(p,units,tw){
   const acts = inVirtual() ? [] : [
     {icon:'＋',title:'Add project',fn:()=>openPhaseModal(p)},
     {icon:'✎',title:'Rename category',fn:()=>openProjectModal(p)},
-    {icon:'🗑',title:'Delete',fn:()=>{if(confirm('Delete category "'+p.name+'"?')){p._del=1;activeSquad().projects=activeSquad().projects.filter(x=>x!==p);render();}}},
+    {icon:'🗑',title:'Delete',fn:()=>{
+      const nProj=(p.phases||[]).length;
+      if(nProj>0){ alert('“'+p.name+'” has '+nProj+' project'+(nProj>1?'s':'')+'. Move or delete '+(nProj>1?'them':'it')+' first — a category with projects can’t be deleted.'); return; }
+      if(confirm('Delete empty category "'+p.name+'"?')){p._del=1;activeSquad().projects=activeSquad().projects.filter(x=>x!==p);render();}
+    }},
   ];
   const {left}=leftCell(0,false,p.color||null,p.name+' ('+count+')',acts);
   if(!inVirtual()){
