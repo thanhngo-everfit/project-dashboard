@@ -711,11 +711,48 @@
   .onb-sub{font-size:13px;color:var(--muted);margin-bottom:18px;}
   .onb-actions{margin-left:auto;display:flex;gap:8px;}
   .onb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;}
-  .onb-split{display:flex;gap:22px;align-items:flex-start;}
-  .onb-col-left{width:420px;flex:none;display:flex;flex-direction:column;gap:16px;}
-  .onb-col-right{flex:1;min-width:0;}
-  @media(max-width:1140px){ .onb-split{flex-direction:column;} .onb-col-left{width:100%;} }
   .onb-card.sel{box-shadow:0 0 0 2px #c7d7fe;}
+  /* hire selector chips */
+  .onb-hires{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px;}
+  .onb-hchip{display:flex;align-items:center;gap:9px;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:7px 13px 7px 8px;cursor:pointer;font-family:inherit;}
+  .onb-hchip:hover{border-color:#c7d0e0;}
+  .onb-hchip.sel{border-color:#4c6fff;box-shadow:0 0 0 2px #d7e0ff;background:#f5f8ff;}
+  .onb-hchip .assignee-av,.onb-hchip .assignee-ini{width:30px;height:30px;font-size:11px;flex:none;}
+  .onb-hc-id{display:flex;flex-direction:column;text-align:left;}
+  .onb-hc-name{font-size:13px;font-weight:700;color:var(--text);}
+  .onb-hc-pct{font-size:11px;color:var(--muted);}
+  /* selected-hire hero */
+  .onb-hero{display:flex;align-items:center;gap:14px;padding:14px 16px;border:1px solid var(--border);border-radius:14px;background:var(--panel);margin-bottom:10px;flex-wrap:wrap;}
+  .onb-hero .assignee-av,.onb-hero .assignee-ini{width:46px;height:46px;font-size:15px;flex:none;}
+  .onb-hero-id{flex:1;min-width:150px;}
+  .onb-hero-name{font-size:18px;font-weight:800;color:var(--text);}
+  .onb-hero-meta{font-size:12.5px;color:var(--muted);margin-top:2px;}
+  .onb-hero-prog{width:190px;flex:none;}
+  .onb-hero-pct{font-size:15px;font-weight:800;color:#067647;}
+  .onb-hero .onb-prog{margin:4px 0 3px;border-radius:999px;}
+  .onb-hero-cnt{font-size:11px;color:var(--muted);}
+  .onb-hero-actions{display:flex;gap:8px;flex:none;}
+  .onb-sched-hint{font-size:12px;color:var(--muted);margin:12px 0;}
+  /* schedule lanes (stacked, full width, cards wrap) */
+  .oc-lanes{display:flex;flex-direction:column;gap:14px;}
+  .oc-lane{border:1px solid var(--border);border-radius:14px;background:#f7f9fc;padding:12px 14px;}
+  .oc-lane-uns{background:#fbfbfd;}
+  .oc-lane.drop{outline:2px dashed #4c6fff;outline-offset:-2px;background:#eef4ff;}
+  .oc-lane-h{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:#475467;margin-bottom:10px;}
+  .oc-lane-cnt{background:#fff;border:1px solid var(--border);border-radius:999px;padding:0 8px;font-size:10.5px;color:var(--muted);}
+  .oc-lane-body{display:flex;flex-wrap:wrap;gap:10px;min-height:40px;}
+  .oc-lane-empty{font-size:12px;color:#b0b6c3;padding:12px;border:1px dashed var(--border);border-radius:9px;width:100%;text-align:center;}
+  .oc-card{width:232px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 12px;box-shadow:0 1px 2px rgba(16,24,40,.05);}
+  .oc-card[draggable=true]{cursor:grab;}
+  .oc-card.dragging{opacity:.4;}
+  .oc-card.done{background:#f6fef9;border-color:#a6f4c5;}
+  .oc-top{display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap;}
+  .oc-cb{width:16px;height:16px;flex:none;cursor:pointer;accent-color:#12b76a;margin:0;}
+  .oc-tpl{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.3px;color:#98a2b3;}
+  .oc-name{font-size:13px;line-height:1.4;color:#344054;cursor:pointer;}
+  .oc-card.done .oc-name{color:#98a2b3;text-decoration:line-through;}
+  .oc-name:hover{color:#1570ef;}
+  @media(max-width:560px){ .oc-card{width:100%;} }
   .onb-step-day{flex:none;font-size:9.5px;font-weight:800;color:#3538cd;background:#eef2ff;border:1px solid #c7d7fe;border-radius:5px;padding:1px 5px;}
   /* schedule planner */
   .plan-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px;}
@@ -4997,102 +5034,86 @@ function openStepPanel(hire, step){
 function renderOnboarding(){
   const el=document.getElementById('onbPage'); if(!el) return;
   const admin=isAdmin(), onb=onbState();
+  if(_onbOpenHire && !onb.hires.some(h=>h.id===_onbOpenHire)) _onbOpenHire=null;
+  if(!_onbOpenHire && onb.hires.length) _onbOpenHire=onb.hires[0].id;
   el.innerHTML=`<div class="onb-head"><div class="onb-h1">🎓 Onboarding</div>
       ${admin?`<div class="onb-actions"><button class="btn" id="onb_tpls">⚙ Manage templates</button><button class="btn primary" id="onb_add">＋ Add hire</button></div>`:''}</div>
     <div class="onb-sub">${onb.hires.length} ${onb.hires.length===1?'hire':'hires'} · ${onb.templates.length} template${onb.templates.length!==1?'s':''}</div>
-    <div class="onb-split"><div class="onb-col-left" id="onb_grid"></div><div class="onb-col-right" id="onb_planner"></div></div>`;
-  const grid=el.querySelector('#onb_grid');
-  if(_onbOpenHire && !onb.hires.some(h=>h.id===_onbOpenHire)) _onbOpenHire=null;
-  if(!_onbOpenHire && onb.hires.length) _onbOpenHire=onb.hires[0].id;   // select first hire so the planner shows
-  if(!onb.hires.length){ grid.innerHTML='<div class="onb-empty">No hires yet.'+(admin?' Click “Add hire” to onboard someone.':'')+'</div>'; }
-  onb.hires.slice().sort((a,b)=>(b.startDate||'').localeCompare(a.startDate||'')||(a.name||'').localeCompare(b.name||'')).forEach(hire=>{
-    const pr=hireProgress(hire), steps=hireSteps(hire);
-    const tplNames=(hire.templates||[]).map(tid=>{ const t=onb.templates.find(x=>x.id===tid); return t?t.name:null; }).filter(Boolean);
-    const card=document.createElement('div'); card.className='onb-card';
-    const av=personAvatarHTML({accountId:hire.accountId||hire.id, name:hire.name, avatar:hire.avatar});
-    card.innerHTML=`<div class="onb-c-head"><span class="onb-caret"></span>${av}<div class="onb-c-id"><div class="onb-c-name">${esc(hire.name||'New hire')}</div><div class="onb-c-meta"><span class="onb-c-cnt">${pr.done}/${pr.total} done</span>${hire.startDate?(' · started '+esc(fmtShort(hire.startDate))):''}${hire.role?(' · '+esc(hire.role)):''}</div></div><span class="onb-c-pct">${pr.pct}%</span>${admin?'<button class="onb-del" title="Remove hire">✕</button>':''}</div>
-      <div class="onb-prog"><span style="width:${pr.pct}%"></span></div>
-      <div class="onb-tpls">${tplNames.map(n=>`<span class="onb-tpl">${esc(n)}</span>`).join('')||'<span class="onb-c-meta">No templates assigned</span>'}${admin?'<button class="onb-tpl-edit" title="Assign templates">＋ Templates</button>':''}</div>
-      <div class="onb-body"></div>`;
-    if(hire.id===_onbOpenHire){ card.classList.add('open'); card.classList.add('sel'); }
-    card.querySelector('.onb-c-head').onclick=e=>{ if(e.target.closest('.onb-del')) return; _onbOpenHire=hire.id; renderOnboarding(); };
-    if(admin){ const del=card.querySelector('.onb-del'); if(del) del.onclick=()=>{ if(!confirm('Remove '+(hire.name||'this hire')+' from onboarding?')) return; onb.hires=onb.hires.filter(h=>h.id!==hire.id); saveOnboarding(); renderOnboarding(); }; }
-    if(admin){ const te=card.querySelector('.onb-tpl-edit'); if(te) te.onclick=()=>openAssignTemplates(hire); }
-    const body=card.querySelector('.onb-body');
-    const updProg=()=>{ const p2=hireProgress(hire); card.querySelector('.onb-c-pct').textContent=p2.pct+'%'; card.querySelector('.onb-prog span').style.width=p2.pct+'%'; const c=card.querySelector('.onb-c-cnt'); if(c)c.textContent=p2.done+'/'+p2.total+' done'; };
-    if(!steps.length){ body.innerHTML='<div class="onb-c-meta" style="padding:8px 0;">Assign a template to add steps.</div>'; }
-    else{
-      const groups={}; steps.forEach(s=>{ (groups[s.tpl]=groups[s.tpl]||[]).push(s); });
-      body.innerHTML='';
-      Object.entries(groups).forEach(([tpl,list])=>{
-        const g=document.createElement('div'); g.className='onb-grp';
-        const gh=document.createElement('div'); gh.className='onb-grp-h'; gh.textContent=tpl; g.appendChild(gh);
-        list.forEach(s=>{
-          const done=!!(hire.done&&hire.done[s.id]);
-          const row=document.createElement('div'); row.className='onb-step'+(done?' done':'');
-          const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=done; if(!admin) cb.disabled=true;
-          const ty=stepType(s), tst=ONB_TYPE_STYLE[ty]||{}; const tb=document.createElement('span'); tb.className='onb-type'; tb.textContent=ty; tb.style.cssText=`color:${tst.c};background:${tst.bg};border-color:${tst.bd}`;
-          const lab=document.createElement('span'); lab.className='onb-step-lab'; lab.textContent=s.text;
-          if(s.media||s.link||s.desc||s.doc){ const ic=document.createElement('span'); ic.className='onb-step-more'; ic.textContent = s.media?'▷':(s.doc?'📄':(s.link?'🔗':'ⓘ')); ic.title='Open details'; lab.appendChild(document.createTextNode(' ')); lab.appendChild(ic); }
-          row.appendChild(cb); row.appendChild(tb); row.appendChild(lab);
-          const pday=(hire.plan||{})[s.id]; if(pday){ const db=document.createElement('span'); db.className='onb-step-day'; db.textContent='D'+pday; db.title='Day '+pday; row.appendChild(db); }
-          lab.onclick=()=>openStepPanel(hire, s);
-          if(admin) cb.onchange=()=>{ if(!hire.done)hire.done={}; if(cb.checked)hire.done[s.id]=true; else delete hire.done[s.id]; row.classList.toggle('done',cb.checked); updProg(); saveOnboarding(); if(_spCur&&_spCur.stepId===s.id&&_spCur.hireId===hire.id) openStepPanel(hire,s); };
-          g.appendChild(row);
-        });
-        body.appendChild(g);
-      });
-    }
-    grid.appendChild(card);
+    <div class="onb-hires" id="onb_hires"></div>
+    <div id="onb_detail"></div>`;
+  const hiresEl=el.querySelector('#onb_hires');
+  if(!onb.hires.length){ hiresEl.innerHTML='<div class="onb-empty">No hires yet.'+(admin?' Click “Add hire” to onboard someone.':'')+'</div>'; }
+  onb.hires.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'')).forEach(hire=>{
+    const pr=hireProgress(hire);
+    const chip=document.createElement('button'); chip.className='onb-hchip'+(hire.id===_onbOpenHire?' sel':'');
+    chip.innerHTML=`${personAvatarHTML({accountId:hire.accountId||hire.id,name:hire.name,avatar:hire.avatar})}<span class="onb-hc-id"><span class="onb-hc-name">${esc(hire.name||'New hire')}</span><span class="onb-hc-pct">${pr.pct}% · ${pr.done}/${pr.total}</span></span>`;
+    chip.onclick=()=>{ _onbOpenHire=hire.id; renderOnboarding(); };
+    hiresEl.appendChild(chip);
   });
-  // right pane: the schedule planner for the selected hire
-  const planEl=el.querySelector('#onb_planner');
-  const selHire=onb.hires.find(h=>h.id===_onbOpenHire);
-  if(selHire) renderPlanner(selHire, planEl);
-  else if(planEl) planEl.innerHTML='<div class="plan-empty">Select a hire to plan their schedule.</div>';
+  const detail=el.querySelector('#onb_detail');
+  const hire=onb.hires.find(h=>h.id===_onbOpenHire);
+  if(hire) renderHireSchedule(hire, detail, admin, onb);
   if(admin){ const a=el.querySelector('#onb_add'); if(a)a.onclick=openAddHire; const m=el.querySelector('#onb_tpls'); if(m)m.onclick=openTemplateManager; }
 }
 let _planDrag=null;
-// Day-by-day schedule planner: drag checklist items into Day columns so the hire knows what to do first.
-function renderPlanner(hire, el){
-  if(!el) return;
-  const admin=isAdmin();
-  const steps=hireSteps(hire);
-  if(!steps.length){ el.innerHTML='<div class="plan-empty">Assign a template first — then drag its items into days.</div>'; return; }
+// Selected hire: hero header + full-width schedule lanes (Unscheduled + Day 1..N). Items wrap inside each
+// lane so the page only scrolls vertically. Drag a card between lanes to schedule it; tick to mark done.
+function renderHireSchedule(hire, el, admin, onb){
+  const steps=hireSteps(hire), pr=hireProgress(hire);
+  const tplNames=(hire.templates||[]).map(tid=>{ const t=onb.templates.find(x=>x.id===tid); return t?t.name:null; }).filter(Boolean);
   const plan=hire.plan||(hire.plan={});
   const days=Math.max(3, hire.planDays||3);
-  const byDay={}; for(let d=1;d<=days;d++) byDay[d]=[];
-  const unsched=[];
+  el.innerHTML=`
+    <div class="onb-hero">
+      ${personAvatarHTML({accountId:hire.accountId||hire.id,name:hire.name,avatar:hire.avatar})}
+      <div class="onb-hero-id"><div class="onb-hero-name">${esc(hire.name||'New hire')}</div>
+        <div class="onb-hero-meta">${hire.role?esc(hire.role):''}${hire.startDate?((hire.role?' · ':'')+'started '+esc(fmtShort(hire.startDate))):''}</div></div>
+      <div class="onb-hero-prog"><div class="onb-hero-pct">${pr.pct}%</div><div class="onb-prog"><span style="width:${pr.pct}%"></span></div><div class="onb-hero-cnt">${pr.done}/${pr.total} done</div></div>
+      ${admin?`<div class="onb-hero-actions"><button class="btn" id="oh_tpls">＋ Templates</button><button class="btn" id="oh_del">Remove</button></div>`:''}
+    </div>
+    <div class="onb-tpls">${tplNames.map(n=>`<span class="onb-tpl">${esc(n)}</span>`).join('')||'<span class="onb-c-meta">No templates assigned</span>'}</div>
+    ${admin?'<div class="onb-sched-hint">Drag items between days so the new hire knows what to do first · tick the box when done.</div>':'<div class="onb-sched-hint">Your onboarding schedule — start with Day 1.</div>'}
+    <div class="oc-lanes" id="oc_lanes"></div>
+    ${admin?'<button class="btn" id="oc_addday" style="margin-top:12px;">＋ Add day</button>':''}`;
+  if(admin){
+    const te=el.querySelector('#oh_tpls'); if(te) te.onclick=()=>openAssignTemplates(hire);
+    const del=el.querySelector('#oh_del'); if(del) del.onclick=()=>{ if(!confirm('Remove '+(hire.name||'this hire')+' from onboarding?')) return; onb.hires=onb.hires.filter(h=>h.id!==hire.id); saveOnboarding(); renderOnboarding(); };
+    const ad=el.querySelector('#oc_addday'); if(ad) ad.onclick=()=>{ hire.planDays=days+1; saveOnboarding(); renderOnboarding(); };
+  }
+  const lanes=el.querySelector('#oc_lanes');
+  if(!steps.length){ lanes.innerHTML='<div class="onb-empty">Assign a template to add items to the schedule.</div>'; return; }
+  const byDay={}; for(let d=1;d<=days;d++) byDay[d]=[]; const unsched=[];
   steps.forEach(s=>{ const d=Number(plan[s.id]); if(d>=1&&d<=days) byDay[d].push(s); else unsched.push(s); });
-  el.innerHTML=`<div class="plan-h"><div class="plan-title">📅 Schedule — ${esc(hire.name||'')}</div>${admin?`<button class="btn" id="plan_addday">＋ Add day</button>`:''}</div>
-    ${admin?'<div class="plan-hint">Drag items into a day so the new hire knows what to read first.</div>':''}
-    <div class="plan-cols" id="plan_cols"></div>`;
-  const cols=el.querySelector('#plan_cols');
-  const stepCard=s=>{ const c=document.createElement('div'); c.className='plan-card'; c.dataset.step=s.id; if(admin) c.draggable=true;
-    const done=!!(hire.done&&hire.done[s.id]);
-    c.innerHTML=`<div class="plan-c-top">${stepTypeBadge(s)}<span class="plan-c-tpl">${esc(s.tpl||'')}${done?' · ✓':''}</span></div><div class="plan-c-name">${esc(s.text)}</div>`;
-    c.onclick=()=>openStepPanel(hire,s);
-    if(admin){ c.ondragstart=e=>{ e.dataTransfer.setData('text/plain', s.id); e.dataTransfer.effectAllowed='move'; _planDrag=s.id; c.classList.add('dragging'); }; c.ondragend=()=>{ c.classList.remove('dragging'); _planDrag=null; }; }
-    return c; };
-  const makeCol=(key,label,list,accent)=>{
-    const col=document.createElement('div'); col.className='plan-col'; if(accent) col.classList.add('plan-col-day'); col.dataset.day=key;
-    col.innerHTML=`<div class="plan-col-h"><span>${esc(label)}</span><span class="plan-col-cnt">${list.length}</span></div>`;
-    const body=document.createElement('div'); body.className='plan-col-body';
-    if(!list.length){ const e=document.createElement('div'); e.className='plan-col-empty'; e.textContent=admin?'Drop here':'—'; body.appendChild(e); }
-    list.forEach(s=>body.appendChild(stepCard(s)));
-    col.appendChild(body);
-    if(admin){
-      col.ondragover=e=>{ e.preventDefault(); e.dataTransfer.dropEffect='move'; col.classList.add('drop'); };
-      col.ondragleave=e=>{ if(!col.contains(e.relatedTarget)) col.classList.remove('drop'); };
-      col.ondrop=e=>{ e.preventDefault(); col.classList.remove('drop'); const sid=e.dataTransfer.getData('text/plain')||_planDrag; if(!sid) return;
-        if(key==='0') delete hire.plan[sid]; else hire.plan[sid]=Number(key);
-        saveOnboarding(); renderOnboarding(); };
+  const updProg=()=>{ const p2=hireProgress(hire); const pct=el.querySelector('.onb-hero-pct'); if(pct)pct.textContent=p2.pct+'%'; const bar=el.querySelector('.onb-hero .onb-prog span'); if(bar)bar.style.width=p2.pct+'%'; const c=el.querySelector('.onb-hero-cnt'); if(c)c.textContent=p2.done+'/'+p2.total+' done'; };
+  const card=s=>{ const done=!!(hire.done&&hire.done[s.id]);
+    const c=document.createElement('div'); c.className='oc-card'+(done?' done':''); c.dataset.step=s.id; if(admin) c.draggable=true;
+    const cb=document.createElement('input'); cb.type='checkbox'; cb.className='oc-cb'; cb.checked=done; if(!admin) cb.disabled=true;
+    const top=document.createElement('div'); top.className='oc-top'; top.appendChild(cb); top.insertAdjacentHTML('beforeend', stepTypeBadge(s)+`<span class="oc-tpl">${esc(s.tpl||'')}</span>`);
+    const nm=document.createElement('div'); nm.className='oc-name'; nm.textContent=s.text;
+    if(s.media||s.link||s.desc||s.doc){ const ic=document.createElement('span'); ic.className='onb-step-more'; ic.textContent=s.media?'▷':(s.doc?'📄':(s.link?'🔗':'ⓘ')); nm.appendChild(document.createTextNode(' ')); nm.appendChild(ic); }
+    c.appendChild(top); c.appendChild(nm);
+    nm.onclick=()=>openStepPanel(hire,s);
+    if(admin){ cb.onchange=()=>{ if(!hire.done)hire.done={}; if(cb.checked)hire.done[s.id]=true; else delete hire.done[s.id]; c.classList.toggle('done',cb.checked); updProg(); saveOnboarding(); if(_spCur&&_spCur.stepId===s.id&&_spCur.hireId===hire.id) openStepPanel(hire,s); };
+      c.ondragstart=e=>{ e.dataTransfer.setData('text/plain',s.id); e.dataTransfer.effectAllowed='move'; _planDrag=s.id; c.classList.add('dragging'); };
+      c.ondragend=()=>{ c.classList.remove('dragging'); _planDrag=null; };
     }
-    return col;
+    return c; };
+  const lane=(key,label,list)=>{
+    const ln=document.createElement('div'); ln.className='oc-lane'+(key==='0'?' oc-lane-uns':''); ln.dataset.day=key;
+    ln.innerHTML=`<div class="oc-lane-h"><span>${esc(label)}</span><span class="oc-lane-cnt">${list.length}</span></div>`;
+    const body=document.createElement('div'); body.className='oc-lane-body';
+    if(!list.length){ const e=document.createElement('div'); e.className='oc-lane-empty'; e.textContent=admin?'Drop items here':'—'; body.appendChild(e); }
+    list.forEach(s=>body.appendChild(card(s)));
+    ln.appendChild(body);
+    if(admin){
+      ln.ondragover=e=>{ e.preventDefault(); e.dataTransfer.dropEffect='move'; ln.classList.add('drop'); };
+      ln.ondragleave=e=>{ if(!ln.contains(e.relatedTarget)) ln.classList.remove('drop'); };
+      ln.ondrop=e=>{ e.preventDefault(); ln.classList.remove('drop'); const sid=e.dataTransfer.getData('text/plain')||_planDrag; if(!sid) return; if(key==='0') delete hire.plan[sid]; else hire.plan[sid]=Number(key); saveOnboarding(); renderOnboarding(); };
+    }
+    return ln;
   };
-  cols.appendChild(makeCol('0','Unscheduled', unsched, false));
-  for(let d=1;d<=days;d++) cols.appendChild(makeCol(String(d),'Day '+d, byDay[d], true));
-  if(admin){ const ad=el.querySelector('#plan_addday'); if(ad) ad.onclick=()=>{ hire.planDays=days+1; saveOnboarding(); renderOnboarding(); }; }
+  lanes.appendChild(lane('0','Unscheduled', unsched));
+  for(let d=1;d<=days;d++) lanes.appendChild(lane(String(d),'Day '+d, byDay[d]));
 }
 function openAddHire(){
   if(!isAdmin()) return; const onb=onbState();
