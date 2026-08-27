@@ -92,7 +92,7 @@
   .zoom button:hover{background:#f5f7fa;}
 
   /* ---------- Gantt area ---------- */
-  .gantt{flex:1;overflow:auto;position:relative;background:var(--panel);}
+  .gantt{flex:1;min-height:0;overflow:auto;position:relative;background:var(--panel);}
   .grid{position:relative;min-width:max-content;padding-bottom:40px;}   /* room so the last row's below-bar design label isn't flush with the page bottom */
   .row{display:flex;height:var(--row-h);border-bottom:1px solid #f0f1f4;position:relative;}
   .row.project{background:#fafbfc;}
@@ -689,7 +689,9 @@
   .appnav-btn{border:none;background:transparent;color:var(--muted);font-size:14px;font-weight:700;padding:8px 14px;border-radius:9px;cursor:pointer;font-family:inherit;}
   .appnav-btn:hover{background:#f0f1f4;color:var(--text);}
   .appnav-btn.active{background:#eef2ff;color:#3538cd;}
-  .app-section{}
+  .app-section{flex:1 1 auto;min-height:0;}                                  /* fills the space under the topbar */
+  #section-roadmap{display:flex;flex-direction:column;min-height:0;}         /* so .gantt (flex:1) can scroll again */
+  #section-home,#section-organization,#section-onboarding{overflow:auto;}    /* page sections scroll vertically */
   .hub{max-width:1000px;margin:0 auto;padding:56px 24px;}
   .hub-head{text-align:center;margin-bottom:40px;}
   .hub-title{font-size:34px;font-weight:900;letter-spacing:-.5px;color:var(--text);}
