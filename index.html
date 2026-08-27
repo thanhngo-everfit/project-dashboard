@@ -1324,6 +1324,7 @@ function inferPhaseType(seg){
 const TASK_MAP = Object.fromEntries(TASK_TYPES.map(t=>[t.key,t]));
 
 const DEFAULT_ZOOM={quarter:3, month:3, week:1};   // default zoom per view (Week 100%, Month/Quarter 300%) — declared before load() uses it
+let _squadWFseededNow=false;   // set when migrate freshly imports the Squad Workflow template (declared before load() -> migrate() runs)
 let state = load();
 
 function uid(){return Math.random().toString(36).slice(2,9);}
@@ -1354,7 +1355,6 @@ function load(){
 /* Model: squad.projects[] = Categories; category.phases[] = Projects (each = one bar with
  * name + start/end + color); project.tasks[] = dev work.
  * Migration: older data used project.segments[] (multiple phases) -> collapse into one start/end. */
-let _squadWFseededNow=false;   // set when migrate freshly imports the Squad Workflow template this load
 function migrate(s){
   if(!s.people || typeof s.people!=='object' || Array.isArray(s.people)) s.people={};   // shared directory: accountId -> {name,avatar,squads[],role}
   Object.values(s.people).forEach(m=>{ if(m && typeof m==='object' && !Array.isArray(m)){ if(!Array.isArray(m.squads)) m.squads = m.squad?[m.squad]:[]; delete m.squad; } });   // squad(string) -> squads[]
