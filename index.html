@@ -750,6 +750,31 @@
   .tmp-addstep{width:100%;border:1px dashed var(--border);background:none;border-radius:9px;padding:9px;font-family:inherit;font-size:13px;font-weight:700;color:#3538cd;cursor:pointer;margin-top:4px;}
   .tmp-addstep:hover{background:#f5f8ff;border-color:#4c6fff;}
   @media(max-width:720px){ .tmp-wrap{flex-direction:column;} .tmp-side{width:100%;flex-direction:row;flex-wrap:wrap;} .tmp-sitem{flex:1;min-width:150px;} }
+  /* Admin · permissions */
+  .adm-legend{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px;}
+  .adm-leg{font-size:11.5px;color:#475467;background:#f9fafb;border:1px solid var(--border);border-radius:7px;padding:4px 9px;}
+  .adm-leg b{color:#101828;}
+  .adm-tablewrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px;background:var(--panel);}
+  .adm-table{min-width:560px;}
+  .adm-row{display:flex;align-items:center;border-bottom:1px solid var(--border);}
+  .adm-row:last-child{border-bottom:none;}
+  .adm-head{background:#f9fafb;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:#667085;}
+  .adm-head .adm-c-person{color:#667085;}
+  .adm-c-person{flex:1;min-width:200px;display:flex;align-items:center;gap:10px;padding:10px 14px;}
+  .adm-c-perm{width:104px;flex:none;text-align:center;padding:10px 6px;}
+  .adm-head .adm-c-perm{font-size:11px;}
+  .adm-pi{display:flex;flex-direction:column;line-height:1.25;min-width:0;}
+  .adm-pn{font-size:13.5px;font-weight:700;color:#101828;}
+  .adm-pe{font-size:11.5px;color:#98a2b3;}
+  .adm-sa{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:#3538cd;background:#eef2ff;border:1px solid #c7d7fe;border-radius:5px;padding:1px 5px;margin-left:4px;vertical-align:middle;}
+  .adm-sw{position:relative;display:inline-block;width:38px;height:22px;cursor:pointer;}
+  .adm-sw input{position:absolute;opacity:0;width:0;height:0;}
+  .adm-slider{position:absolute;inset:0;background:#d0d5dd;border-radius:22px;transition:background .15s;}
+  .adm-slider:before{content:'';position:absolute;width:16px;height:16px;left:3px;top:3px;background:#fff;border-radius:50%;transition:transform .15s;box-shadow:0 1px 2px rgba(16,24,40,.2);}
+  .adm-sw input:checked + .adm-slider{background:#12b76a;}
+  .adm-sw input:checked + .adm-slider:before{transform:translateX(16px);}
+  .adm-sw input:disabled + .adm-slider{opacity:.55;cursor:not-allowed;}
+  .adm-note{font-size:12.5px;color:#b54708;background:#fffaeb;border:1px solid #fedf89;border-radius:9px;padding:9px 12px;margin-top:12px;}
   .onb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;}
   .onb-card.sel{box-shadow:0 0 0 2px #c7d7fe;}
   /* hire selector chips */
@@ -1057,6 +1082,11 @@
           <div class="hub-name">Onboarding</div>
           <div class="hub-desc">Onboard new hires with role-based checklists.</div>
         </button>
+        <button class="hub-card" data-sec="admin" id="hubAdmin" style="display:none">
+          <div class="hub-ico">🔐</div>
+          <div class="hub-name">Admin</div>
+          <div class="hub-desc">Manage what each teammate can access.</div>
+        </button>
       </div>
     </div>
   </div>
@@ -1069,6 +1099,11 @@
   <!-- ============ ONBOARDING ============ -->
   <div class="app-section" id="section-onboarding" style="display:none">
     <div class="onb" id="onbPage"></div>
+  </div>
+
+  <!-- ============ ADMIN ============ -->
+  <div class="app-section" id="section-admin" style="display:none">
+    <div class="onb" id="adminPage"></div>
   </div>
 
   <!-- ============ ROADMAP ============ -->
@@ -1202,9 +1237,22 @@
 const GOOGLE_CLIENT_ID = '292601272916-9kkgsjlp8fdo9eskuj0lelufve2h7cvq.apps.googleusercontent.com';
 const ALLOWED_DOMAIN  = 'everfit.io';
 const AUTH_KEY = 'roadmapAuth';
-const ADMIN_EMAIL = 'thanhngo@everfit.io';   // only this user can add/remove tribes & squads
+const ADMIN_EMAIL = 'thanhngo@everfit.io';   // super-admin: full access + manages everyone's permissions
+// Delegatable permission areas. The super-admin can grant any of these to a teammate on the Admin page.
+// (Tribe/squad structure changes and version history stay super-admin-only and are NOT delegatable.)
+const ACCESS_AREAS = [
+  {key:'onboarding',  label:'Onboarding',  desc:'Manage templates, hires and schedules'},
+  {key:'people',      label:'People',      desc:'Edit the people directory & squads'},
+  {key:'evaluations', label:'Evaluations', desc:'View & edit performance evaluations'},
+  {key:'jira',        label:'Jira sync',   desc:'Run Jira sync and import data'},
+];
 let currentEmail = '';
-function isAdmin(){ return currentEmail === ADMIN_EMAIL; }
+let currentAccess = [];   // permission-area keys granted to the signed-in user (super-admin implies all)
+function accessMap(){ return (state && state.access && typeof state.access==='object' && !Array.isArray(state.access)) ? state.access : {}; }
+function isSuperAdmin(){ return currentEmail === ADMIN_EMAIL; }
+function refreshAccess(){ currentAccess = (accessMap()[currentEmail] || []).slice(); }
+function can(area){ return isSuperAdmin() || currentAccess.indexOf(area) >= 0; }   // area-scoped permission
+function isAdmin(){ return isSuperAdmin(); }   // structural roadmap changes + history stay super-admin only
 // Tribe (top level) > Squad > Category > Project
 function activeTribe(){ return (state.tribes||[]).find(t=>t.id===state.activeTribe) || (state.tribes||[])[0]; }
 function curSquads(){ const t=activeTribe(); return t?(t.squads||[]):[]; }
@@ -1347,7 +1395,7 @@ function openSquadPeoplePopup(){
   modal.style.width='640px';
   modal.innerHTML=`<h3>${esc(label||'Squad')} · ${people.length} ${people.length===1?'person':'people'}</h3>
     <div class="spp-wrap">${sections}</div>
-    <div class="modal-actions">${isAdmin()?'<button class="btn" id="spp_manage">Manage people</button>':''}<button class="btn primary" id="spp_close">Close</button></div>`;
+    <div class="modal-actions">${can('people')?'<button class="btn" id="spp_manage">Manage people</button>':''}<button class="btn primary" id="spp_close">Close</button></div>`;
   const mng=modal.querySelector('#spp_manage'); if(mng) mng.onclick=()=>{ closeModal(); openPeopleManager(); };
   modal.querySelector('#spp_close').onclick=closeModal;
   modalBg.classList.add('open');
@@ -1766,7 +1814,7 @@ async function runPool(conc, count, fn){
 async function jiraSync(opts){
   opts=opts||{}; const silent=!!opts.silent;   // silent = auto-sync: apply all changes, no review popup, no status toasts
   if(!idToken) return;
-  if(!silent && !isAdmin()) return;   // the manual review flow is admin-only; auto-sync runs for everyone
+  if(!silent && !can('jira')) return;   // the manual review flow needs Jira-sync access; auto-sync runs for everyone
   const targets=[];   // every project across every tribe that has a Jira link
   (state.tribes||[]).forEach(tr=>(tr.squads||[]).forEach(sq=>(sq.projects||[]).forEach(cat=>(cat.phases||[]).forEach(p=>{
     const key=jiraIssueKey(p.jira); if(key) targets.push({proj:p, key});
@@ -2013,12 +2061,12 @@ function fmtSyncTime(ts){
   return MONTHS[d.getMonth()]+' '+d.getDate()+', '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
 }
 function renderJiraSync(){
-  const admin=isAdmin();   // only thanhngo@everfit.io
+  const jira=can('jira');
   const wrap=document.getElementById('jiraSyncWrap'); if(!wrap) return;
   wrap.style.display = 'flex';   // the "Last Jira sync" timestamp is visible to everyone
-  const hb=document.getElementById('historyBtn'); if(hb) hb.style.display = admin ? 'inline-flex' : 'none';   // admin only
-  const sb=document.getElementById('jiraSyncBtn'); if(sb) sb.style.display = admin ? 'inline-flex' : 'none';  // admin only
-  const ib=document.getElementById('importBtn'); if(ib) ib.style.display = admin ? '' : 'none';   // import (upload) is admin only; export stays for everyone
+  const hb=document.getElementById('historyBtn'); if(hb) hb.style.display = isSuperAdmin() ? 'inline-flex' : 'none';   // version history: super-admin only
+  const sb=document.getElementById('jiraSyncBtn'); if(sb) sb.style.display = jira ? 'inline-flex' : 'none';  // Jira-sync access
+  const ib=document.getElementById('importBtn'); if(ib) ib.style.display = jira ? '' : 'none';   // import (upload) needs Jira access; export stays for everyone
   const t=document.getElementById('jiraSyncTime'); if(t) t.textContent='Last Jira sync: '+fmtSyncTime(state.lastJiraSync);
 }
 // Admin: browse and restore previous saved versions (server keeps the last 30 automatically).
@@ -2144,6 +2192,8 @@ function adoptRemoteData(data, updatedAt, tribesUpdatedAt){
   if(data.people && typeof data.people==='object') state.people = data.people;   // shared people directory
   if(data.evals && typeof data.evals==='object') state.evals = data.evals;   // performance evaluations
   if(data.onboarding && typeof data.onboarding==='object') state.onboarding = data.onboarding;   // onboarding hires + templates
+  if(data.access && typeof data.access==='object') state.access = data.access;   // per-person permission grants
+  refreshAccess();
   if(!state.tribes.find(t=>t.id===state.activeTribe) && state.tribes[0]) state.activeTribe=state.tribes[0].id;
   if(!activeVirtual()){
     const sqs=curSquads();
@@ -3009,7 +3059,7 @@ function renderOrgChart(g){
   const wrap=document.createElement('div'); wrap.className='org';
   const sum=document.createElement('div'); sum.className='org-sum';
   const sumText=document.createElement('span'); sum.appendChild(sumText);
-  if(isAdmin()){ const b=document.createElement('button'); b.className='btn'; b.textContent='⚙ Manage people'; b.style.marginLeft='10px'; b.onclick=openPeopleManager; sum.appendChild(b); }
+  if(can('people')){ const b=document.createElement('button'); b.className='btn'; b.textContent='⚙ Manage people'; b.style.marginLeft='10px'; b.onclick=openPeopleManager; sum.appendChild(b); }
   wrap.appendChild(sum);
 
   // One division per lead: lead card on top, a trunk, then that lead's squads.
@@ -3106,7 +3156,7 @@ function openMemberDetail(accountId){
   const kp=knownPeople().find(p=>p.accountId===accountId)||{};
   const meta=dir[accountId]||{};
   const person={ accountId, name:meta.name||kp.name||'Unknown', avatar:meta.avatar||kp.avatar||'', role:meta.role||kp.role||'', squads:(meta.squads||kp.squads||[]) };
-  const admin=isAdmin();
+  const admin=can('evaluations');
   let period=(mdSel&&mdSel.accountId===accountId&&mdSel.period)||periodList()[0];
   const critNames=criteriaForRole(person.role);
   if(!state.evals) state.evals={};
@@ -3334,7 +3384,7 @@ async function patchEvals(patch){
 }
 // Manage People: assign a squad + role to each known person (shared directory). Admin only.
 function openPeopleManager(){
-  if(!isAdmin()) return;
+  if(!can('people')) return;
   const squads=curSquads().map(s=>s.name);
   const ppl=knownPeople();                                   // mutable working list (manual adds append here)
   const work={}, orig={};
@@ -4892,8 +4942,9 @@ function showApp(auth){
   document.getElementById('acct').style.display='flex';
   document.getElementById('appnav').style.display='flex';
   renderProfile(auth);
-  syncLoad().then(()=>{ startPolling(); startAutoJiraSync();
-    if(_squadWFseededNow && isAdmin()){ _squadWFseededNow=false; saveOnboarding(); }   // persist the one-time import
+  syncLoad().then(()=>{ startPolling(); startAutoJiraSync(); refreshAccess();
+    const ha=document.getElementById('hubAdmin'); if(ha) ha.style.display=isSuperAdmin()?'':'none';
+    if(_squadWFseededNow && can('onboarding')){ _squadWFseededNow=false; saveOnboarding(); }   // persist the one-time import
     const deep = pendingViewSlug || pendingTribeSlug;   // ?view= / ?tribe= deep link -> go straight to roadmap
     showSection(deep ? 'roadmap' : (loadSection()||'home'));
   });
@@ -4902,8 +4953,9 @@ const SECTION_KEY='hq_section';
 function loadSection(){ try{ return localStorage.getItem(SECTION_KEY); }catch(e){ return null; } }
 let currentSection='home';
 function showSection(name){
-  const secs=['home','roadmap','organization','onboarding'];
+  const secs=['home','roadmap','organization','onboarding','admin'];
   if(!secs.includes(name)) name='home';
+  if(name==='admin' && !isSuperAdmin()) name='home';   // Admin page is super-admin only
   currentSection=name;
   try{ localStorage.setItem(SECTION_KEY,name); }catch(e){}
   secs.forEach(s=>{ const el=document.getElementById('section-'+s); if(el) el.style.display=(s===name)?'':'none'; });
@@ -4912,8 +4964,58 @@ function showSection(name){
   if(name==='roadmap') render();
   else if(name==='organization') renderOrgPage();
   else if(name==='onboarding') renderOnboarding();
+  else if(name==='admin') renderAdminPage();
 }
 function renderOrgPage(){ const el=document.getElementById('orgPage'); if(el){ el.innerHTML=''; renderOrgChart(el); } }
+// Persist one person's permission grants via a targeted patch (super-admin only, server-enforced).
+async function saveAccess(email, areas){
+  if(!isSuperAdmin()) return;
+  email=(email||'').toLowerCase();
+  if(!state.access || typeof state.access!=='object' || Array.isArray(state.access)) state.access={};
+  if(areas && areas.length) state.access[email]=areas.slice(); else delete state.access[email];
+  refreshAccess();
+  setSync('Saving permissions…');
+  try{ const r=await apiFetch('/api/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'patchAccess', access:{[email]:(areas&&areas.length)?areas:null}})});
+    if(r.status===401){ handleAuthExpired(); return; }
+    if(r.ok){ const j=await r.json().catch(()=>({})); checkVersion(j.version); setSync('Permissions saved','ok'); }
+    else setSync('Permissions save failed','bad');
+  }catch(e){ setSync('Permissions save failed — offline','bad'); }
+}
+// Admin page: grant delegatable areas (ACCESS_AREAS) to teammates. Super-admin only.
+function renderAdminPage(){
+  const el=document.getElementById('adminPage'); if(!el) return;
+  if(!isSuperAdmin()){ el.innerHTML='<div class="onb-empty">This page is available to the workspace admin only.</div>'; return; }
+  const acc=accessMap();
+  const dir=Object.entries(state.people||{}).map(([id,m])=>({id,...m})).filter(p=>p.name).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  const withEmail=dir.filter(p=>(p.email||'').trim());
+  const noEmail=dir.filter(p=>!(p.email||'').trim());
+  el.innerHTML=`<div class="onb-head"><div class="onb-h1">🔐 Admin · Permissions</div></div>
+    <div class="onb-sub">Grant teammates access to specific areas. You (<b>${esc(ADMIN_EMAIL)}</b>) always have full access and manage this page. Tribe/squad structure changes and version history stay admin-only.</div>
+    <div class="adm-legend">${ACCESS_AREAS.map(a=>`<span class="adm-leg"><b>${esc(a.label)}</b> — ${esc(a.desc)}</span>`).join('')}</div>
+    <div class="adm-tablewrap"><div class="adm-table" id="adm_table"></div></div>
+    ${noEmail.length?`<div class="adm-note">⚠ ${noEmail.length} ${noEmail.length===1?'person has':'people have'} no email set, so they can't be granted access yet. Add emails in <b>Organization → Manage people</b>.</div>`:''}
+    ${withEmail.length?'':'<div class="onb-empty">No people with an email in the directory yet.</div>'}`;
+  const table=el.querySelector('#adm_table');
+  if(!withEmail.length) return;
+  const head=document.createElement('div'); head.className='adm-row adm-head';
+  head.innerHTML=`<div class="adm-c-person">Person</div>${ACCESS_AREAS.map(a=>`<div class="adm-c-perm">${esc(a.label)}</div>`).join('')}`;
+  table.appendChild(head);
+  withEmail.forEach(p=>{
+    const em=(p.email||'').toLowerCase();
+    const isSA=em===ADMIN_EMAIL;
+    const granted=new Set(isSA?ACCESS_AREAS.map(a=>a.key):(acc[em]||[]));
+    const row=document.createElement('div'); row.className='adm-row';
+    row.innerHTML=`<div class="adm-c-person">${personAvatarHTML({accountId:p.id,name:p.name,avatar:p.avatar})}<span class="adm-pi"><span class="adm-pn">${esc(p.name)}${isSA?' <span class="adm-sa">Admin</span>':''}</span><span class="adm-pe">${esc(p.email)}</span></span></div>`+
+      ACCESS_AREAS.map(a=>`<div class="adm-c-perm"><label class="adm-sw"><input type="checkbox" data-em="${esc(em)}" data-area="${a.key}"${granted.has(a.key)?' checked':''}${isSA?' disabled':''}><span class="adm-slider"></span></label></div>`).join('');
+    table.appendChild(row);
+  });
+  table.querySelectorAll('input[type=checkbox]').forEach(cb=>cb.onchange=()=>{
+    const em=cb.dataset.em, area=cb.dataset.area;
+    const cur=new Set(accessMap()[em]||[]);
+    if(cb.checked) cur.add(area); else cur.delete(area);
+    saveAccess(em, [...cur]);
+  });
+}
 function renderProfile(auth){
   const name=auth.name||auth.email||'', initial=(name.trim()[0]||'?');
   const av=document.getElementById('profileAvatar'), lg=document.getElementById('pmAvatar');
@@ -5088,7 +5190,7 @@ const ONB_PRACTICE_Q=[
 function openStepPanel(hire, step){
   const {bg,panel}=ensureStepPanel();
   _spCur={hireId:hire.id, stepId:step.id};
-  const admin=isAdmin(); const done=!!(hire.done&&hire.done[step.id]);
+  const admin=can('onboarding'); const done=!!(hire.done&&hire.done[step.id]);
   const pr=(hire.practice&&hire.practice[step.id])||{learn:'',challenges:'',other:''};
   const hasDetails = step.media||step.desc||step.link||(step.doc&&typeof SQUAD_WF_DOCS!=='undefined'&&SQUAD_WF_DOCS[step.doc]);
   const overviewHTML=`
@@ -5139,7 +5241,7 @@ function openStepPanel(hire, step){
 let _onbView='hires';   // 'hires' | 'templates' (templates is an admin-only in-page editor)
 function renderOnboarding(){
   const el=document.getElementById('onbPage'); if(!el) return;
-  const admin=isAdmin(), onb=onbState();
+  const admin=can('onboarding'), onb=onbState();
   if(!admin) _onbView='hires';
   if(_onbOpenHire && !onb.hires.some(h=>h.id===_onbOpenHire)) _onbOpenHire=null;
   if(!_onbOpenHire && onb.hires.length) _onbOpenHire=onb.hires[0].id;
@@ -5263,7 +5365,7 @@ function renderHireSchedule(hire, el, admin, onb){
   for(let d=from;d<=to;d++) lanes.appendChild(lane(String(d),'Day '+d, byDay[d]));
 }
 function openAddHire(){
-  if(!isAdmin()) return; const onb=onbState();
+  if(!can('onboarding')) return; const onb=onbState();
   const taken=new Set(onb.hires.map(h=>h.accountId).filter(Boolean));
   const dir=Object.entries(state.people||{}).map(([id,m])=>({id,name:m.name,avatar:m.avatar,role:m.role})).filter(p=>p.name).sort((a,b)=>a.name.localeCompare(b.name));
   const avail=dir.filter(p=>!taken.has(p.id));
@@ -5288,7 +5390,7 @@ function openAddHire(){
   modalBg.classList.add('open'); nameSel.focus();
 }
 function openAssignTemplates(hire){
-  if(!isAdmin()) return; const onb=onbState();
+  if(!can('onboarding')) return; const onb=onbState();
   const sel=new Set(hire.templates||[]);
   modal.style.width='520px';
   modal.innerHTML=`<h3>Assign templates — ${esc(hire.name||'')}</h3>

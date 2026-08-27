@@ -26,6 +26,20 @@ const redis = new Redis({
 
 const oauth = new OAuth2Client(CLIENT_ID);
 
+// Permission grants live in state.access = { "<email>": ["onboarding","people",...] }. The super-admin
+// (ADMIN_EMAIL) implicitly has every area. allowArea() is the server-side enforcement of the Admin page.
+const ACCESS_AREA_KEYS = ['onboarding', 'people', 'evaluations', 'jira'];
+function grantedAreas(state, email) {
+  const a = state && state.access;
+  const e = (email || '').toLowerCase();
+  return (a && typeof a === 'object' && !Array.isArray(a) && Array.isArray(a[e])) ? a[e] : [];
+}
+function allowArea(user, state, area) {
+  const e = (user.email || '').toLowerCase();
+  if (e === ADMIN_EMAIL) return true;
+  return grantedAreas(state, e).indexOf(area) >= 0;
+}
+
 async function verify(req) {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
@@ -93,11 +107,11 @@ export default async function handler(req, res) {
       // Targeted merge of the shared people directory only — reads the CURRENT record and updates just
       // `people`, so a person edit never overwrites concurrent tribe/project changes by someone else.
       if (body.action === 'patchPeople') {
-        if ((user.email || '').toLowerCase() !== ADMIN_EMAIL) { res.status(403).json({ error: 'forbidden' }); return; }   // only the admin manages people
         const patch = (body.people && typeof body.people === 'object' && !Array.isArray(body.people)) ? body.people : null;
         if (!patch) { res.status(400).json({ error: 'missing_people' }); return; }
         const cur = await redis.get(KEY);
         const state = (cur && cur.state) ? cur.state : { tribes: [] };
+        if (!allowArea(user, state, 'people')) { res.status(403).json({ error: 'forbidden' }); return; }   // super-admin or 'people' grant
         const merged = { ...(state.people || {}) };            // merge per-accountId (keeps others' edits)
         for (const [k, v] of Object.entries(patch)) { if (v === null) delete merged[k]; else merged[k] = v; }   // null = delete
         state.people = merged;
@@ -109,11 +123,11 @@ export default async function handler(req, res) {
       // Targeted merge of performance evaluations only (admin/manager tool), keyed by accountId then period,
       // so an eval save never overwrites concurrent tribe/project/people changes. value null = delete.
       if (body.action === 'patchEvals') {
-        if ((user.email || '').toLowerCase() !== ADMIN_EMAIL) { res.status(403).json({ error: 'forbidden' }); return; }
         const patch = (body.evals && typeof body.evals === 'object' && !Array.isArray(body.evals)) ? body.evals : null;
         if (!patch) { res.status(400).json({ error: 'missing_evals' }); return; }
         const cur = await redis.get(KEY);
         const state = (cur && cur.state) ? cur.state : { tribes: [] };
+        if (!allowArea(user, state, 'evaluations')) { res.status(403).json({ error: 'forbidden' }); return; }   // super-admin or 'evaluations' grant
         const merged = { ...(state.evals || {}) };
         for (const [id, periods] of Object.entries(patch)) {
           if (periods === null) { delete merged[id]; continue; }
@@ -129,12 +143,32 @@ export default async function handler(req, res) {
       }
       // Targeted replace of the onboarding module only (admin/manager tool) — never touches tribes/people/evals.
       if (body.action === 'patchOnboarding') {
-        if ((user.email || '').toLowerCase() !== ADMIN_EMAIL) { res.status(403).json({ error: 'forbidden' }); return; }
         const onb = (body.onboarding && typeof body.onboarding === 'object' && !Array.isArray(body.onboarding)) ? body.onboarding : null;
         if (!onb) { res.status(400).json({ error: 'missing_onboarding' }); return; }
         const cur = await redis.get(KEY);
         const state = (cur && cur.state) ? cur.state : { tribes: [] };
+        if (!allowArea(user, state, 'onboarding')) { res.status(403).json({ error: 'forbidden' }); return; }   // super-admin or 'onboarding' grant
         state.onboarding = onb;
+        const record = { state, updatedAt: Date.now(), updatedBy: user.email, tribesUpdatedAt: (cur && (cur.tribesUpdatedAt || cur.updatedAt)) || Date.now() };
+        await redis.set(KEY, record);
+        res.status(200).json({ ok: true, updatedAt: record.updatedAt, version: VERSION });
+        return;
+      }
+      // Targeted merge of permission grants only (super-admin only). value: array of areas, or null = revoke all.
+      if (body.action === 'patchAccess') {
+        if ((user.email || '').toLowerCase() !== ADMIN_EMAIL) { res.status(403).json({ error: 'forbidden' }); return; }   // only the super-admin grants permissions
+        const patch = (body.access && typeof body.access === 'object' && !Array.isArray(body.access)) ? body.access : null;
+        if (!patch) { res.status(400).json({ error: 'missing_access' }); return; }
+        const cur = await redis.get(KEY);
+        const state = (cur && cur.state) ? cur.state : { tribes: [] };
+        const merged = { ...((state.access && typeof state.access === 'object' && !Array.isArray(state.access)) ? state.access : {}) };
+        for (const [em, areas] of Object.entries(patch)) {
+          const k = (em || '').toLowerCase();
+          if (!k || k === ADMIN_EMAIL) continue;   // super-admin is implicit, never stored
+          const clean = Array.isArray(areas) ? areas.filter(a => ACCESS_AREA_KEYS.indexOf(a) >= 0) : [];
+          if (clean.length) merged[k] = clean; else delete merged[k];
+        }
+        state.access = merged;
         const record = { state, updatedAt: Date.now(), updatedBy: user.email, tribesUpdatedAt: (cur && (cur.tribesUpdatedAt || cur.updatedAt)) || Date.now() };
         await redis.set(KEY, record);
         res.status(200).json({ ok: true, updatedAt: record.updatedAt, version: VERSION });
@@ -199,6 +233,7 @@ export default async function handler(req, res) {
         if (body.state.tagCreators == null && existing.state.tagCreators) body.state.tagCreators = existing.state.tagCreators;
         if (body.state.evals == null && existing.state.evals) body.state.evals = existing.state.evals;
         if (body.state.onboarding == null && existing.state.onboarding) body.state.onboarding = existing.state.onboarding;
+        if (body.state.access == null && existing.state.access) body.state.access = existing.state.access;
       }
       // Snapshot the version we're about to replace so any bad save is recoverable (keep last 30).
       // Skip when only metadata changed (e.g. auto-sync bumping lastJiraSync with identical tribes) so

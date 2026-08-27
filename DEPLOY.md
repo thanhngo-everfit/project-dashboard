@@ -182,6 +182,23 @@ title to return home):
   templates and hires; everyone can view. Stored in `state.onboarding` and saved via a targeted
   `patchOnboarding` merge.
 
+## Admin · Permissions (delegated access)
+
+The **Home hub** shows an **🔐 Admin** card to the super-admin (`thanhngo@everfit.io`) only.
+It opens a permissions page where the super-admin can grant teammates access to specific areas:
+
+- **Onboarding** — manage templates, hires and schedules.
+- **People** — edit the people directory & squads.
+- **Evaluations** — view & edit performance evaluations.
+- **Jira sync** — run Jira sync and import data.
+
+Grants are stored in `state.access = { "<email>": ["onboarding", ...] }` and saved via a targeted
+`patchAccess` action (super-admin only). Access is **enforced server-side**: `patchPeople`, `patchEvals`
+and `patchOnboarding` accept the super-admin *or* anyone holding the matching grant (`api/state.js`
+`allowArea`). Tribe/squad **structure changes** and **version history/restore** remain super-admin-only
+and are **not** delegatable. In the client, `can('<area>')` gates each feature; `isAdmin()` still means
+the super-admin.
+
 ## Step 5 — Organization view & AI performance evaluation (admin only)
 
 The **🏛️ Organization** tab shows an org chart (Squad Leads → their squads → members, from the
