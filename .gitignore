@@ -9,3 +9,8 @@ node_modules/
 # Local env (never commit secrets)
 .env
 .env.*
+
+# Local reference material (not part of the app)
+Squad Workflow/
+*.docx
+*.xlsx

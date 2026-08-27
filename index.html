@@ -1354,6 +1354,7 @@ function load(){
 /* Model: squad.projects[] = Categories; category.phases[] = Projects (each = one bar with
  * name + start/end + color); project.tasks[] = dev work.
  * Migration: older data used project.segments[] (multiple phases) -> collapse into one start/end. */
+let _squadWFseededNow=false;   // set when migrate freshly imports the Squad Workflow template this load
 function migrate(s){
   if(!s.people || typeof s.people!=='object' || Array.isArray(s.people)) s.people={};   // shared directory: accountId -> {name,avatar,squads[],role}
   Object.values(s.people).forEach(m=>{ if(m && typeof m==='object' && !Array.isArray(m)){ if(!Array.isArray(m.squads)) m.squads = m.squad?[m.squad]:[]; delete m.squad; } });   // squad(string) -> squads[]
@@ -1362,6 +1363,11 @@ function migrate(s){
   if(!Array.isArray(s.onboarding.templates)) s.onboarding.templates=[];
   if(!Array.isArray(s.onboarding.hires)) s.onboarding.hires=[];
   if(!s.onboarding.templates.length) s.onboarding.templates=defaultOnbTemplates();   // seed once
+  // One-time import of the Squad Workflow template (Core Product). Persisted flag lets you delete it later.
+  if(!s.onboarding._seededSquadWF){
+    if(!s.onboarding.templates.some(t=>t.id==='tpl_squadwf')){ s.onboarding.templates.push(squadWorkflowTemplate()); _squadWFseededNow=true; }
+    s.onboarding._seededSquadWF=true;
+  }
   // wrap legacy top-level squads into a single "Core Product" tribe
   if(!Array.isArray(s.tribes)){
     s.tribes = [{ id:'tribe_core', name:'Core Product', squads: Array.isArray(s.squads)?s.squads:[] }];
@@ -4703,6 +4709,7 @@ function showApp(auth){
   document.getElementById('appnav').style.display='flex';
   renderProfile(auth);
   syncLoad().then(()=>{ startPolling(); startAutoJiraSync();
+    if(_squadWFseededNow && isAdmin()){ _squadWFseededNow=false; saveOnboarding(); }   // persist the one-time import
     const deep = pendingViewSlug || pendingTribeSlug;   // ?view= / ?tribe= deep link -> go straight to roadmap
     showSection(deep ? 'roadmap' : (loadSection()||'home'));
   });
@@ -4787,6 +4794,22 @@ function defaultOnbTemplates(){
   ];
 }
 function onbState(){ if(!state.onboarding||typeof state.onboarding!=='object') state.onboarding={templates:[],hires:[]}; if(!Array.isArray(state.onboarding.templates)) state.onboarding.templates=[]; if(!Array.isArray(state.onboarding.hires)) state.onboarding.hires=[]; return state.onboarding; }
+// "Core Product · Squad Workflow" template, imported from the Squad Workflow docs. Fixed ids so it seeds
+// once and completion state stays stable. Add Google Drive links per step in Manage templates.
+function squadWorkflowTemplate(){
+  return {id:'tpl_squadwf', name:'Squad Workflow', category:'Core Product', steps:[
+    {id:'swf_framework', text:'Engineering Squad Framework', link:'', media:'',
+      desc:'The foundation — read first. How squads are structured; the Contact Point & Co-Worker roles; how tasks are distributed and how to check feature progress; per-platform development & cross-review matrix; sprint ceremonies; daily reporting (individual update → Contact Point platform status → SM consolidated squad report); and the bug reporting & investigation workflow with severity SLAs.'},
+    {id:'swf_taskimpl', text:'Task Implementation Workflow', link:'', media:'',
+      desc:'End-to-end feature delivery. Classify the feature, then follow Path A (New/Challenged) or Path B (Established); delegate to QA + Developer; the RACI matrix per path; event-tracking delegation, spec requirements and domain routing; escalation rules; and the expected deliverables.'},
+    {id:'swf_ai', text:'AI-Augmented Squad Workflow (Claude)', link:'', media:'',
+      desc:'How each role — BA, QA, Developer, Scrum Master — uses AI across the full feature lifecycle to accelerate specs, test cases, implementation, and reporting.'},
+    {id:'swf_devops', text:'DevOps Request Workflow — Squad Model', link:'', media:'',
+      desc:'How to request DevOps support. The approval matrix; request categories (Slack request, source-code access, infra setup, infra read/write access, release process); ready-to-use request templates for each; how to track progress; hard rules not to skip; and who to contact.'},
+    {id:'swf_incident', text:'Incident Resolution Workflow', link:'', media:'',
+      desc:'The production incident runbook. Severity classification and roles/ownership; the technical resolution spine (triage → assess & contain → diagnose → decide the fix → emergency change control → data remediation → verify & recover); the parallel Communication and Customer Success tracks; RCA and post-incident prevention; and the First 60 Minutes quick card.'},
+  ]};
+}
 async function saveOnboarding(){
   if(!idToken||updateAvailable||saveBlocked) return;
   setSync('Saving onboarding…');
