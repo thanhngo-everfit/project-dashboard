@@ -711,6 +711,29 @@
   .onb-sub{font-size:13px;color:var(--muted);margin-bottom:18px;}
   .onb-actions{margin-left:auto;display:flex;gap:8px;}
   .onb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;}
+  .onb-split{display:flex;gap:22px;align-items:flex-start;}
+  .onb-col-left{width:420px;flex:none;display:flex;flex-direction:column;gap:16px;}
+  .onb-col-right{flex:1;min-width:0;}
+  @media(max-width:1140px){ .onb-split{flex-direction:column;} .onb-col-left{width:100%;} }
+  .onb-card.sel{box-shadow:0 0 0 2px #c7d7fe;}
+  .onb-step-day{flex:none;font-size:9.5px;font-weight:800;color:#3538cd;background:#eef2ff;border:1px solid #c7d7fe;border-radius:5px;padding:1px 5px;}
+  /* schedule planner */
+  .plan-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px;}
+  .plan-title{font-size:16px;font-weight:800;color:var(--text);}
+  .plan-hint{font-size:12px;color:var(--muted);margin-bottom:12px;}
+  .plan-cols{display:flex;gap:12px;overflow-x:auto;padding-bottom:10px;align-items:flex-start;}
+  .plan-col{flex:1 1 0;min-width:190px;background:#f7f9fc;border:1px solid var(--border);border-radius:12px;padding:10px;}
+  .plan-col-day{background:#fbfcff;border-color:#dbe4ff;}
+  .plan-col.drop{outline:2px dashed #4c6fff;outline-offset:-2px;background:#eef4ff;}
+  .plan-col-h{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:#475467;margin-bottom:9px;display:flex;align-items:center;justify-content:space-between;}
+  .plan-col-cnt{background:#fff;border:1px solid var(--border);border-radius:999px;padding:0 7px;color:var(--muted);font-size:10.5px;}
+  .plan-col-body{min-height:44px;display:flex;flex-direction:column;gap:8px;}
+  .plan-col-empty{font-size:11px;color:#b0b6c3;text-align:center;padding:14px 4px;border:1px dashed var(--border);border-radius:8px;}
+  .plan-card{background:#fff;border:1px solid var(--border);border-radius:9px;padding:8px 10px;cursor:pointer;box-shadow:0 1px 2px rgba(16,24,40,.05);}
+  .plan-card[draggable=true]{cursor:grab;}
+  .plan-card.dragging{opacity:.4;}
+  .plan-c-tpl{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.3px;color:#6941c6;}
+  .plan-c-name{font-size:12.5px;color:#344054;line-height:1.35;margin-top:2px;}
   .onb-card{border:1px solid var(--border);border-radius:14px;background:var(--panel);overflow:hidden;box-shadow:0 1px 3px rgba(16,24,40,.05);}
   .onb-c-head{display:flex;align-items:center;gap:11px;padding:13px 15px;border-bottom:1px solid var(--border);cursor:pointer;}
   .onb-c-head:hover{background:#f9fafb;}
@@ -4950,8 +4973,10 @@ function renderOnboarding(){
   el.innerHTML=`<div class="onb-head"><div class="onb-h1">🎓 Onboarding</div>
       ${admin?`<div class="onb-actions"><button class="btn" id="onb_tpls">⚙ Manage templates</button><button class="btn primary" id="onb_add">＋ Add hire</button></div>`:''}</div>
     <div class="onb-sub">${onb.hires.length} ${onb.hires.length===1?'hire':'hires'} · ${onb.templates.length} template${onb.templates.length!==1?'s':''}</div>
-    <div class="onb-grid" id="onb_grid"></div>`;
+    <div class="onb-split"><div class="onb-col-left" id="onb_grid"></div><div class="onb-col-right" id="onb_planner"></div></div>`;
   const grid=el.querySelector('#onb_grid');
+  if(_onbOpenHire && !onb.hires.some(h=>h.id===_onbOpenHire)) _onbOpenHire=null;
+  if(!_onbOpenHire && onb.hires.length) _onbOpenHire=onb.hires[0].id;   // select first hire so the planner shows
   if(!onb.hires.length){ grid.innerHTML='<div class="onb-empty">No hires yet.'+(admin?' Click “Add hire” to onboard someone.':'')+'</div>'; }
   onb.hires.slice().sort((a,b)=>(b.startDate||'').localeCompare(a.startDate||'')||(a.name||'').localeCompare(b.name||'')).forEach(hire=>{
     const pr=hireProgress(hire), steps=hireSteps(hire);
@@ -4962,8 +4987,8 @@ function renderOnboarding(){
       <div class="onb-prog"><span style="width:${pr.pct}%"></span></div>
       <div class="onb-tpls">${tplNames.map(n=>`<span class="onb-tpl">${esc(n)}</span>`).join('')||'<span class="onb-c-meta">No templates assigned</span>'}${admin?'<button class="onb-tpl-edit" title="Assign templates">＋ Templates</button>':''}</div>
       <div class="onb-body"></div>`;
-    if(hire.id===_onbOpenHire) card.classList.add('open');
-    card.querySelector('.onb-c-head').onclick=e=>{ if(e.target.closest('.onb-del')) return; card.classList.toggle('open'); _onbOpenHire=card.classList.contains('open')?hire.id:null; };
+    if(hire.id===_onbOpenHire){ card.classList.add('open'); card.classList.add('sel'); }
+    card.querySelector('.onb-c-head').onclick=e=>{ if(e.target.closest('.onb-del')) return; _onbOpenHire=hire.id; renderOnboarding(); };
     if(admin){ const del=card.querySelector('.onb-del'); if(del) del.onclick=()=>{ if(!confirm('Remove '+(hire.name||'this hire')+' from onboarding?')) return; onb.hires=onb.hires.filter(h=>h.id!==hire.id); saveOnboarding(); renderOnboarding(); }; }
     if(admin){ const te=card.querySelector('.onb-tpl-edit'); if(te) te.onclick=()=>openAssignTemplates(hire); }
     const body=card.querySelector('.onb-body');
@@ -4982,6 +5007,7 @@ function renderOnboarding(){
           const lab=document.createElement('span'); lab.className='onb-step-lab'; lab.textContent=s.text;
           if(s.media||s.link||s.desc||s.doc){ const ic=document.createElement('span'); ic.className='onb-step-more'; ic.textContent = s.media?'▷':(s.doc?'📄':(s.link?'🔗':'ⓘ')); ic.title='Open details'; lab.appendChild(document.createTextNode(' ')); lab.appendChild(ic); }
           row.appendChild(cb); row.appendChild(lab);
+          const pday=(hire.plan||{})[s.id]; if(pday){ const db=document.createElement('span'); db.className='onb-step-day'; db.textContent='D'+pday; db.title='Day '+pday; row.appendChild(db); }
           lab.onclick=()=>openStepPanel(hire, s);
           if(admin) cb.onchange=()=>{ if(!hire.done)hire.done={}; if(cb.checked)hire.done[s.id]=true; else delete hire.done[s.id]; row.classList.toggle('done',cb.checked); updProg(); saveOnboarding(); if(_spCur&&_spCur.stepId===s.id&&_spCur.hireId===hire.id) openStepPanel(hire,s); };
           g.appendChild(row);
@@ -4991,7 +5017,54 @@ function renderOnboarding(){
     }
     grid.appendChild(card);
   });
+  // right pane: the schedule planner for the selected hire
+  const planEl=el.querySelector('#onb_planner');
+  const selHire=onb.hires.find(h=>h.id===_onbOpenHire);
+  if(selHire) renderPlanner(selHire, planEl);
+  else if(planEl) planEl.innerHTML='<div class="plan-empty">Select a hire to plan their schedule.</div>';
   if(admin){ const a=el.querySelector('#onb_add'); if(a)a.onclick=openAddHire; const m=el.querySelector('#onb_tpls'); if(m)m.onclick=openTemplateManager; }
+}
+let _planDrag=null;
+// Day-by-day schedule planner: drag checklist items into Day columns so the hire knows what to do first.
+function renderPlanner(hire, el){
+  if(!el) return;
+  const admin=isAdmin();
+  const steps=hireSteps(hire);
+  if(!steps.length){ el.innerHTML='<div class="plan-empty">Assign a template first — then drag its items into days.</div>'; return; }
+  const plan=hire.plan||(hire.plan={});
+  const days=Math.max(3, hire.planDays||3);
+  const byDay={}; for(let d=1;d<=days;d++) byDay[d]=[];
+  const unsched=[];
+  steps.forEach(s=>{ const d=Number(plan[s.id]); if(d>=1&&d<=days) byDay[d].push(s); else unsched.push(s); });
+  el.innerHTML=`<div class="plan-h"><div class="plan-title">📅 Schedule — ${esc(hire.name||'')}</div>${admin?`<button class="btn" id="plan_addday">＋ Add day</button>`:''}</div>
+    ${admin?'<div class="plan-hint">Drag items into a day so the new hire knows what to read first.</div>':''}
+    <div class="plan-cols" id="plan_cols"></div>`;
+  const cols=el.querySelector('#plan_cols');
+  const stepCard=s=>{ const c=document.createElement('div'); c.className='plan-card'; c.dataset.step=s.id; if(admin) c.draggable=true;
+    const done=!!(hire.done&&hire.done[s.id]);
+    c.innerHTML=`<div class="plan-c-tpl">${esc(s.tpl||'')}${done?' · ✓':''}</div><div class="plan-c-name">${esc(s.text)}</div>`;
+    c.onclick=()=>openStepPanel(hire,s);
+    if(admin){ c.ondragstart=e=>{ e.dataTransfer.setData('text/plain', s.id); e.dataTransfer.effectAllowed='move'; _planDrag=s.id; c.classList.add('dragging'); }; c.ondragend=()=>{ c.classList.remove('dragging'); _planDrag=null; }; }
+    return c; };
+  const makeCol=(key,label,list,accent)=>{
+    const col=document.createElement('div'); col.className='plan-col'; if(accent) col.classList.add('plan-col-day'); col.dataset.day=key;
+    col.innerHTML=`<div class="plan-col-h"><span>${esc(label)}</span><span class="plan-col-cnt">${list.length}</span></div>`;
+    const body=document.createElement('div'); body.className='plan-col-body';
+    if(!list.length){ const e=document.createElement('div'); e.className='plan-col-empty'; e.textContent=admin?'Drop here':'—'; body.appendChild(e); }
+    list.forEach(s=>body.appendChild(stepCard(s)));
+    col.appendChild(body);
+    if(admin){
+      col.ondragover=e=>{ e.preventDefault(); e.dataTransfer.dropEffect='move'; col.classList.add('drop'); };
+      col.ondragleave=e=>{ if(!col.contains(e.relatedTarget)) col.classList.remove('drop'); };
+      col.ondrop=e=>{ e.preventDefault(); col.classList.remove('drop'); const sid=e.dataTransfer.getData('text/plain')||_planDrag; if(!sid) return;
+        if(key==='0') delete hire.plan[sid]; else hire.plan[sid]=Number(key);
+        saveOnboarding(); renderOnboarding(); };
+    }
+    return col;
+  };
+  cols.appendChild(makeCol('0','Unscheduled', unsched, false));
+  for(let d=1;d<=days;d++) cols.appendChild(makeCol(String(d),'Day '+d, byDay[d], true));
+  if(admin){ const ad=el.querySelector('#plan_addday'); if(ad) ad.onclick=()=>{ hire.planDays=days+1; saveOnboarding(); renderOnboarding(); }; }
 }
 function openAddHire(){
   if(!isAdmin()) return; const onb=onbState();
