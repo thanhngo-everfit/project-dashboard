@@ -5125,7 +5125,7 @@ function renderHireSchedule(hire, el, admin, onb){
   };
   lanes.appendChild(lane('0','Unscheduled', unsched));
   // Week tabs (7 days each) so the long Day 1..60 list stays navigable.
-  const WEEK_LEN=7, weeks=Math.ceil(days/WEEK_LEN);
+  const WEEK_LEN=5, weeks=Math.ceil(days/WEEK_LEN);   // Mon–Fri working week (no weekends)
   if(_onbWeek<1||_onbWeek>weeks) _onbWeek=1;
   const tabs=document.createElement('div'); tabs.className='oc-weeks';
   for(let w=1;w<=weeks;w++){
