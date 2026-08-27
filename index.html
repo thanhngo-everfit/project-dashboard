@@ -744,8 +744,9 @@
   .tm-step input{flex:1;font-size:12.5px;padding:5px 8px;border:1px solid var(--border);border-radius:7px;font-family:inherit;}
   .tm-addstep{font-size:12px;color:#1570ef;background:none;border:none;cursor:pointer;padding:4px 2px;font-weight:600;}
   .onb-picker{display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:9px;padding:8px;}
-  .onb-pick{display:flex;align-items:center;gap:8px;font-size:13px;padding:4px;border-radius:6px;cursor:pointer;}
-  .onb-pick:hover{background:#f2f5fb;}
+  .onb-picker label.onb-pick{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:600;color:var(--text);text-transform:none;letter-spacing:0;margin:0;padding:6px 8px;border-radius:7px;cursor:pointer;}
+  .onb-picker label.onb-pick:hover{background:#f2f5fb;}
+  .onb-picker input[type=checkbox]{width:17px;height:17px;flex:none;margin:0;padding:0;accent-color:#4c6fff;}
 
   /* ---------- Login gate ---------- */
   .gate{position:fixed;inset:0;z-index:1000;background:#fff;display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px;text-align:center;}
@@ -4808,26 +4809,28 @@ function renderOnboarding(){
 }
 function openAddHire(){
   if(!isAdmin()) return; const onb=onbState();
-  const dir=Object.entries(state.people||{}).map(([id,m])=>({id,name:m.name,avatar:m.avatar,role:m.role})).filter(p=>p.name);
+  const taken=new Set(onb.hires.map(h=>h.accountId).filter(Boolean));
+  const dir=Object.entries(state.people||{}).map(([id,m])=>({id,name:m.name,avatar:m.avatar,role:m.role})).filter(p=>p.name).sort((a,b)=>a.name.localeCompare(b.name));
+  const avail=dir.filter(p=>!taken.has(p.id));
   const sel=new Set();
   modal.style.width='560px';
   modal.innerHTML=`<h3>Add hire to onboarding</h3>
-    <div class="field"><label>Name</label><input id="ah_name" placeholder="New hire name…" list="ah_people" autocomplete="off"><datalist id="ah_people">${dir.map(p=>`<option value="${esc(p.name)}">`).join('')}</datalist></div>
+    ${avail.length?'':'<div style="font-size:13px;color:var(--muted);margin:-4px 0 12px;">Everyone in the directory is already onboarding. Add more people in <b>Organization → Manage people</b> first.</div>'}
+    <div class="field"><label>Person</label><select id="ah_name"><option value="">— Select from directory —</option>${avail.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}${p.role?(' · '+esc(p.role)):''}</option>`).join('')}</select></div>
     <div class="field row2"><div style="flex:1"><label>Start date</label><input type="date" id="ah_start"></div><div style="flex:1"><label>Role (optional)</label><input id="ah_role" placeholder="e.g. Backend"></div></div>
     <div class="field"><label>Assign templates (any number)</label><div class="onb-picker" id="ah_tpls"></div></div>
     <div class="modal-actions"><button class="btn" id="ah_cancel">Cancel</button><button class="btn primary" id="ah_save">Add hire</button></div>`;
   const pick=modal.querySelector('#ah_tpls');
-  onb.templates.forEach(t=>{ const lab=document.createElement('label'); lab.className='onb-pick'; const cb=document.createElement('input'); cb.type='checkbox'; cb.onchange=()=>{ if(cb.checked)sel.add(t.id); else sel.delete(t.id); }; lab.appendChild(cb); lab.appendChild(document.createTextNode(' '+t.name+(t.category?(' · '+t.category):''))); pick.appendChild(lab); });
-  // prefill role from directory match as the user types (best-effort)
+  onb.templates.forEach(t=>{ const lab=document.createElement('label'); lab.className='onb-pick'; const cb=document.createElement('input'); cb.type='checkbox'; cb.onchange=()=>{ if(cb.checked)sel.add(t.id); else sel.delete(t.id); }; lab.appendChild(cb); lab.appendChild(document.createTextNode(t.name+(t.category?(' · '+t.category):''))); pick.appendChild(lab); });
+  const nameSel=modal.querySelector('#ah_name'), roleInp=modal.querySelector('#ah_role');
+  nameSel.onchange=()=>{ const p=dir.find(x=>x.id===nameSel.value); if(p && !roleInp.value) roleInp.value=p.role||''; };
   modal.querySelector('#ah_cancel').onclick=closeModal;
   modal.querySelector('#ah_save').onclick=()=>{
-    const name=modal.querySelector('#ah_name').value.trim(); if(!name){ modal.querySelector('#ah_name').focus(); return; }
-    let accountId='', avatar='', role=modal.querySelector('#ah_role').value.trim();
-    const match=dir.find(p=>nameLooseMatch(name,p.name)); if(match){ accountId=match.id; avatar=match.avatar||''; if(!role) role=match.role||''; }
-    onb.hires.push({ id:'hire_'+uid(), name, accountId, avatar, role, startDate:modal.querySelector('#ah_start').value, templates:[...sel], done:{} });
+    const p=dir.find(x=>x.id===nameSel.value); if(!p){ nameSel.focus(); return; }
+    onb.hires.push({ id:'hire_'+uid(), name:p.name, accountId:p.id, avatar:p.avatar||'', role:roleInp.value.trim()||p.role||'', startDate:modal.querySelector('#ah_start').value, templates:[...sel], done:{} });
     saveOnboarding(); closeModal(); renderOnboarding();
   };
-  modalBg.classList.add('open'); modal.querySelector('#ah_name').focus();
+  modalBg.classList.add('open'); nameSel.focus();
 }
 function openTemplateManager(){
   if(!isAdmin()) return; const onb=onbState();
