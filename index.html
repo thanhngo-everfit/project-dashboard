@@ -3388,12 +3388,13 @@ function phaseRow(cat,proj,units,tw){
     if(proj.progress && proj.progress.total){   // delivery completion from linked Jira tickets
       const p=proj.progress, pct=Math.max(0,Math.min(100,p.pct)), u=p.unit==='pts'?' pts':' tasks';
       const donePct=p.total?p.done/p.total*100:0, qaPct=p.total?(p.qa||0)/p.total*100:0;
-      const badge=document.createElement('span'); badge.className='pctbadge'; badge.textContent=pct+'%'; bar.appendChild(badge);
+      const rem=Math.max(0, Math.round((p.total-p.done-(p.qa||0))*10)/10), remU=p.unit==='pts'?'p':'';
+      const badge=document.createElement('span'); badge.className='pctbadge'; badge.textContent = rem>0 ? (pct+'% · '+rem+remU+' left') : (pct+'%'); bar.appendChild(badge);
       const pf=document.createElement('div'); pf.className='pfill';
       const g=document.createElement('span'); g.className='seg-done'; g.style.width=donePct+'%';
       const a=document.createElement('span'); a.className='seg-qa'; a.style.width=qaPct+'%';
       pf.appendChild(g); pf.appendChild(a); bar.appendChild(pf);
-      bar.title='Delivery: '+p.done+' done'+(p.qa?(' · '+p.qa+' in QA'):'')+' / '+p.total+u+(p.unit==='pts'?(' ('+(p.tasks||0)+' tasks)'):'')+' — '+pct+'%';
+      bar.title='Delivery: '+p.done+' done'+(p.qa?(' · '+p.qa+' in QA'):'')+' / '+p.total+u+(p.unit==='pts'?(' ('+(p.tasks||0)+' tasks)'):'')+' — '+pct+'% · '+rem+remU+' left';
     }
     placeBar(bar,proj,units);
     attachDrag(bar,proj,units,'phase',cat);
@@ -3888,7 +3889,8 @@ function renderDelivery(container, data, base){
   const total=issues.reduce((s,i)=>s+wt(i),0), todo=total-done-qa-prog;
   const pct=total?Math.round((done+qa)/total*100):0, seg=n=>total?(n/total*100):0;
   const ord={done:0,qa:1,prog:2,todo:3};
-  let h=`<div class="pp-prog-tot"><span class="pp-prog-pct">${pct}%</span><span class="pp-prog-cnt">${done+qa} / ${total} ${unit}${usePts?` · ${issues.length} tasks`:''} · ${epics.length} epic${epics.length!==1?'s':''}</span></div>`;
+  const remaining=Math.max(0, Math.round((total-done-qa)*10)/10);
+  let h=`<div class="pp-prog-tot"><span class="pp-prog-pct">${pct}%</span><span class="pp-prog-cnt">${done+qa} / ${total} ${unit} · <b>${remaining} ${unit} left</b>${usePts?` · ${issues.length} tasks`:''} · ${epics.length} epic${epics.length!==1?'s':''}</span></div>`;
   h+=`<div class="pp-stack"><span class="pp-seg-done" style="width:${seg(done)}%"></span><span class="pp-seg-qa" style="width:${seg(qa)}%"></span><span class="pp-seg-prog" style="width:${seg(prog)}%"></span><span class="pp-seg-todo" style="width:${seg(todo)}%"></span></div>`;
   h+=`<div class="pp-legend"><span><i style="background:#12b76a"></i>Done <b>${done}</b></span><span><i style="background:#f79009"></i>In QA <b>${qa}</b></span><span><i style="background:#2e90fa"></i>In progress <b>${prog}</b></span><span><i style="background:#d0d5dd"></i>To do <b>${todo}</b></span><span class="pp-unit">by ${usePts?'story points':'card count'}</span></div>`;
   epics.forEach(ep=>{
