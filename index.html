@@ -1954,6 +1954,8 @@ function adoptRemoteData(data, updatedAt, tribesUpdatedAt){
   if(typeof data.lastJiraSync==='number') state.lastJiraSync = data.lastJiraSync;   // shared Jira sync time
   if(data.tagCreators && typeof data.tagCreators==='object') state.tagCreators = data.tagCreators;   // shared tag creators
   if(data.people && typeof data.people==='object') state.people = data.people;   // shared people directory
+  if(data.evals && typeof data.evals==='object') state.evals = data.evals;   // performance evaluations
+  if(data.onboarding && typeof data.onboarding==='object') state.onboarding = data.onboarding;   // onboarding hires + templates
   if(!state.tribes.find(t=>t.id===state.activeTribe) && state.tribes[0]) state.activeTribe=state.tribes[0].id;
   if(!activeVirtual()){
     const sqs=curSquads();
