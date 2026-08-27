@@ -722,6 +722,8 @@
   .onb-prog span{display:block;height:100%;background:#12b76a;}
   .onb-tpls{display:flex;flex-wrap:wrap;gap:5px;padding:9px 15px 0;}
   .onb-tpl{font-size:10.5px;font-weight:700;color:#3538cd;background:#eef2ff;border:1px solid #c7d7fe;border-radius:999px;padding:1px 8px;}
+  .onb-tpl-edit{font-size:10.5px;font-weight:700;color:var(--muted);background:#fff;border:1px dashed var(--border);border-radius:999px;padding:1px 9px;cursor:pointer;font-family:inherit;}
+  .onb-tpl-edit:hover{color:#3538cd;border-color:#c7d7fe;background:#f5f7ff;}
   .onb-body{padding:6px 15px 14px;display:none;}
   .onb-card.open .onb-body{display:block;}
   .onb-caret{color:#98a2b3;font-size:11px;flex:none;transition:transform .15s;}
@@ -4913,11 +4915,12 @@ function renderOnboarding(){
     const av=personAvatarHTML({accountId:hire.accountId||hire.id, name:hire.name, avatar:hire.avatar});
     card.innerHTML=`<div class="onb-c-head"><span class="onb-caret"></span>${av}<div class="onb-c-id"><div class="onb-c-name">${esc(hire.name||'New hire')}</div><div class="onb-c-meta"><span class="onb-c-cnt">${pr.done}/${pr.total} done</span>${hire.startDate?(' · started '+esc(fmtShort(hire.startDate))):''}${hire.role?(' · '+esc(hire.role)):''}</div></div><span class="onb-c-pct">${pr.pct}%</span>${admin?'<button class="onb-del" title="Remove hire">✕</button>':''}</div>
       <div class="onb-prog"><span style="width:${pr.pct}%"></span></div>
-      <div class="onb-tpls">${tplNames.map(n=>`<span class="onb-tpl">${esc(n)}</span>`).join('')||'<span class="onb-c-meta">No templates assigned</span>'}</div>
+      <div class="onb-tpls">${tplNames.map(n=>`<span class="onb-tpl">${esc(n)}</span>`).join('')||'<span class="onb-c-meta">No templates assigned</span>'}${admin?'<button class="onb-tpl-edit" title="Assign templates">＋ Templates</button>':''}</div>
       <div class="onb-body"></div>`;
     if(hire.id===_onbOpenHire) card.classList.add('open');
     card.querySelector('.onb-c-head').onclick=e=>{ if(e.target.closest('.onb-del')) return; card.classList.toggle('open'); _onbOpenHire=card.classList.contains('open')?hire.id:null; };
     if(admin){ const del=card.querySelector('.onb-del'); if(del) del.onclick=()=>{ if(!confirm('Remove '+(hire.name||'this hire')+' from onboarding?')) return; onb.hires=onb.hires.filter(h=>h.id!==hire.id); saveOnboarding(); renderOnboarding(); }; }
+    if(admin){ const te=card.querySelector('.onb-tpl-edit'); if(te) te.onclick=()=>openAssignTemplates(hire); }
     const body=card.querySelector('.onb-body');
     const updProg=()=>{ const p2=hireProgress(hire); card.querySelector('.onb-c-pct').textContent=p2.pct+'%'; card.querySelector('.onb-prog span').style.width=p2.pct+'%'; const c=card.querySelector('.onb-c-cnt'); if(c)c.textContent=p2.done+'/'+p2.total+' done'; };
     if(!steps.length){ body.innerHTML='<div class="onb-c-meta" style="padding:8px 0;">Assign a template to add steps.</div>'; }
@@ -4969,6 +4972,20 @@ function openAddHire(){
     saveOnboarding(); closeModal(); renderOnboarding();
   };
   modalBg.classList.add('open'); nameSel.focus();
+}
+function openAssignTemplates(hire){
+  if(!isAdmin()) return; const onb=onbState();
+  const sel=new Set(hire.templates||[]);
+  modal.style.width='520px';
+  modal.innerHTML=`<h3>Assign templates — ${esc(hire.name||'')}</h3>
+    <div style="font-size:12px;color:var(--muted);margin:-6px 0 12px;">Tick any number of templates. The hire's checklist is the union of all assigned templates.</div>
+    <div class="field"><label>Templates</label><div class="onb-picker" id="at_tpls"></div></div>
+    <div class="modal-actions"><button class="btn" id="at_cancel">Cancel</button><button class="btn primary" id="at_save">Save</button></div>`;
+  const pick=modal.querySelector('#at_tpls');
+  onb.templates.forEach(t=>{ const lab=document.createElement('label'); lab.className='onb-pick'; const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=sel.has(t.id); cb.onchange=()=>{ if(cb.checked)sel.add(t.id); else sel.delete(t.id); }; lab.appendChild(cb); lab.appendChild(document.createTextNode(t.name+(t.category?(' · '+t.category):''))); pick.appendChild(lab); });
+  modal.querySelector('#at_cancel').onclick=closeModal;
+  modal.querySelector('#at_save').onclick=()=>{ hire.templates=[...sel]; saveOnboarding(); closeModal(); renderOnboarding(); };
+  modalBg.classList.add('open');
 }
 function openTemplateManager(){
   if(!isAdmin()) return; const onb=onbState();
