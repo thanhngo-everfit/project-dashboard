@@ -740,7 +740,10 @@
   .oc-lane.drop{outline:2px dashed #4c6fff;outline-offset:-2px;background:#eef4ff;}
   .oc-lane-h{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:#475467;margin-bottom:10px;}
   .oc-lane-cnt{background:#fff;border:1px solid var(--border);border-radius:999px;padding:0 8px;font-size:10.5px;color:var(--muted);}
-  .oc-lane-body{display:flex;flex-wrap:wrap;gap:10px;min-height:40px;}
+  .oc-lane-body{display:flex;flex-wrap:wrap;gap:10px;min-height:0;}
+  .oc-lane-mt{padding:8px 14px;background:#fbfbfd;}
+  .oc-lane-mt .oc-lane-h{margin-bottom:0;color:#98a2b3;}
+  .oc-lane-mt .oc-lane-body{display:none;}
   .oc-lane-empty{font-size:12px;color:#b0b6c3;padding:12px;border:1px dashed var(--border);border-radius:9px;width:100%;text-align:center;}
   .oc-card{width:232px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 12px;box-shadow:0 1px 2px rgba(16,24,40,.05);}
   .oc-card[draggable=true]{cursor:grab;}
@@ -5063,7 +5066,7 @@ function renderHireSchedule(hire, el, admin, onb){
   const steps=hireSteps(hire), pr=hireProgress(hire);
   const tplNames=(hire.templates||[]).map(tid=>{ const t=onb.templates.find(x=>x.id===tid); return t?t.name:null; }).filter(Boolean);
   const plan=hire.plan||(hire.plan={});
-  const days=Math.max(3, hire.planDays||3);
+  const days=60;   // fixed Day 1..60 schedule (no manual add-day)
   el.innerHTML=`
     <div class="onb-hero">
       ${personAvatarHTML({accountId:hire.accountId||hire.id,name:hire.name,avatar:hire.avatar})}
@@ -5074,12 +5077,10 @@ function renderHireSchedule(hire, el, admin, onb){
     </div>
     <div class="onb-tpls">${tplNames.map(n=>`<span class="onb-tpl">${esc(n)}</span>`).join('')||'<span class="onb-c-meta">No templates assigned</span>'}</div>
     ${admin?'<div class="onb-sched-hint">Drag items between days so the new hire knows what to do first · tick the box when done.</div>':'<div class="onb-sched-hint">Your onboarding schedule — start with Day 1.</div>'}
-    <div class="oc-lanes" id="oc_lanes"></div>
-    ${admin?'<button class="btn" id="oc_addday" style="margin-top:12px;">＋ Add day</button>':''}`;
+    <div class="oc-lanes" id="oc_lanes"></div>`;
   if(admin){
     const te=el.querySelector('#oh_tpls'); if(te) te.onclick=()=>openAssignTemplates(hire);
     const del=el.querySelector('#oh_del'); if(del) del.onclick=()=>{ if(!confirm('Remove '+(hire.name||'this hire')+' from onboarding?')) return; onb.hires=onb.hires.filter(h=>h.id!==hire.id); saveOnboarding(); renderOnboarding(); };
-    const ad=el.querySelector('#oc_addday'); if(ad) ad.onclick=()=>{ hire.planDays=days+1; saveOnboarding(); renderOnboarding(); };
   }
   const lanes=el.querySelector('#oc_lanes');
   if(!steps.length){ lanes.innerHTML='<div class="onb-empty">Assign a template to add items to the schedule.</div>'; return; }
@@ -5100,10 +5101,10 @@ function renderHireSchedule(hire, el, admin, onb){
     }
     return c; };
   const lane=(key,label,list)=>{
-    const ln=document.createElement('div'); ln.className='oc-lane'+(key==='0'?' oc-lane-uns':''); ln.dataset.day=key;
+    const ln=document.createElement('div'); ln.className='oc-lane'+(key==='0'?' oc-lane-uns':'')+((!list.length&&key!=='0')?' oc-lane-mt':''); ln.dataset.day=key;
     ln.innerHTML=`<div class="oc-lane-h"><span>${esc(label)}</span><span class="oc-lane-cnt">${list.length}</span></div>`;
     const body=document.createElement('div'); body.className='oc-lane-body';
-    if(!list.length){ const e=document.createElement('div'); e.className='oc-lane-empty'; e.textContent=admin?'Drop items here':'—'; body.appendChild(e); }
+    if(!list.length && key==='0'){ const e=document.createElement('div'); e.className='oc-lane-empty'; e.textContent=admin?'Everything is scheduled':'—'; body.appendChild(e); }
     list.forEach(s=>body.appendChild(card(s)));
     ln.appendChild(body);
     if(admin){
