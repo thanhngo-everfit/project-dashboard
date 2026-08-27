@@ -767,6 +767,14 @@
   .onb-hero-id{flex:1;min-width:150px;}
   .onb-hero-name{font-size:18px;font-weight:800;color:var(--text);}
   .onb-hero-meta{font-size:12.5px;color:var(--muted);margin-top:2px;}
+  .onb-hero-tags{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;}
+  .onb-hero-sq{font-size:11.5px;font-weight:700;color:#3538cd;background:#eef2ff;border:1px solid #c7d7fe;border-radius:7px;padding:3px 9px;}
+  .onb-hero-sq.muted{color:#98a2b3;background:#f2f4f7;border-color:var(--border);font-weight:600;}
+  .onb-hero-mgr{display:inline-flex;align-items:center;gap:7px;background:#f9fafb;border:1px solid var(--border);border-radius:20px;padding:3px 11px 3px 3px;}
+  .onb-hero-mgr .ppl-av{width:24px;height:24px;font-size:10px;}
+  .onb-hero-mgr-t{display:flex;flex-direction:column;line-height:1.15;}
+  .onb-hero-mgr-lbl{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:#98a2b3;}
+  .onb-hero-mgr-nm{font-size:12.5px;font-weight:700;color:#344054;}
   .onb-hero-prog{width:190px;flex:none;}
   .onb-hero-pct{font-size:15px;font-weight:800;color:#067647;}
   .onb-hero .onb-prog{margin:4px 0 3px;border-radius:999px;}
@@ -5163,16 +5171,33 @@ let _planDrag=null;
 let _onbWeek=1;   // which week of the schedule is shown
 // Selected hire: hero header + full-width schedule lanes (Unscheduled + Day 1..N). Items wrap inside each
 // lane so the page only scrolls vertically. Drag a card between lanes to schedule it; tick to mark done.
+// Squad(s) come from the directory; the manager is the Squad Lead whose squads include one of them.
+function onbManagerFor(hire){
+  const sqs=personSquads(hire.accountId||hire.id);
+  if(!sqs.length) return null;
+  for(const l of ORG_LEADS){
+    if(l.accountId===(hire.accountId||hire.id)) continue;   // a lead has no manager here
+    const leadSquads=(l.squadKeys||[]).map(squadNameForKey);
+    if(sqs.some(s=>leadSquads.includes(s))) return {accountId:l.accountId, name:(state.people[l.accountId]||{}).name||l.name, avatar:(state.people[l.accountId]||{}).avatar||''};
+  }
+  return null;
+}
 function renderHireSchedule(hire, el, admin, onb){
   const steps=hireSteps(hire), pr=hireProgress(hire);
   const tplNames=(hire.templates||[]).map(tid=>{ const t=onb.templates.find(x=>x.id===tid); return t?t.name:null; }).filter(Boolean);
   const plan=hire.plan||(hire.plan={});
   const days=60;   // fixed Day 1..60 schedule (no manual add-day)
+  const sqs=personSquads(hire.accountId||hire.id), mgr=onbManagerFor(hire);
+  const metaBits=[]; if(hire.role) metaBits.push(esc(hire.role)); if(hire.startDate) metaBits.push('started '+esc(fmtShort(hire.startDate)));
   el.innerHTML=`
     <div class="onb-hero">
       ${personAvatarHTML({accountId:hire.accountId||hire.id,name:hire.name,avatar:hire.avatar})}
       <div class="onb-hero-id"><div class="onb-hero-name">${esc(hire.name||'New hire')}</div>
-        <div class="onb-hero-meta">${hire.role?esc(hire.role):''}${hire.startDate?((hire.role?' · ':'')+'started '+esc(fmtShort(hire.startDate))):''}</div></div>
+        <div class="onb-hero-meta">${metaBits.join(' · ')}</div>
+        <div class="onb-hero-tags">
+          ${sqs.length?sqs.map(s=>`<span class="onb-hero-sq">🏷 ${esc(s)}</span>`).join(''):'<span class="onb-hero-sq muted">No squad</span>'}
+          ${mgr?`<span class="onb-hero-mgr">${personAvatarHTML(mgr)}<span class="onb-hero-mgr-t"><span class="onb-hero-mgr-lbl">Manager</span><span class="onb-hero-mgr-nm">${esc(mgr.name)}</span></span></span>`:''}
+        </div></div>
       <div class="onb-hero-prog"><div class="onb-hero-pct">${pr.pct}%</div><div class="onb-prog"><span style="width:${pr.pct}%"></span></div><div class="onb-hero-cnt">${pr.done}/${pr.total} done</div></div>
       ${admin?`<div class="onb-hero-actions"><button class="btn" id="oh_tpls">＋ Templates</button><button class="btn" id="oh_del">Remove</button></div>`:''}
     </div>
