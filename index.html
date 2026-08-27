@@ -734,6 +734,23 @@
   .onb-step input{width:17px;height:17px;flex:none;margin-top:1px;cursor:pointer;accent-color:#12b76a;}
   .onb-step.done label{color:#98a2b3;text-decoration:line-through;}
   .onb-step label{cursor:pointer;line-height:1.4;color:#344054;}
+  .onb-step-lab{cursor:pointer;line-height:1.4;color:#344054;flex:1;}
+  .onb-step-lab:hover{color:#1570ef;}
+  .onb-step.done .onb-step-lab{color:#98a2b3;text-decoration:line-through;}
+  .onb-step-more{font-size:11px;color:#98a2b3;}
+  /* step detail panel media */
+  .sp-media{position:relative;width:100%;border-radius:10px;overflow:hidden;background:#000;margin-bottom:4px;}
+  .sp-media iframe,.sp-media video{display:block;width:100%;aspect-ratio:16/9;border:none;}
+  .sp-img{display:block;width:100%;border-radius:10px;border:1px solid var(--border);}
+  .sp-link{display:inline-block;font-size:13px;color:#1570ef;word-break:break-all;text-decoration:none;}
+  .sp-link:hover{text-decoration:underline;}
+  /* template manager step detail fields */
+  .tm-stepwrap{margin:6px 0;padding-bottom:6px;border-bottom:1px dashed #eef0f3;}
+  .tm-s-more{margin:4px 0 0 4px;}
+  .tm-s-more summary{font-size:11px;color:#98a2b3;cursor:pointer;list-style:none;padding:2px 0;}
+  .tm-s-more summary::-webkit-details-marker{display:none;}
+  .tm-s-more input,.tm-s-more textarea{width:100%;box-sizing:border-box;font-size:12px;padding:5px 8px;border:1px solid var(--border);border-radius:7px;font-family:inherit;margin-top:5px;}
+  .tm-s-more textarea{min-height:44px;resize:vertical;}
   .onb-empty{font-size:13px;color:var(--muted);padding:28px 0;text-align:center;}
   .onb-del{border:none;background:transparent;color:#c0c5cf;cursor:pointer;font-size:14px;width:26px;height:26px;border-radius:7px;flex:none;}
   .onb-del:hover{background:#fee4e2;color:#d92d20;}
@@ -4783,6 +4800,54 @@ function hireSteps(hire){ const tpls=onbState().templates, out=[], seen=new Set(
   (hire.templates||[]).forEach(tid=>{ const t=tpls.find(x=>x.id===tid); if(!t) return; (t.steps||[]).forEach(s=>{ if(!seen.has(s.id)){ seen.add(s.id); out.push({...s, tpl:t.name}); } }); });
   return out; }
 function hireProgress(hire){ const st=hireSteps(hire); const done=st.filter(s=>hire.done&&hire.done[s.id]).length; return {done,total:st.length,pct:st.length?Math.round(done/st.length*100):0}; }
+let _onbOpenHire=null;   // which hire card is expanded (kept across re-renders)
+// ---- Onboarding step detail panel (right slide-over) ----
+let _spEls=null, _spCur=null;
+function ensureStepPanel(){
+  if(_spEls) return _spEls;
+  const bg=document.createElement('div'); bg.className='pp-bg'; const panel=document.createElement('div'); panel.className='proj-panel';
+  document.body.appendChild(bg); document.body.appendChild(panel);
+  bg.onclick=closeStepPanel;
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape' && bg.classList.contains('open')) closeStepPanel(); });
+  _spEls={bg,panel}; return _spEls;
+}
+function closeStepPanel(){ if(_spEls){ _spEls.panel.classList.remove('open'); _spEls.bg.classList.remove('open'); } _spCur=null; }
+// Render an image / video / embed / link from a URL.
+function onbMediaHTML(url){
+  url=(url||'').trim(); if(!url) return '';
+  const yt=url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([\w-]{11})/);
+  if(yt) return `<div class="sp-media"><iframe src="https://www.youtube.com/embed/${yt[1]}" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowfullscreen></iframe></div>`;
+  const vim=url.match(/vimeo\.com\/(\d+)/);
+  if(vim) return `<div class="sp-media"><iframe src="https://player.vimeo.com/video/${vim[1]}" allowfullscreen></iframe></div>`;
+  if(/\.(mp4|webm|ogg)(\?|#|$)/i.test(url)) return `<div class="sp-media"><video src="${esc(url)}" controls preload="metadata"></video></div>`;
+  if(/\.(png|jpe?g|gif|webp|svg|avif)(\?|#|$)/i.test(url)) return `<a href="${esc(url)}" target="_blank" rel="noopener"><img class="sp-img" src="${esc(url)}" alt=""></a>`;
+  return `<a class="sp-link" href="${esc(url)}" target="_blank" rel="noopener">🎬 ${esc(url)}</a>`;
+}
+function openStepPanel(hire, step){
+  const {bg,panel}=ensureStepPanel();
+  _spCur={hireId:hire.id, stepId:step.id};
+  const admin=isAdmin(); const done=!!(hire.done&&hire.done[step.id]);
+  panel.innerHTML=`
+    <div class="pp-top"><span class="pp-dot" style="background:#6941c6"></span>
+      <div class="pp-title">${esc(step.text||'Step')}</div>
+      <button class="pp-iconbtn" id="sp_close" title="Close">✕</button></div>
+    <div class="pp-body">
+      <div class="pp-sec"><div class="pp-meta">
+        ${step.tpl?`<div class="pp-k">Template</div><div class="pp-v">${esc(step.tpl)}</div>`:''}
+        <div class="pp-k">Hire</div><div class="pp-v">${esc(hire.name||'')}</div>
+        <div class="pp-k">Status</div><div class="pp-v"><span class="pp-st ${done?'done':'todo'}">${done?'Done':'To do'}</span></div>
+      </div></div>
+      ${step.media?`<div class="pp-sec"><div class="pp-sec-h">Media</div>${onbMediaHTML(step.media)}</div>`:''}
+      ${step.desc?`<div class="pp-sec"><div class="pp-sec-h">Details</div><div class="pp-note" style="background:#fbfcfe;border-color:var(--border);">${esc(step.desc)}</div></div>`:''}
+      ${step.link?`<div class="pp-sec"><div class="pp-sec-h">Link</div><a class="sp-link" href="${esc(normalizeUrl(step.link))}" target="_blank" rel="noopener">🔗 ${esc(step.link)}</a></div>`:''}
+      ${(!step.media&&!step.desc&&!step.link)?`<div class="pp-empty">No extra details for this step.${admin?' Add a description, link or media in Manage templates.':''}</div>`:''}
+      ${admin?`<div class="pp-actions" style="margin-top:8px;"><button class="btn ${done?'':'primary'}" id="sp_toggle">${done?'↺ Mark as not done':'✓ Mark as done'}</button></div>`:''}
+    </div>`;
+  panel.querySelector('#sp_close').onclick=closeStepPanel;
+  const tg=panel.querySelector('#sp_toggle');
+  if(tg) tg.onclick=()=>{ if(!hire.done)hire.done={}; if(done) delete hire.done[step.id]; else hire.done[step.id]=true; saveOnboarding(); renderOnboarding(); openStepPanel(hire, step); };
+  bg.classList.add('open'); panel.classList.add('open');
+}
 function renderOnboarding(){
   const el=document.getElementById('onbPage'); if(!el) return;
   const admin=isAdmin(), onb=onbState();
@@ -4801,19 +4866,31 @@ function renderOnboarding(){
       <div class="onb-prog"><span style="width:${pr.pct}%"></span></div>
       <div class="onb-tpls">${tplNames.map(n=>`<span class="onb-tpl">${esc(n)}</span>`).join('')||'<span class="onb-c-meta">No templates assigned</span>'}</div>
       <div class="onb-body"></div>`;
-    card.querySelector('.onb-c-head').onclick=e=>{ if(e.target.closest('.onb-del')) return; card.classList.toggle('open'); };
+    if(hire.id===_onbOpenHire) card.classList.add('open');
+    card.querySelector('.onb-c-head').onclick=e=>{ if(e.target.closest('.onb-del')) return; card.classList.toggle('open'); _onbOpenHire=card.classList.contains('open')?hire.id:null; };
     if(admin){ const del=card.querySelector('.onb-del'); if(del) del.onclick=()=>{ if(!confirm('Remove '+(hire.name||'this hire')+' from onboarding?')) return; onb.hires=onb.hires.filter(h=>h.id!==hire.id); saveOnboarding(); renderOnboarding(); }; }
     const body=card.querySelector('.onb-body');
+    const updProg=()=>{ const p2=hireProgress(hire); card.querySelector('.onb-c-pct').textContent=p2.pct+'%'; card.querySelector('.onb-prog span').style.width=p2.pct+'%'; const c=card.querySelector('.onb-c-cnt'); if(c)c.textContent=p2.done+'/'+p2.total+' done'; };
     if(!steps.length){ body.innerHTML='<div class="onb-c-meta" style="padding:8px 0;">Assign a template to add steps.</div>'; }
     else{
       const groups={}; steps.forEach(s=>{ (groups[s.tpl]=groups[s.tpl]||[]).push(s); });
-      body.innerHTML=Object.entries(groups).map(([tpl,list])=>`<div class="onb-grp"><div class="onb-grp-h">${esc(tpl)}</div>`+
-        list.map(s=>{ const done=!!(hire.done&&hire.done[s.id]); return `<div class="onb-step${done?' done':''}"><input type="checkbox" data-s="${esc(s.id)}" ${done?'checked':''} ${admin?'':'disabled'}><label>${esc(s.text)}</label></div>`; }).join('')+`</div>`).join('');
-      body.querySelectorAll('.onb-step label').forEach(l=>l.onclick=()=>{ const cb=l.previousElementSibling; if(!cb.disabled){ cb.checked=!cb.checked; cb.onchange(); } });
-      if(admin) body.querySelectorAll('input[type=checkbox]').forEach(cb=>{ cb.onchange=()=>{ const sid=cb.dataset.s; if(!hire.done)hire.done={}; if(cb.checked)hire.done[sid]=true; else delete hire.done[sid];
-        cb.closest('.onb-step').classList.toggle('done',cb.checked);
-        const p2=hireProgress(hire); card.querySelector('.onb-c-pct').textContent=p2.pct+'%'; card.querySelector('.onb-prog span').style.width=p2.pct+'%'; const c=card.querySelector('.onb-c-cnt'); if(c)c.textContent=p2.done+'/'+p2.total+' done';
-        saveOnboarding(); }; });
+      body.innerHTML='';
+      Object.entries(groups).forEach(([tpl,list])=>{
+        const g=document.createElement('div'); g.className='onb-grp';
+        const gh=document.createElement('div'); gh.className='onb-grp-h'; gh.textContent=tpl; g.appendChild(gh);
+        list.forEach(s=>{
+          const done=!!(hire.done&&hire.done[s.id]);
+          const row=document.createElement('div'); row.className='onb-step'+(done?' done':'');
+          const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=done; if(!admin) cb.disabled=true;
+          const lab=document.createElement('span'); lab.className='onb-step-lab'; lab.textContent=s.text;
+          if(s.media||s.link||s.desc){ const ic=document.createElement('span'); ic.className='onb-step-more'; ic.textContent = s.media?'▷':(s.link?'🔗':'ⓘ'); ic.title='Has details'; lab.appendChild(document.createTextNode(' ')); lab.appendChild(ic); }
+          row.appendChild(cb); row.appendChild(lab);
+          lab.onclick=()=>openStepPanel(hire, s);
+          if(admin) cb.onchange=()=>{ if(!hire.done)hire.done={}; if(cb.checked)hire.done[s.id]=true; else delete hire.done[s.id]; row.classList.toggle('done',cb.checked); updProg(); saveOnboarding(); if(_spCur&&_spCur.stepId===s.id&&_spCur.hireId===hire.id) openStepPanel(hire,s); };
+          g.appendChild(row);
+        });
+        body.appendChild(g);
+      });
     }
     grid.appendChild(card);
   });
@@ -4862,13 +4939,27 @@ function openTemplateManager(){
       box.querySelector('.tm-cat').oninput=e=>t.category=e.target.value;
       box.querySelector('.tm-deltpl').onclick=()=>{ work.splice(ti,1); draw(); };
       const steps=box.querySelector('.tm-steps');
-      (t.steps=t.steps||[]).forEach((s,si)=>{ const r=document.createElement('div'); r.className='tm-step'; r.innerHTML=`<input value="${esc(s.text)}" placeholder="Step description"><button class="onb-del" title="Remove step">✕</button>`; r.querySelector('input').oninput=e=>s.text=e.target.value; r.querySelector('button').onclick=()=>{ t.steps.splice(si,1); draw(); }; steps.appendChild(r); });
-      box.querySelector('.tm-addstep').onclick=()=>{ t.steps.push({id:'st_'+uid(),text:''}); draw(); };
+      (t.steps=t.steps||[]).forEach((s,si)=>{
+        const r=document.createElement('div'); r.className='tm-stepwrap';
+        const hasMore=!!(s.desc||s.link||s.media);
+        r.innerHTML=`<div class="tm-step"><input class="tm-s-text" value="${esc(s.text)}" placeholder="Step title"><button class="onb-del tm-s-del" title="Remove step">✕</button></div>`+
+          `<details class="tm-s-more"${hasMore?' open':''}><summary>details (link / media / description)</summary>`+
+          `<input class="tm-s-link" value="${esc(s.link||'')}" placeholder="Link (optional) — https://…">`+
+          `<input class="tm-s-media" value="${esc(s.media||'')}" placeholder="Image or video URL (optional) — YouTube/Vimeo/.mp4/.png…">`+
+          `<textarea class="tm-s-desc" placeholder="Description (optional)">${esc(s.desc||'')}</textarea></details>`;
+        r.querySelector('.tm-s-text').oninput=e=>s.text=e.target.value;
+        r.querySelector('.tm-s-link').oninput=e=>s.link=e.target.value;
+        r.querySelector('.tm-s-media').oninput=e=>s.media=e.target.value;
+        r.querySelector('.tm-s-desc').oninput=e=>s.desc=e.target.value;
+        r.querySelector('.tm-s-del').onclick=()=>{ t.steps.splice(si,1); draw(); };
+        steps.appendChild(r);
+      });
+      box.querySelector('.tm-addstep').onclick=()=>{ t.steps.push({id:'st_'+uid(),text:'',desc:'',link:'',media:''}); draw(); };
       list.appendChild(box);
     });
     modal.querySelector('#tm_add').onclick=()=>{ work.push({id:'tpl_'+uid(),name:'New template',category:'Function',steps:[]}); draw(); };
     modal.querySelector('#tm_cancel').onclick=closeModal;
-    modal.querySelector('#tm_save').onclick=()=>{ onb.templates=work.map(t=>({id:t.id,name:(t.name||'').trim()||'Template',category:(t.category||'').trim(),steps:(t.steps||[]).filter(s=>(s.text||'').trim()).map(s=>({id:s.id,text:s.text.trim()}))})); saveOnboarding(); closeModal(); renderOnboarding(); };
+    modal.querySelector('#tm_save').onclick=()=>{ onb.templates=work.map(t=>({id:t.id,name:(t.name||'').trim()||'Template',category:(t.category||'').trim(),steps:(t.steps||[]).filter(s=>(s.text||'').trim()).map(s=>({id:s.id,text:s.text.trim(),desc:(s.desc||'').trim(),link:(s.link||'').trim(),media:(s.media||'').trim()}))})); saveOnboarding(); closeModal(); renderOnboarding(); };
   }
   draw(); modalBg.classList.add('open');
 }
