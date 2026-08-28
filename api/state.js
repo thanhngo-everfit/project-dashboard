@@ -28,7 +28,7 @@ const oauth = new OAuth2Client(CLIENT_ID);
 
 // Permission grants live in state.access = { "<email>": ["onboarding","people",...] }. The super-admin
 // (ADMIN_EMAIL) implicitly has every area. allowArea() is the server-side enforcement of the Admin page.
-const ACCESS_AREA_KEYS = ['onboarding', 'people', 'evaluations', 'jira'];
+const ACCESS_AREA_KEYS = ['roadmap', 'onboarding', 'people', 'evaluations', 'jira'];
 function grantedAreas(state, email) {
   const a = state && state.access;
   const e = (email || '').toLowerCase();
@@ -201,14 +201,15 @@ export default async function handler(req, res) {
         res.status(409).json({ error: 'wipe_guard', oldCount, newCount });
         return;
       }
-      // Only the admin may add or remove tribes or squads (renames/reorders/edits are fine for everyone).
+      // Only the super-admin or a 'roadmap'-granted user may add/remove tribes or squads or change hidden
+      // lists (renames/reorders/edits are fine for everyone).
       const tribeIds = st => Array.isArray(st && st.tribes) ? st.tribes.map(t => t.id) : null;   // legacy (no tribes) -> skip tribe check
       const squadIds = st => {
         if (Array.isArray(st && st.tribes)) return st.tribes.flatMap(t => (t.squads || []).map(s => s.id));
         if (Array.isArray(st && st.squads)) return st.squads.map(s => s.id);
         return null;
       };
-      if ((user.email || '').toLowerCase() !== ADMIN_EMAIL) {
+      if (!allowArea(user, existing && existing.state, 'roadmap')) {
         const oldSt = existing && existing.state;
         const setChanged = (a, b) => {
           if (!a || !b) return false;

@@ -187,6 +187,7 @@ title to return home):
 The **Home hub** shows an **🔐 Admin** card to the super-admin (`thanhngo@everfit.io`) only.
 It opens a permissions page where the super-admin can grant teammates access to specific areas:
 
+- **Roadmap** — add, edit, remove & hide tribes and squads (roadmap structure).
 - **Onboarding** — manage templates, hires and schedules.
 - **People** — edit the people directory & squads.
 - **Evaluations** — view & edit performance evaluations.
@@ -195,9 +196,9 @@ It opens a permissions page where the super-admin can grant teammates access to 
 Grants are stored in `state.access = { "<email>": ["onboarding", ...] }` and saved via a targeted
 `patchAccess` action (super-admin only). Access is **enforced server-side**: `patchPeople`, `patchEvals`
 and `patchOnboarding` accept the super-admin *or* anyone holding the matching grant (`api/state.js`
-`allowArea`). Tribe/squad **structure changes** and **version history/restore** remain super-admin-only
-and are **not** delegatable. In the client, `can('<area>')` gates each feature; `isAdmin()` still means
-the super-admin.
+`allowArea`); tribe/squad **structure changes** now accept the super-admin *or* a `roadmap`-granted user.
+**Version history/restore** remains super-admin-only and is **not** delegatable. In the client,
+`can('<area>')` gates each feature; `isAdmin()` still means the super-admin.
 
 ## Step 5 — Organization view & AI performance evaluation (admin only)
 

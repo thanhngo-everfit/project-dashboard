@@ -1245,6 +1245,7 @@ const ADMIN_EMAIL = 'thanhngo@everfit.io';   // super-admin: full access + manag
 // Delegatable permission areas. The super-admin can grant any of these to a teammate on the Admin page.
 // (Tribe/squad structure changes and version history stay super-admin-only and are NOT delegatable.)
 const ACCESS_AREAS = [
+  {key:'roadmap',     label:'Roadmap',     desc:'Add, edit, remove & hide tribes and squads'},
   {key:'onboarding',  label:'Onboarding',  desc:'Manage templates, hires and schedules'},
   {key:'people',      label:'People',      desc:'Edit the people directory & squads'},
   {key:'evaluations', label:'Evaluations', desc:'View & edit performance evaluations'},
@@ -2396,7 +2397,7 @@ function headShade(i,n){
 /* ============================ Render ============================ */
 function render(){
   applyPendingView();
-  if(!isAdmin() && isHidden(state.activeSquad)){   // members can't stay on a hidden tab
+  if(!can('roadmap') && isHidden(state.activeSquad)){   // members can't stay on a hidden tab
     const s=curSquads().find(x=>!isHidden(x.id));
     const v=VIRTUAL_VIEWS.find(x=>!isHidden(x.id));
     state.activeSquad = s?s.id : (v?v.id:state.activeSquad);
@@ -2659,9 +2660,9 @@ function renderTribes(){
   bar.innerHTML='';
   (state.tribes||[]).forEach(t=>{
     const el=document.createElement('div'); el.className='tribe'+(t.id===state.activeTribe?' active':'');
-    el.innerHTML=`<span class="tr-name">${esc(t.name)}</span>${isAdmin()&&state.tribes.length>1?'<button class="tr-x" title="Remove tribe">×</button>':''}`;
+    el.innerHTML=`<span class="tr-name">${esc(t.name)}</span>${can('roadmap')&&state.tribes.length>1?'<button class="tr-x" title="Remove tribe">×</button>':''}`;
     el.onclick=e=>{ if(e.target.classList.contains('tr-x'))return; setActiveTribe(t.id); };
-    if(isAdmin()){ el.querySelector('.tr-name').ondblclick=ev=>{ ev.stopPropagation(); const v=prompt('Tribe name:', t.name); if(v!=null){ t.name=v.trim()||t.name; render(); } }; }
+    if(can('roadmap')){ el.querySelector('.tr-name').ondblclick=ev=>{ ev.stopPropagation(); const v=prompt('Tribe name:', t.name); if(v!=null){ t.name=v.trim()||t.name; render(); } }; }
     const x=el.querySelector('.tr-x');
     if(x) x.onclick=()=>{
       if(!confirm('Remove tribe "'+t.name+'" and all its squads?'))return;
@@ -2671,7 +2672,7 @@ function renderTribes(){
     };
     bar.appendChild(el);
   });
-  if(isAdmin()){
+  if(can('roadmap')){
     const add=document.createElement('button'); add.className='tribe-add'; add.textContent='＋ Tribe'; add.title='New tribe';
     add.onclick=()=>{ const id='tribe_'+uid(); state.tribes.push({id,name:'New Tribe',squads:[{id:uid(),name:'Squad 1',projects:[]}]}); setActiveTribe(id); };
     bar.appendChild(add);
@@ -2688,11 +2689,11 @@ function renderTabs(){
   const bar=document.getElementById('tabbar');
   bar.innerHTML='';
   curSquads().forEach(s=>{
-    if(isHidden(s.id) && !isAdmin()) return;   // hidden from members
+    if(isHidden(s.id) && !can('roadmap')) return;   // hidden from members
     const tab=document.createElement('div');
     tab.className='tab'+(s.id===state.activeSquad?' active':'')+(isHidden(s.id)?' hidden-tab':'');
-    tab.innerHTML=`<span class="tname" contenteditable="false">${esc(s.name)}</span>${isAdmin()?'<button class="x" title="Close">×</button>':''}`;
-    if(isAdmin()) tab.insertBefore(hideToggleBtn(s.id), tab.querySelector('.x'));
+    tab.innerHTML=`<span class="tname" contenteditable="false">${esc(s.name)}</span>${can('roadmap')?'<button class="x" title="Close">×</button>':''}`;
+    if(can('roadmap')) tab.insertBefore(hideToggleBtn(s.id), tab.querySelector('.x'));
     tab.onclick=e=>{ if(e.target.classList.contains('x')||e.target.classList.contains('hide-toggle'))return; state.activeSquad=s.id; render(); };
     const nameEl=tab.querySelector('.tname');
     tab.querySelector('.tname').ondblclick=()=>{
@@ -2732,16 +2733,16 @@ function renderTabs(){
   });
   // fixed virtual views (cross-squad, by tag) — cannot be removed/renamed/reordered
   VIRTUAL_VIEWS.forEach(v=>{
-    if(isHidden(v.id) && !isAdmin()) return;   // hidden from members
+    if(isHidden(v.id) && !can('roadmap')) return;   // hidden from members
     const tab=document.createElement('div');
     tab.className='tab tab-virtual'+(v.id===state.activeSquad?' active':'')+(isHidden(v.id)?' hidden-tab':'');
     tab.innerHTML='<span class="vt-ico">'+(v.icon||'🏷️')+'</span><span class="tname">'+esc(v.name)+'</span>';
     tab.title=v.allSquads ? (v.name+' — every project from all squads') : v.listByEnd ? (v.name+' — all projects across squads, grouped by end date') : v.byAssignee ? (v.name+' — assignees across squads with hours logged per project') : v.orgChart ? (v.name+' — org chart of squads and their members') : (v.name+' — all "'+v.tag+'" projects across squads');
-    if(isAdmin()) tab.appendChild(hideToggleBtn(v.id));
+    if(can('roadmap')) tab.appendChild(hideToggleBtn(v.id));
     tab.onclick=e=>{ if(e.target.classList.contains('hide-toggle'))return; state.activeSquad=v.id; render(); };
     bar.appendChild(tab);
   });
-  if(isAdmin()){
+  if(can('roadmap')){
     const add=document.createElement('button');
     add.className='tab-add'; add.textContent='+'; add.title='New squad';
     add.onclick=()=>{const id=uid();activeTribe().squads.push({id,name:'Squad '+(curSquads().length+1),projects:[]});state.activeSquad=id;render();};
