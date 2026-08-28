@@ -5040,6 +5040,34 @@ function backfillEmails(){
   if(!confirm('Fill the email for '+n+' '+(n===1?'person':'people')+' from the roster?'+(skipped?('\n\n'+skipped+' could not be matched and will stay empty (set those manually).'):''))) return;
   patchPeople(patch); refreshAccess(); renderAdminPage();
 }
+// Duplicate directory entries that share the same (non-empty) email — reliably the same person, e.g. a
+// stale synthetic "m:" entry alongside the real Jira-linked one. Returns groups of accountIds (len ≥ 2).
+function peopleDupGroups(){
+  const byEmail={};
+  Object.entries(state.people||{}).forEach(([id,m])=>{ const e=((m&&m.email)||'').trim().toLowerCase(); if(!e) return; (byEmail[e]=byEmail[e]||[]).push(id); });
+  return Object.values(byEmail).filter(ids=>ids.length>1);
+}
+// Merge each same-email group into one entry: keep the Jira-linked (non "m:") id, union squads, fill missing
+// role/avatar/name, delete the rest. Persists via one patchPeople merge. Super-admin only.
+function mergeDuplicatePeople(){
+  if(!isSuperAdmin()) return;
+  const groups=peopleDupGroups();
+  if(!groups.length){ alert('No duplicate people found (matched by email).'); return; }
+  const extra=groups.reduce((n,g)=>n+g.length-1,0);
+  if(!confirm('Merge '+groups.length+' duplicated '+(groups.length===1?'person':'people')+', removing '+extra+' extra '+(extra===1?'entry':'entries')+'?\n\nSquads are combined and the Jira-linked account is kept.')) return;
+  const patch={};
+  groups.forEach(ids=>{
+    ids.sort((a,b)=>{   // keeper first: prefer real Jira id, then one with an avatar
+      const am=String(a).startsWith('m:')?1:0, bm=String(b).startsWith('m:')?1:0; if(am!==bm) return am-bm;
+      const av=(state.people[a]&&state.people[a].avatar)?0:1, bv=(state.people[b]&&state.people[b].avatar)?0:1; return av-bv;
+    });
+    const keep=ids[0]; const K={...(state.people[keep]||{})}; const squads=new Set(K.squads||[]);
+    ids.slice(1).forEach(id=>{ const m=state.people[id]||{}; (m.squads||[]).forEach(s=>squads.add(s)); if(!K.role&&m.role)K.role=m.role; if(!K.avatar&&m.avatar)K.avatar=m.avatar; if(!K.name&&m.name)K.name=m.name; });
+    K.squads=[...squads]; state.people[keep]=K; patch[keep]=K;
+    ids.slice(1).forEach(id=>{ delete state.people[id]; patch[id]=null; });
+  });
+  patchPeople(patch); renderAdminPage();
+}
 // Admin page: grant delegatable areas (ACCESS_AREAS) to teammates. Super-admin only.
 function renderAdminPage(){
   const el=document.getElementById('adminPage'); if(!el) return;
@@ -5048,14 +5076,17 @@ function renderAdminPage(){
   const dir=Object.entries(state.people||{}).map(([id,m])=>({id,...m})).filter(p=>p.name).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
   const withEmail=dir.filter(p=>(p.email||'').trim());
   const noEmail=dir.filter(p=>!(p.email||'').trim());
+  const dups=peopleDupGroups(); const dupExtra=dups.reduce((n,g)=>n+g.length-1,0);
   el.innerHTML=`<div class="onb-head"><div class="onb-h1">🔐 Admin · Permissions</div>
-      ${noEmail.length?`<div class="onb-actions"><button class="btn primary" id="adm_backfill">✉ Backfill emails (${noEmail.length})</button></div>`:''}</div>
+      <div class="onb-actions">${dupExtra?`<button class="btn" id="adm_merge">⧉ Merge duplicates (${dupExtra})</button>`:''}${noEmail.length?`<button class="btn primary" id="adm_backfill">✉ Backfill emails (${noEmail.length})</button>`:''}</div></div>
     <div class="onb-sub">Grant teammates access to specific areas. You (<b>${esc(ADMIN_EMAIL)}</b>) always have full access and manage this page. Tribe/squad structure changes and version history stay admin-only.</div>
     <div class="adm-legend">${ACCESS_AREAS.map(a=>`<span class="adm-leg"><b>${esc(a.label)}</b> — ${esc(a.desc)}</span>`).join('')}</div>
+    ${dupExtra?`<div class="adm-note">⧉ ${dupExtra} duplicate ${dupExtra===1?'entry shares':'entries share'} an email with another person. Click <b>Merge duplicates</b> to combine them (keeps the Jira-linked account, merges squads).</div>`:''}
     <div class="adm-tablewrap"><div class="adm-table" id="adm_table"></div></div>
     ${noEmail.length?`<div class="adm-note">⚠ ${noEmail.length} ${noEmail.length===1?'person has':'people have'} no email set, so they can't be granted access yet. Add emails in <b>Organization → Manage people</b>.</div>`:''}
     ${withEmail.length?'':'<div class="onb-empty">No people with an email in the directory yet.</div>'}`;
   const bf=el.querySelector('#adm_backfill'); if(bf) bf.onclick=backfillEmails;
+  const mg=el.querySelector('#adm_merge'); if(mg) mg.onclick=mergeDuplicatePeople;
   const table=el.querySelector('#adm_table');
   if(!withEmail.length) return;
   const head=document.createElement('div'); head.className='adm-row adm-head';
