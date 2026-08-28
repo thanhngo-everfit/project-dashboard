@@ -197,9 +197,11 @@
   .pm-add select{flex:none;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:#fff;}
   .pm-manual{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.3px;color:#8a6d1f;background:#fef3c7;border:1px solid #fcd34d;border-radius:999px;padding:1px 6px;margin-left:6px;}
   .pm-row.sel{background:#eef4ff;}
-  .pm-head{display:grid;grid-template-columns:1fr 190px 130px 28px;gap:10px;font-size:10.5px;font-weight:800;color:#98a2b3;text-transform:uppercase;letter-spacing:.4px;padding:0 4px 6px;}
+  .pm-head{display:grid;grid-template-columns:1fr 160px 120px 190px 28px;gap:10px;font-size:10.5px;font-weight:800;color:#98a2b3;text-transform:uppercase;letter-spacing:.4px;padding:0 4px 6px;}
   .pm-list{max-height:54vh;overflow-y:auto;display:flex;flex-direction:column;gap:3px;}
-  .pm-row{display:grid;grid-template-columns:1fr 190px 130px 28px;gap:10px;align-items:center;padding:4px;border-radius:8px;}
+  .pm-row{display:grid;grid-template-columns:1fr 160px 120px 190px 28px;gap:10px;align-items:center;padding:4px;border-radius:8px;}
+  .pm-email{font-size:12.5px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;font-family:inherit;min-width:0;width:100%;box-sizing:border-box;}
+  .pm-email:focus{outline:none;border-color:#4c6fff;box-shadow:0 0 0 2px #d7e0ff;}
   /* multi-select squad picker (a <details> disclosure with checkboxes) */
   .pm-sq{position:relative;font-size:13px;}
   .pm-sq>summary{list-style:none;cursor:pointer;padding:6px 24px 6px 8px;border:1px solid var(--border);border-radius:8px;background:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:relative;}
@@ -1436,12 +1438,13 @@ function knownPeople(){
     const m=map[id]||(map[id]={accountId:id,name:'',avatar:''});
     if(meta.name && !m.name) m.name=meta.name; if(meta.avatar && !m.avatar) m.avatar=meta.avatar;
   });
-  return Object.values(map).map(m=>({...m, squads:personSquads(m.accountId), role:personRole(m.accountId)}));
+  return Object.values(map).map(m=>({...m, squads:personSquads(m.accountId), role:personRole(m.accountId), email:(state.people[m.accountId]||{}).email||''}));
 }
-function setPersonMeta(id, name, avatar, squads, role){
+function setPersonMeta(id, name, avatar, squads, role, email){
   if(!state.people) state.people={};
   const cur=state.people[id]||{};
-  state.people[id]={ name:name||cur.name||'', avatar:avatar||cur.avatar||'', squads:Array.isArray(squads)?squads.slice():[], role:role||'' };
+  const e=(email!==undefined && email!==null) ? email : (cur.email||'');   // preserve email unless explicitly set (fixes email-wipe on role/squad edits)
+  state.people[id]={ name:name||cur.name||'', avatar:avatar||cur.avatar||'', squads:Array.isArray(squads)?squads.slice():[], role:role||'', email:e };
 }
 // Fixed virtual squads (read-only structure)
 const VIRTUAL_VIEWS = [
@@ -3404,7 +3407,7 @@ function openPeopleManager(){
   const squads=curSquads().map(s=>s.name);
   const ppl=knownPeople();                                   // mutable working list (manual adds append here)
   const work={}, orig={};
-  ppl.forEach(p=>{ work[p.accountId]={squads:(p.squads||[]).slice(),role:p.role||''}; orig[p.accountId]={squads:(p.squads||[]).slice(),role:p.role||'',name:p.name||'',avatar:p.avatar||''}; });
+  ppl.forEach(p=>{ work[p.accountId]={squads:(p.squads||[]).slice(),role:p.role||'',email:p.email||''}; orig[p.accountId]={squads:(p.squads||[]).slice(),role:p.role||'',name:p.name||'',avatar:p.avatar||'',email:p.email||''}; });
   const opt=(v,sel)=>`<option value="${esc(v)}" ${sel===v?'selected':''}>${esc(v)}</option>`;
   const roleOpts=sel=>['<option value="">— Role —</option>', ...ROLES.map(r=>opt(r,sel))].join('');
   // Multi-select squad picker: a <details> disclosure with a checkbox per squad. onchange gets the new array.
@@ -3436,7 +3439,7 @@ function openPeopleManager(){
     return wrap;
   }
   let addSquads=[];   // multi-select state for the manual-add row
-  modal.style.width='720px';
+  modal.style.width='880px';
   modal.innerHTML=`<h3>Manage People</h3>
     <div style="font-size:12px;color:var(--muted);margin:-6px 0 10px;">Assign one or more squads + a role to each person. People with a Jira accountId link to their synced activity; manually-added people are roster-only. <span id="pm_count"></span></div>
     <div class="pm-actions"><button class="btn" id="pm_auto">⚡ Auto-assign from Slack rosters</button></div>
@@ -3447,7 +3450,7 @@ function openPeopleManager(){
       <button class="btn primary" id="pm_add_btn">+ Add</button>
     </div>
     <input id="pm_search" class="pm-search" placeholder="Search name…" autocomplete="off">
-    <div class="pm-head"><span>Person</span><span>Squads</span><span>Role</span><span></span></div>
+    <div class="pm-head"><span>Person</span><span>Squads</span><span>Role</span><span>Email</span><span></span></div>
     <div class="pm-list" id="pm_list"></div>
     <div class="modal-actions"><button class="btn" id="pm_cancel">Cancel</button><button class="btn primary" id="pm_save">Save</button></div>`;
   const listEl=modal.querySelector('#pm_list'), countEl=modal.querySelector('#pm_count');
@@ -3471,9 +3474,11 @@ function openPeopleManager(){
     const picker=squadPicker(w.squads, arr=>{ work[p.accountId].squads=arr; });
     const rs=document.createElement('select'); rs.className='pm-role'; rs.innerHTML=roleOpts(w.role); rs.value=w.role||'';
     rs.onchange=e=>{ work[p.accountId].role=e.target.value; };
+    const em=document.createElement('input'); em.className='pm-email'; em.type='email'; em.placeholder='name@everfit.io'; em.value=w.email||''; em.autocomplete='off';
+    em.oninput=e=>{ work[p.accountId].email=e.target.value; };
     const del=document.createElement('button'); del.className='pm-del'; del.title='Remove from directory'; del.textContent='✕';
     del.onclick=()=>removePerson(p.accountId);
-    row.appendChild(person); row.appendChild(picker); row.appendChild(rs); row.appendChild(del);
+    row.appendChild(person); row.appendChild(picker); row.appendChild(rs); row.appendChild(em); row.appendChild(del);
     return row;
   }
   function renderList(){
@@ -3488,7 +3493,7 @@ function openPeopleManager(){
   function ensurePerson(name, id){
     id = id || ('m:'+stripAccents(name).replace(/\s+/g,'_'));
     let p=ppl.find(x=>x.accountId===id);
-    if(!p){ p={accountId:id, name, avatar:''}; ppl.push(p); work[id]={squads:[],role:''}; orig[id]={squads:[],role:'',name,avatar:''}; }
+    if(!p){ p={accountId:id, name, avatar:''}; ppl.push(p); work[id]={squads:[],role:'',email:''}; orig[id]={squads:[],role:'',name,avatar:'',email:''}; }
     return p;
   }
   const sb=modal.querySelector('#pm_search');
@@ -3498,7 +3503,7 @@ function openPeopleManager(){
   modal.querySelector('#pm_add_btn').onclick=()=>{
     const nm=addName.value.trim(); if(!nm){ addName.focus(); return; }
     const p=ensurePerson(nm);
-    work[p.accountId]={squads:addSquads.slice(), role:modal.querySelector('#pm_add_role').value};
+    work[p.accountId]={squads:addSquads.slice(), role:modal.querySelector('#pm_add_role').value, email:(work[p.accountId]&&work[p.accountId].email)||''};
     addName.value=''; addSquads=[]; mountAddPicker(); renderList();
     const row=listEl.querySelector('.pm-row[data-id="'+CSS.escape(p.accountId)+'"]'); if(row){ row.scrollIntoView({block:'center'}); row.classList.add('sel'); }
   };
@@ -3521,7 +3526,7 @@ function openPeopleManager(){
         byName[nm]=p;
       }
       const id=p.accountId;
-      if(!seen.has(id)){ work[id]={squads:[], role}; seen.add(id); }   // reset once, first time this person is touched
+      if(!seen.has(id)){ work[id]={squads:[], role, email:(work[id]&&work[id].email)||(orig[id]&&orig[id].email)||''}; seen.add(id); }   // reset once, first time this person is touched (keep email)
       const w=work[id];
       if(!w.squads.includes(squad)) w.squads.push(squad);
       if(role && !w.role) w.role=role;
@@ -3533,9 +3538,10 @@ function openPeopleManager(){
   modal.querySelector('#pm_save').onclick=()=>{
     const patch={};
     const sameSquads=(a,b)=>{ a=a||[]; b=b||[]; if(a.length!==b.length) return false; const B=new Set(b); return a.every(x=>B.has(x)); };
-    ppl.forEach(p=>{ const w=work[p.accountId]||{squads:[],role:''}, o=orig[p.accountId]||{squads:[],role:''};
-      if(!sameSquads(w.squads,o.squads) || (w.role||'')!==(o.role||'')){
-        setPersonMeta(p.accountId, p.name, p.avatar, w.squads, w.role);
+    ppl.forEach(p=>{ const w=work[p.accountId]||{squads:[],role:'',email:''}, o=orig[p.accountId]||{squads:[],role:'',email:''};
+      const emailChanged=(w.email||'').trim()!==(o.email||'').trim();
+      if(!sameSquads(w.squads,o.squads) || (w.role||'')!==(o.role||'') || emailChanged){
+        setPersonMeta(p.accountId, p.name, p.avatar, w.squads, w.role, (w.email||'').trim());
         patch[p.accountId]=state.people[p.accountId];
       }
     });
