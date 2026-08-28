@@ -1304,7 +1304,7 @@ function tagsLineHTML(tags){
 const FEATURE_SIZES = ['Small','Medium','Big','Huge'];
 const PRIORITIES = ['Highest','High','Medium','Low'];
 const OPEN_SCALES = ['Internal','Beta','Public'];   // release scope shown in the Marketing view
-const ROLES = ['Backend','Frontend','Android','iOS','Fullstack','QA','QC','BA','Design','PM','PC','SM','DevOps','Data'];   // people roles (PC=Project Coordinator, SM=Scrum Master)
+const ROLES = ['TL','Backend','Frontend','Android','iOS','Fullstack','QA','QC','BA','Design','PM','PC','SM','DevOps','Data'];   // people roles (TL=Tech Lead, PC=Project Coordinator, SM=Scrum Master)
 // Core squad rosters from Slack user groups: [name, role, squadKey]. One primary squad per person
 // (shared coordinators/BAs/SM assigned to a home squad; adjust in the modal). squadKey resolves to the
 // tribe's actual squad name via squadNameForKey().
@@ -1362,7 +1362,7 @@ const stripAccents=s=>(s||'').normalize('NFD').replace(DIACRITICS,'').toLowerCas
 function nameTokens(s){ return stripAccents(s).split(/[^a-z0-9]+/).filter(Boolean); }
 function nameLooseMatch(a,b){ const ta=nameTokens(a), sb=new Set(nameTokens(b)); return ta.length>0 && ta.every(t=>sb.has(t)); }
 // Role display order so leads/coordinators show first among a squad's people.
-const ROLE_ORDER = ['PM','SM','PC','Fullstack','Backend','Frontend','iOS','Android','Data','BA','QA','QC','Design','DevOps'];
+const ROLE_ORDER = ['PM','SM','PC','TL','Fullstack','Backend','Frontend','iOS','Android','Data','BA','QA','QC','Design','DevOps'];
 const ORD_ROLE=r=>{ const i=ROLE_ORDER.indexOf(r); return i<0?99:i; };
 // The directory people to show for the current tab: a real squad's members, or (on All Squads) the
 // whole-tribe roster. Returns {label, people, allSquads}; people empty on other virtual views.
@@ -1395,7 +1395,7 @@ function renderSquadPeople(){
   el.onclick=openSquadPeoplePopup;
 }
 // Popup: the squad's people grouped by role (and by squad on All Squads).
-const ROLE_FULL={PM:'Product / Project Manager',SM:'Scrum Master',PC:'Project Coordinator',BA:'Business Analyst',QA:'QA Engineer',QC:'QC',Frontend:'Frontend',Backend:'Backend',iOS:'iOS',Android:'Android',Fullstack:'Fullstack',Data:'Data',Design:'Design',DevOps:'DevOps'};
+const ROLE_FULL={TL:'Tech Lead',PM:'Product / Project Manager',SM:'Scrum Master',PC:'Project Coordinator',BA:'Business Analyst',QA:'QA Engineer',QC:'QC',Frontend:'Frontend',Backend:'Backend',iOS:'iOS',Android:'Android',Fullstack:'Fullstack',Data:'Data',Design:'Design',DevOps:'DevOps'};
 function openSquadPeoplePopup(){
   const {label, people, allSquads}=squadPeopleList(); if(!people.length) return;
   const personLine=p=>{ const col=assigneeColor(p.id||p.name||''), ini=esc(assigneeInitials(p.name));
