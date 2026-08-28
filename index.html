@@ -1335,6 +1335,22 @@ const ROSTER_ACCOUNTS = {
   'Bao Ho':'633108fda84c7f79c3865027',
   'Thanh Ngo':'5ebe4253833be70b7e45a444',
 };
+// Real @everfit.io emails per roster name (verified via Slack directory, not guessed — many differ from the
+// name, e.g. Sally Phan → tuyenphan, Dong Vo → dongdoan, Uyen Thao → thaodinhthi). Used by the Admin page's
+// "Backfill emails" action to fill directory entries that have no email yet. Value = local-part only.
+const ROSTER_EMAILS = {
+  'Anh Van Le':'anhle','Bao Ho':'baoho','Dung Pham':'dungpham','Duy Le':'duyle','Ha Duong':'haduong',
+  'Hanh Le':'hanhle','Hoai Ho':'hoaiho','Hoang Nguyen':'hoangnguyenphuc','Phu Duong':'phuduong','Tan Huynh':'tanhuynh',
+  'Thao Nguyen Nguyen':'nguyennguyen','Thao Pham':'thaopham','Trung Huynh':'trunghuynh','Bich Thuy':'thuyha',
+  'Danh Truong':'danhtruong','Duc Trinh':'ductrinh','Ngan Le':'nganlethi','Nhan Huynh':'nhanhuynh','Sally Phan':'tuyenphan',
+  'Thai Bui':'thaibui','Thanh Tran':'thanhtran','Thuc Vo':'thucvo','Toan Tran':'toantran','Trang Le':'trangle',
+  'Van Nguyen':'vannguyen','Dong Truong':'dongtruong','Duyen Tran':'duyentran','Ha Nguyen':'hanguyen','Lanh Ngo':'lanhngo',
+  'Loc Le':'locle','Thao Dinh':'thaodinh','Dieu Kieu':'dieukieu','Nhi Bien':'nhibien','Thanh Ngo':'thanhngo',
+  'Thuong Huynh':'thuonghuynh','Dong Vo':'dongdoan','Jade Nguyen':'ngocnguyenthi','Long Nguyen Hoang':'longnguyen12',
+  'Long Phan':'longphan','Ly Nguyen':'lynguyen','Quang Pham Minh':'quangphamminh','Thinh Le':'thinhle','Tuan Nguyen':'tuannguyen',
+  'Uyen Thao':'thaodinhthi','Anh Phan':'anhphan','Duong Tran Quoc':'duongtranquoc','Hanh Tran':'hanhtran','Khoa Huynh':'khoahuynh',
+  'Ngoc Nguyen':'ngocnguyen','Nhat Huy':'huynguyennhat','Tran Nguyen':'trannguyen','Trang Ngo':'trangngo','Tuyen Tran':'tuyentran',
+};
 const SQUAD_KEY_PATS = { nutrition:/nutrition/i, engagement:/engagement/i, enablement:/enablement/i, integration:/integration|middleware/i, platform:/platform|workspace|capability/i, training:/training|automation/i };
 const SQUAD_KEY_LABELS = { nutrition:'Nutrition', engagement:'Engagement', enablement:'Enablement', integration:'Integration & Middleware', platform:'Platform Capability', training:'Training & Automation' };
 // Map a roster squadKey to the tribe's actual squad name (fuzzy), else the standard label.
@@ -4981,6 +4997,28 @@ async function saveAccess(email, areas){
     else setSync('Permissions save failed','bad');
   }catch(e){ setSync('Permissions save failed — offline','bad'); }
 }
+// One-click: fill @everfit.io emails (from ROSTER_EMAILS, verified via Slack) into directory entries that
+// have none. Matches by normalized name, with a unique-loose-match fallback; never overwrites an existing
+// email. Persists via a single targeted patchPeople merge. Super-admin only.
+function backfillEmails(){
+  if(!isSuperAdmin()) return;
+  const norm=s=>stripAccents(s).replace(/[^a-z0-9]+/g,' ').trim();
+  const byNorm={}; Object.entries(ROSTER_EMAILS).forEach(([nm,lp])=>{ byNorm[norm(nm)]=lp+'@everfit.io'; });
+  const dir=state.people||{}; const patch={}; let skipped=0;
+  Object.entries(dir).forEach(([id,m])=>{
+    if(!m || !m.name || (m.email||'').trim()) return;   // no name, or already has an email
+    let email=byNorm[norm(m.name)];
+    if(!email){   // fallback: accept a loose name match only when exactly one roster entry matches
+      const cand=Object.keys(byNorm).filter(k=>nameLooseMatch(k,m.name)||nameLooseMatch(m.name,k));
+      if(cand.length===1) email=byNorm[cand[0]];
+    }
+    if(email){ dir[id]={...m, email}; patch[id]=dir[id]; } else skipped++;
+  });
+  const n=Object.keys(patch).length;
+  if(!n){ alert('No unmatched directory people could be matched to the roster. '+(skipped?skipped+' still have no email — set them manually in Manage people.':'')); return; }
+  if(!confirm('Fill the email for '+n+' '+(n===1?'person':'people')+' from the roster?'+(skipped?('\n\n'+skipped+' could not be matched and will stay empty (set those manually).'):''))) return;
+  patchPeople(patch); refreshAccess(); renderAdminPage();
+}
 // Admin page: grant delegatable areas (ACCESS_AREAS) to teammates. Super-admin only.
 function renderAdminPage(){
   const el=document.getElementById('adminPage'); if(!el) return;
@@ -4989,12 +5027,14 @@ function renderAdminPage(){
   const dir=Object.entries(state.people||{}).map(([id,m])=>({id,...m})).filter(p=>p.name).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
   const withEmail=dir.filter(p=>(p.email||'').trim());
   const noEmail=dir.filter(p=>!(p.email||'').trim());
-  el.innerHTML=`<div class="onb-head"><div class="onb-h1">🔐 Admin · Permissions</div></div>
+  el.innerHTML=`<div class="onb-head"><div class="onb-h1">🔐 Admin · Permissions</div>
+      ${noEmail.length?`<div class="onb-actions"><button class="btn primary" id="adm_backfill">✉ Backfill emails (${noEmail.length})</button></div>`:''}</div>
     <div class="onb-sub">Grant teammates access to specific areas. You (<b>${esc(ADMIN_EMAIL)}</b>) always have full access and manage this page. Tribe/squad structure changes and version history stay admin-only.</div>
     <div class="adm-legend">${ACCESS_AREAS.map(a=>`<span class="adm-leg"><b>${esc(a.label)}</b> — ${esc(a.desc)}</span>`).join('')}</div>
     <div class="adm-tablewrap"><div class="adm-table" id="adm_table"></div></div>
     ${noEmail.length?`<div class="adm-note">⚠ ${noEmail.length} ${noEmail.length===1?'person has':'people have'} no email set, so they can't be granted access yet. Add emails in <b>Organization → Manage people</b>.</div>`:''}
     ${withEmail.length?'':'<div class="onb-empty">No people with an email in the directory yet.</div>'}`;
+  const bf=el.querySelector('#adm_backfill'); if(bf) bf.onclick=backfillEmails;
   const table=el.querySelector('#adm_table');
   if(!withEmail.length) return;
   const head=document.createElement('div'); head.className='adm-row adm-head';
