@@ -221,6 +221,8 @@
   .pm-person{display:flex;align-items:center;gap:9px;min-width:0;}
   .pm-person .assignee-av,.pm-person .assignee-ini{width:28px;height:28px;font-size:11px;flex:none;}
   .pm-name{font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .pm-name-input{font-weight:600;border:1px solid var(--border);border-radius:7px;padding:5px 8px;font-family:inherit;min-width:0;flex:1;background:#fff;}
+  .pm-name-input:focus{outline:none;border-color:#4c6fff;box-shadow:0 0 0 2px #d7e0ff;}
   .pm-row select{font-size:13px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;font-family:inherit;background:#fff;width:100%;}
   .ppl-sumline{font-size:12px;color:var(--muted);font-weight:600;margin:0 2px 14px;}
   .ppl-card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(16,24,40,.06);}
@@ -3470,7 +3472,15 @@ function openPeopleManager(){
     const w=work[p.accountId]||(work[p.accountId]={squads:[],role:''});
     const manual=String(p.accountId).startsWith('m:');
     const person=document.createElement('span'); person.className='pm-person';
-    person.innerHTML=`${personAvatarHTML(p)}<span class="pm-name">${esc(p.name||'Unknown')}</span>${manual?'<span class="pm-manual">manual</span>':''}`;
+    person.innerHTML=personAvatarHTML(p);
+    if(manual){   // manually-added people have an editable name (Jira-linked names come from sync)
+      const ni=document.createElement('input'); ni.className='pm-name pm-name-input'; ni.value=p.name||''; ni.placeholder='Name'; ni.autocomplete='off';
+      ni.oninput=e=>{ p.name=e.target.value; };
+      person.appendChild(ni);
+      const b=document.createElement('span'); b.className='pm-manual'; b.textContent='manual'; person.appendChild(b);
+    } else {
+      const nm=document.createElement('span'); nm.className='pm-name'; nm.textContent=p.name||'Unknown'; person.appendChild(nm);
+    }
     const picker=squadPicker(w.squads, arr=>{ work[p.accountId].squads=arr; });
     const rs=document.createElement('select'); rs.className='pm-role'; rs.innerHTML=roleOpts(w.role); rs.value=w.role||'';
     rs.onchange=e=>{ work[p.accountId].role=e.target.value; };
@@ -3481,12 +3491,14 @@ function openPeopleManager(){
     row.appendChild(person); row.appendChild(picker); row.appendChild(rs); row.appendChild(em); row.appendChild(del);
     return row;
   }
+  // a row's name comes from the static span (Jira people) or the editable input (manual people)
+  const rowName=row=>{ const i=row.querySelector('.pm-name-input'); if(i) return i.value; const s=row.querySelector('.pm-name'); return s?(s.textContent||''):''; };
   function renderList(){
     listEl.innerHTML=''; countEl.textContent=ppl.length+' '+(ppl.length===1?'person':'people');
     if(!ppl.length){ listEl.innerHTML='<div style="padding:14px;color:var(--muted);font-size:13px;">No people yet — run a Jira sync or add someone manually.</div>'; return; }
     ppl.slice().sort((a,b)=>(a.name||'zzz').localeCompare(b.name||'zzz')).forEach(p=>listEl.appendChild(makeRow(p)));
     const s=(modal.querySelector('#pm_search').value||'').trim().toLowerCase();
-    if(s) listEl.querySelectorAll('.pm-row').forEach(row=>{ row.style.display=(row.querySelector('.pm-name').textContent||'').toLowerCase().includes(s)?'':'none'; });
+    if(s) listEl.querySelectorAll('.pm-row').forEach(row=>{ row.style.display=rowName(row).toLowerCase().includes(s)?'':'none'; });
   }
   renderList();
   // add (or find) a person in the working set
@@ -3497,7 +3509,7 @@ function openPeopleManager(){
     return p;
   }
   const sb=modal.querySelector('#pm_search');
-  sb.oninput=()=>{ const s=sb.value.trim().toLowerCase(); listEl.querySelectorAll('.pm-row').forEach(row=>{ const n=(row.querySelector('.pm-name').textContent||'').toLowerCase(); row.style.display=(!s||n.includes(s))?'':'none'; }); };
+  sb.oninput=()=>{ const s=sb.value.trim().toLowerCase(); listEl.querySelectorAll('.pm-row').forEach(row=>{ const n=rowName(row).toLowerCase(); row.style.display=(!s||n.includes(s))?'':'none'; }); };
   // manual add
   const addName=modal.querySelector('#pm_add_name');
   modal.querySelector('#pm_add_btn').onclick=()=>{
@@ -3538,10 +3550,12 @@ function openPeopleManager(){
   modal.querySelector('#pm_save').onclick=()=>{
     const patch={};
     const sameSquads=(a,b)=>{ a=a||[]; b=b||[]; if(a.length!==b.length) return false; const B=new Set(b); return a.every(x=>B.has(x)); };
-    ppl.forEach(p=>{ const w=work[p.accountId]||{squads:[],role:'',email:''}, o=orig[p.accountId]||{squads:[],role:'',email:''};
+    ppl.forEach(p=>{ const w=work[p.accountId]||{squads:[],role:'',email:''}, o=orig[p.accountId]||{squads:[],role:'',email:'',name:''};
       const emailChanged=(w.email||'').trim()!==(o.email||'').trim();
-      if(!sameSquads(w.squads,o.squads) || (w.role||'')!==(o.role||'') || emailChanged){
-        setPersonMeta(p.accountId, p.name, p.avatar, w.squads, w.role, (w.email||'').trim());
+      const name=(p.name||'').trim()||o.name||'';   // never save an empty name — keep the original
+      const nameChanged=name!==(o.name||'');
+      if(!sameSquads(w.squads,o.squads) || (w.role||'')!==(o.role||'') || emailChanged || nameChanged){
+        setPersonMeta(p.accountId, name, p.avatar, w.squads, w.role, (w.email||'').trim());
         patch[p.accountId]=state.people[p.accountId];
       }
     });
