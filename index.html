@@ -353,6 +353,12 @@
   .pp-epic.open .pp-caret{transform:rotate(90deg);}
   .pp-issue{display:flex;align-items:center;gap:8px;padding:5px 2px;font-size:12.5px;border-top:1px solid #f2f4f7;}
   .pp-issue:first-child{border-top:none;}
+  .pp-fv{margin-top:8px;}
+  .pp-fv:first-child{margin-top:0;}
+  .pp-fv-h{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 6px;margin-bottom:2px;background:#f9fafb;border-radius:6px;}
+  .pp-fv-v{font-size:11px;font-weight:800;color:#475467;text-transform:uppercase;letter-spacing:.3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .pp-fv-c{font-size:11px;font-weight:700;color:#98a2b3;flex:none;}
+  .pp-fv .pp-issue:first-child{border-top:none;}
   .pp-st{flex:none;font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.3px;border-radius:5px;padding:2px 6px;}
   .pp-st.done{background:#d1fadf;color:#027a48;}
   .pp-st.qa{background:#fef0c7;color:#b54708;}
@@ -4322,10 +4328,25 @@ function renderDelivery(container, data, base){
     const esum=b=>ei.filter(i=>bk(i)===b).reduce((s,i)=>s+ew(i),0);
     const ed=esum('done'), eqa=esum('qa'), epg=esum('prog'), etot=ei.reduce((s,i)=>s+ew(i),0), et=etot-ed-eqa-epg;
     const s2=n=>etot?(n/etot*100):0;
-    const rows=ei.slice().sort((a,b)=>(ord[bk(a)]-ord[bk(b)])||a.key.localeCompare(b.key)).map(i=>{
+    const rowHtml=i=>{
       const cls=bk(i); const sp=Number(i.sp)||0;
       return `<div class="pp-issue"><span class="pp-st ${cls}" title="${esc(i.status)}">${esc(i.status||cls)}</span><a class="pp-ikey" href="${esc(base+'/browse/'+i.key)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(i.key)}</a><span class="pp-isum">${esc(i.summary)}</span>${sp?`<span class="pp-pts">${sp}p</span>`:''}${i.subtask?'<span class="pp-isub">sub</span>':''}</div>`;
-    }).join('');
+    };
+    const byBucket=(a,b)=>(ord[bk(a)]-ord[bk(b)])||a.key.localeCompare(b.key);
+    let rows;
+    if(ei.some(i=>i.fixVersions&&i.fixVersions.length)){   // group child issues by fix version when any are set
+      const groups={}, gorder=[];
+      ei.forEach(i=>{ const v=(i.fixVersions&&i.fixVersions[0])||''; if(!(v in groups)){ groups[v]=[]; gorder.push(v); } groups[v].push(i); });
+      gorder.sort((a,b)=> (a===''?1:0)-(b===''?1:0) || a.localeCompare(b,undefined,{numeric:true}));
+      rows=gorder.map(v=>{
+        const list=groups[v].slice().sort(byBucket);
+        const ept=list.some(i=>(Number(i.sp)||0)>0), gpts=list.reduce((s,i)=>s+(ept?(Number(i.sp)||0):1),0);
+        const gdone=list.filter(i=>bk(i)==='done'||bk(i)==='qa').reduce((s,i)=>s+(ept?(Number(i.sp)||0):1),0);
+        return `<div class="pp-fv"><div class="pp-fv-h"><span class="pp-fv-v">${v?('🏷 '+esc(v)):'No fix version'}</span><span class="pp-fv-c">${gdone}/${gpts}${ept?'p':''}</span></div>${list.map(rowHtml).join('')}</div>`;
+      }).join('');
+    } else {
+      rows=ei.slice().sort(byBucket).map(rowHtml).join('');
+    }
     h+=`<div class="pp-epic"><div class="pp-epic-h"><span class="pp-caret">▸</span><span class="pp-epic-key">${esc(ep.key)}</span><span class="pp-epic-name">${esc(ep.summary||'')}</span>`+
        `<span class="pp-mini"><span class="pp-seg-done" style="width:${s2(ed)}%"></span><span class="pp-seg-qa" style="width:${s2(eqa)}%"></span><span class="pp-seg-prog" style="width:${s2(epg)}%"></span><span class="pp-seg-todo" style="width:${s2(et)}%"></span></span>`+
        `<span class="pp-epic-cnt">${ed+eqa}/${etot}${epPts?'p':''}</span></div>`+

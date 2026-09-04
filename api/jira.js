@@ -260,11 +260,11 @@ export default async function handler(req, res) {
       if (!epics.length) { res.status(200).json({ epics: [], issues: [] }); return; }
       const catOf = st => (st && st.statusCategory && st.statusCategory.key) || 'new';   // new|indeterminate|done
       const spf = await spFieldId();
-      const fields = ['status', 'issuetype', 'parent', 'summary', 'assignee'].concat(spf ? [spf] : []);
+      const fields = ['status', 'issuetype', 'parent', 'summary', 'assignee', 'fixVersions'].concat(spf ? [spf] : []);
       const issues = [], childToEpic = {};
       const pushIssue = (iss, epic) => {
         const f = iss.fields || {}; const st = f.status || {};
-        issues.push({ key: iss.key, epic, type: (f.issuetype && f.issuetype.name) || '', subtask: !!(f.issuetype && f.issuetype.subtask), summary: f.summary || '', status: st.name || '', cat: catOf(st), sp: spNum(f, spf), assignee: f.assignee ? person(f.assignee) : null });
+        issues.push({ key: iss.key, epic, type: (f.issuetype && f.issuetype.name) || '', subtask: !!(f.issuetype && f.issuetype.subtask), summary: f.summary || '', status: st.name || '', cat: catOf(st), sp: spNum(f, spf), assignee: f.assignee ? person(f.assignee) : null, fixVersions: (Array.isArray(f.fixVersions) ? f.fixVersions.map(v => v && v.name).filter(Boolean) : []) });
       };
       for (const grp of chunk(epics, 50)) {
         await jqlEach('parent in (' + grp.join(',') + ')', fields, iss => {
