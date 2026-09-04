@@ -4337,7 +4337,9 @@ function renderDelivery(container, data, base){
     if(ei.some(i=>i.fixVersions&&i.fixVersions.length)){   // group child issues by fix version when any are set
       const groups={}, gorder=[];
       ei.forEach(i=>{ const v=(i.fixVersions&&i.fixVersions[0])||''; if(!(v in groups)){ groups[v]=[]; gorder.push(v); } groups[v].push(i); });
-      gorder.sort((a,b)=> (a===''?1:0)-(b===''?1:0) || a.localeCompare(b,undefined,{numeric:true}));
+      // "To be confirmed" pinned top, "N/A" pinned bottom, "No fix version" just above N/A, rest natural.
+      const fvRank=v=>{ const s=(v||'').trim().toLowerCase(); if(s==='to be confirmed'||s==='tbc') return 0; if(s==='') return 2; if(s==='n/a'||s==='na') return 3; return 1; };
+      gorder.sort((a,b)=> fvRank(a)-fvRank(b) || a.localeCompare(b,undefined,{numeric:true}));
       rows=gorder.map(v=>{
         const list=groups[v].slice().sort(byBucket);
         const ept=list.some(i=>(Number(i.sp)||0)>0), gpts=list.reduce((s,i)=>s+(ept?(Number(i.sp)||0):1),0);
