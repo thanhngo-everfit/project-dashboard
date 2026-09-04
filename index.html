@@ -580,6 +580,7 @@
   .mkt-rel.no{color:#667085;background:#f2f4f7;border:1px solid #e4e7ec;}
   .mkt-rel.done{color:#344054;background:#eaecf0;border:1px solid #d0d5dd;}
   .mkt-rel.wait{color:#b54708;background:#fffaeb;border:1px solid #fedf89;}
+  .mkt-rel.overdue{color:#b42318;background:#fef3f2;border:1px solid #fecdca;}
   .mkt-scale{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.3px;border-radius:999px;padding:2px 9px;white-space:nowrap;}
   .mkt-scale.s-internal{color:#475467;background:#f2f4f7;border:1px solid #e4e7ec;}
   .mkt-scale.s-beta{color:#b54708;background:#fffaeb;border:1px solid #fedf89;}
@@ -2504,7 +2505,7 @@ function renderReleaseFilter(){
   const present=new Set();
   const scope = (activeVirtual()&&activeVirtual().listByEnd) ? allProjects().map(x=>x.p) : activeSquad().projects.flatMap(c=>c.phases||[]);
   scope.forEach(p=>present.add(projStatusLabel(p)));
-  const ORDER=['Active','Waiting for Start','Released','Completed'];
+  const ORDER=['Active','Overdue','Waiting for Start','Released','Completed'];
   const opts=ORDER.filter(s=>present.has(s));
   state.releaseFilters=state.releaseFilters.filter(s=>present.has(s));   // drop filters no longer present
   const n=state.releaseFilters.length;
@@ -2915,6 +2916,7 @@ function renderListByEnd(g){
         const rel = p.release==='released' ? '<span class="mkt-rel yes">Released</span>'
                   : p.release==='completed' ? '<span class="mkt-rel done">Completed</span>'
                   : (projStatusLabel(p)==='Waiting for Start') ? '<span class="mkt-rel wait">Waiting for Start</span>'
+                  : (projStatusLabel(p)==='Overdue') ? '<span class="mkt-rel overdue">Overdue</span>'
                   : '<span class="mkt-rel no">Not yet</span>';
         const scale = p.openScale ? `<span class="mkt-scale s-${esc(p.openScale.toLowerCase())}">${esc(p.openScale)}</span>` : '<span class="mkt-dash">—</span>';
         const linksHtml=indicatorsHTML(p);
@@ -3928,10 +3930,12 @@ function projStatusLabel(proj){
   if(proj.release==='released') return 'Released';
   if(proj.release==='completed') return 'Completed';
   if(validISO(proj.start) && proj.start > todayISO()) return 'Waiting for Start';
+  if(validISO(proj.end) && proj.end < todayISO()) return 'Overdue';   // started, past its end date, not yet released/completed
   return 'Active';
 }
 const STATUS_STYLE={
   'Active':{c:'#1849a9',bg:'#eff8ff',bd:'#b2ddff'},
+  'Overdue':{c:'#b42318',bg:'#fef3f2',bd:'#fecdca'},
   'Waiting for Start':{c:'#b54708',bg:'#fffaeb',bd:'#fedf89'},
   'Released':{c:'#085d3a',bg:'#d3f8df',bd:'#75e0a7'},
   'Completed':{c:'#085d3a',bg:'#d3f8df',bd:'#75e0a7'},
