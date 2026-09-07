@@ -3806,7 +3806,7 @@ function phaseRow(cat,proj,units,tw){
       const donePct=p.total?p.done/p.total*100:0, qaPct=p.total?(p.qa||0)/p.total*100:0;
       const rem=Math.max(0, Math.round((p.total-p.done-(p.qa||0))*10)/10), remU=p.unit==='pts'?'p':'';
       const badge=document.createElement('span'); badge.className='pctbadge'; badge.textContent = rem>0 ? (pct+'% · '+rem+remU+' left') : (pct+'%'); bar.appendChild(badge);
-      if(p.tbc>0){ const tb=document.createElement('span'); tb.className='tbcbadge'; tb.textContent='⚠ '+p.tbc+' TBC'; tb.title=p.tbc+' ticket'+(p.tbc>1?'s':'')+' in the "To be confirmed" fix version — needs a fix version'; bar.insertBefore(tb, badge); }
+      if(p.tbc>0){ const tb=document.createElement('span'); tb.className='tbcbadge'; tb.textContent='⚠ '+p.tbc+' TBC'; tb.title=p.tbc+' ticket'+(p.tbc>1?'s':'')+' in the "To be confirmed" fix version — needs a fix version'; bar.appendChild(tb); }
       const pf=document.createElement('div'); pf.className='pfill';
       const g=document.createElement('span'); g.className='seg-done'; g.style.width=donePct+'%';
       const a=document.createElement('span'); a.className='seg-qa'; a.style.width=qaPct+'%';
