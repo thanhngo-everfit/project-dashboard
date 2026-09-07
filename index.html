@@ -4310,6 +4310,19 @@ function ensureProjPanel(){
 }
 function closeProjPanel(){ if(!_ppEls) return; _ppEls.panel.classList.remove('open'); _ppEls.bg.classList.remove('open'); }
 function catOfProject(projId){ const hit=allProjects().find(x=>x.p.id===projId); return hit?hit.cat:null; }
+// Move a project (phase) into a category in any squad. catId '' / '__new__' creates a same-named category
+// in the target squad. Returns true if it actually moved.
+function moveProjectTo(proj, squadId, catId, newCatName){
+  let src=null; (state.tribes||[]).forEach(t=>(t.squads||[]).forEach(s=>(s.projects||[]).forEach(c=>{ if((c.phases||[]).some(ph=>ph.id===proj.id)) src=c; })));
+  let tsq=null;  (state.tribes||[]).forEach(t=>(t.squads||[]).forEach(s=>{ if(s.id===squadId) tsq=s; }));
+  if(!src||!tsq) return false;
+  let tcat=(catId && catId!=='__new__') ? (tsq.projects||[]).find(c=>c.id===catId) : null;
+  if(!tcat){ tcat={id:uid(), name:(newCatName||src.name||'General').trim(), color:src.color||'#cdb4f6', phases:[]}; tsq.projects=tsq.projects||[]; tsq.projects.push(tcat); }
+  if(tcat===src) return false;
+  src.phases=(src.phases||[]).filter(ph=>ph.id!==proj.id);
+  tcat.phases=tcat.phases||[]; tcat.phases.push(proj);
+  return true;
+}
 function jiraBrowseBase(jiraUrl){ try{ return new URL(jiraUrl).origin; }catch(e){ return 'https://everfit.atlassian.net'; } }
 // Render the delivery-progress block (overall bar + per-epic breakdown of child task/sub-task statuses).
 function renderDelivery(container, data, base){
@@ -4429,7 +4442,7 @@ function renderPanelView(panel, cat, proj){
       <div class="pp-sec">
         <div class="pp-sec-h">Details <span style="margin-left:auto;font-weight:600;text-transform:none;letter-spacing:0;color:#b0b6c3;">click a field to edit</span></div>
         <div class="pp-meta">
-          ${row('Category', esc(cat.name||'—'))}
+          ${erow('category','Squad · Category', esc(((squadOfProject(proj.id)||{}).name||'')+(cat.name?(' · '+cat.name):'')))}
           ${erow('release','Status', chip(relLabel, STATUS_STYLE[relLabel]||{}))}
           ${erow('timeline','Timeline', (proj.start||proj.end)?esc((fmtShort(proj.start)||'…')+' → '+(fmtShort(proj.end)||'…')):'')}
           ${erow('priority','Priority', proj.priority?priorityChipHTML(proj):'')}
@@ -4497,6 +4510,21 @@ function mountFieldEditor(fkey, cell, proj, commit, cancel){
     cell.innerHTML=inner+`<div class="pp-ed-btns"><button class="btn primary" id="pp_ok">Save</button><button class="btn" id="pp_no">Cancel</button></div>`;
     cell.querySelector('#pp_ok').onclick=onSave; cell.querySelector('#pp_no').onclick=cancel;
   };
+  if(fkey==='category'){
+    const ownTribe=(state.tribes||[]).find(t=>(t.squads||[]).some(s=>(s.projects||[]).some(c=>(c.phases||[]).some(ph=>ph.id===proj.id)))) || activeTribe();
+    const squads=(ownTribe&&ownTribe.squads)||[];
+    const curSq=squads.find(s=>(s.projects||[]).some(c=>(c.phases||[]).some(ph=>ph.id===proj.id)));
+    const curCat=curSq&&(curSq.projects||[]).find(c=>(c.phases||[]).some(ph=>ph.id===proj.id));
+    withButtons(`<div class="pp-ed-row"><select id="pp_msq" class="pp-ed-inp"></select></div><div class="pp-ed-row" style="margin-top:6px;"><select id="pp_mcat" class="pp-ed-inp"></select></div>`, ()=>{
+      const sid=cell.querySelector('#pp_msq').value, cid=cell.querySelector('#pp_mcat').value;
+      if(moveProjectTo(proj, sid, cid, curCat?curCat.name:'General')){ _ppEditField=null; render(); openProjectPanel(catOfProject(proj.id), proj); }
+      else cancel();
+    });
+    const sqSel=cell.querySelector('#pp_msq'), catSel=cell.querySelector('#pp_mcat');
+    squads.forEach(s=>{ const o=document.createElement('option'); o.value=s.id; o.textContent=s.name; if(curSq&&s.id===curSq.id)o.selected=true; sqSel.appendChild(o); });
+    const fillCats=()=>{ const s=squads.find(x=>x.id===sqSel.value); catSel.innerHTML=''; ((s&&s.projects)||[]).forEach(c=>{ const o=document.createElement('option'); o.value=c.id; o.textContent=c.name; catSel.appendChild(o); }); const nw=document.createElement('option'); nw.value='__new__'; nw.textContent='＋ New category ("'+((curCat&&curCat.name)||'General')+'")'; catSel.appendChild(nw); if(curCat && s && (s.projects||[]).some(c=>c.id===curCat.id)) catSel.value=curCat.id; };
+    fillCats(); sqSel.onchange=fillCats; sqSel.focus(); return;
+  }
   if(fkey==='name'){ textEd(proj.name, v=>{ proj.name=v.trim()||proj.name; }, true); return; }
   if(fkey==='jira'){ textEd(proj.jira, v=>{ proj.jira=normalizeUrl(v.trim()); }); return; }
   if(fkey==='release'){ selectEd([{v:'',l:'Active'},{v:'released',l:'Released'},{v:'completed',l:'Completed (no release)'}], proj.release, v=>{ proj.release=v; proj.done=(v==='released'||v==='completed'); }); return; }
