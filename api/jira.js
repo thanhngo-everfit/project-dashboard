@@ -181,11 +181,11 @@ export default async function handler(req, res) {
       const epics = [...new Set((Array.isArray(body.epics) ? body.epics : []).map(k => String(k || '').trim()).filter(Boolean))].slice(0, 80);
       if (!epics.length) { res.status(200).json({ assignees: {}, tickets: [] }); return; }
       const spf = await spFieldId();
-      const pFields = ['assignee', 'parent', 'timespent', 'status'].concat(spf ? [spf] : []);
+      const pFields = ['assignee', 'parent', 'timespent', 'status', 'fixVersions'].concat(spf ? [spf] : []);
       const epicAssignees = {}, tickets = [], childToEpic = {};
       const catOf = st => (st && st.statusCategory && st.statusCategory.key) || 'new';   // new|indeterminate|done
       const addA = (epic, a) => { if (!epic || !a || !a.accountId) return; const m = epicAssignees[epic] || (epicAssignees[epic] = {}); if (!m[a.accountId]) m[a.accountId] = person(a); };
-      const push = (iss, epic) => { const f = iss.fields || {}; const ts = f.timespent; tickets.push({ key: iss.key, epic, ts: ts == null ? null : (Number(ts) || 0), cat: catOf(f.status), status: (f.status && f.status.name) || '', sp: spNum(f, spf) }); };
+      const push = (iss, epic) => { const f = iss.fields || {}; const ts = f.timespent; tickets.push({ key: iss.key, epic, ts: ts == null ? null : (Number(ts) || 0), cat: catOf(f.status), status: (f.status && f.status.name) || '', sp: spNum(f, spf), fixVersions: (Array.isArray(f.fixVersions) ? f.fixVersions.map(v => v && v.name).filter(Boolean) : []) }); };
       for (const grp of chunk(epics, 50)) {
         await jqlEach('parent in (' + grp.join(',') + ')', pFields, iss => {
           const epic = iss.fields && iss.fields.parent && iss.fields.parent.key; if (!epic) return;
