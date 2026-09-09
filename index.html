@@ -3068,7 +3068,7 @@ function renderOrgChart(g){
   // A lead can have a stale duplicate directory entry (e.g. a synthetic "m:" one from before account
   // linking) — exclude by accountId OR by loose name match so they never appear inside their own squads.
   const isLead=p=>leadIds.has(p.id) || leadNames.some(n=>nameLooseMatch(n, p.name));
-  const squads=curSquads();
+  const squads=curSquads().filter(s=>!isBacklogSquad(s));   // Backlog is a parking squad, not an org unit
   const dirList=Object.entries(dir).map(([id,m])=>({id,...m}));
   let totalMembers=0;
 
@@ -4310,6 +4310,15 @@ function ensureProjPanel(){
 }
 function closeProjPanel(){ if(!_ppEls) return; _ppEls.panel.classList.remove('open'); _ppEls.bg.classList.remove('open'); }
 function catOfProject(projId){ const hit=allProjects().find(x=>x.p.id===projId); return hit?hit.cat:null; }
+// Ensure every tribe has a "Backlog" squad (a parking squad you can move items to/from). Only a
+// roadmap-privileged user seeds it (adding a squad is a structural change); returns true if it added any.
+function ensureBacklogSquad(){
+  if(!can('roadmap')) return false;
+  let added=false;
+  (state.tribes||[]).forEach(t=>{ if(!(t.squads||[]).some(s=>/^backlog$/i.test((s.name||'').trim()))){ (t.squads=t.squads||[]).push({id:'sq_backlog_'+uid(), name:'Backlog', projects:[]}); added=true; } });
+  return added;
+}
+function isBacklogSquad(s){ return !!s && /^backlog$/i.test((s.name||'').trim()); }
 // Move a project (phase) into a category in any squad. catId '' / '__new__' creates a same-named category
 // in the target squad. Returns true if it actually moved.
 function moveProjectTo(proj, squadId, catId, newCatName){
@@ -5064,6 +5073,7 @@ function showApp(auth){
   renderProfile(auth);
   syncLoad().then(()=>{ startPolling(); startAutoJiraSync(); refreshAccess();
     const ha=document.getElementById('hubAdmin'); if(ha) ha.style.display=isSuperAdmin()?'':'none';
+    if(ensureBacklogSquad()) scheduleSave();   // one-time: create the Backlog parking squad (admin only)
     if(_squadWFseededNow && can('onboarding')){ _squadWFseededNow=false; saveOnboarding(); }   // persist the one-time import
     const deep = pendingViewSlug || pendingTribeSlug;   // ?view= / ?tribe= deep link -> go straight to roadmap
     showSection(deep ? 'roadmap' : (loadSection()||'home'));
