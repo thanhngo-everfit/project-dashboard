@@ -4615,6 +4615,10 @@ function openPhaseModal(category,proj){
     ${showTeam?`<div class="field"><label>Team</label>
       <div id="m_teams" class="tag-picker"></div>
     </div>`:''}
+    ${editing?`<div class="field row2">
+      <div><label>Squad (move project)</label><select id="m_squad"></select></div>
+      <div><label>Category</label><select id="m_cat"></select></div>
+    </div>`:''}
     <div class="field row2">
       <div><label>Feature size (optional)</label><select id="m_size">
         <option value="" ${!def.size?'selected':''}>None</option>
@@ -4637,6 +4641,19 @@ function openPhaseModal(category,proj){
     </div>
     <div class="modal-actions"><button class="btn" id="m_cancel">Cancel</button><button class="btn primary" id="m_save">Save</button></div>`;
   wireDateClears();
+  // Move-to-squad selectors (edit mode only). Category list follows the chosen squad; "＋ New" recreates
+  // the project's current category name in the target squad.
+  if(editing){
+    const ownTribe=(state.tribes||[]).find(t=>(t.squads||[]).some(s=>(s.projects||[]).some(c=>(c.phases||[]).some(ph=>ph.id===proj.id)))) || activeTribe();
+    const mSquads=(ownTribe&&ownTribe.squads)||[];
+    const curCatObj = category || catOfProject(proj.id);
+    const sqSel=modal.querySelector('#m_squad'), catSel=modal.querySelector('#m_cat');
+    if(sqSel && catSel){
+      mSquads.forEach(s=>{ const o=document.createElement('option'); o.value=s.id; o.textContent=s.name; if(ownSquad&&s.id===ownSquad.id)o.selected=true; sqSel.appendChild(o); });
+      const fillCats=()=>{ const s=mSquads.find(x=>x.id===sqSel.value); catSel.innerHTML=''; ((s&&s.projects)||[]).forEach(c=>{ const o=document.createElement('option'); o.value=c.id; o.textContent=c.name; catSel.appendChild(o); }); const nw=document.createElement('option'); nw.value='__new__'; nw.textContent='＋ New category ("'+((curCatObj&&curCatObj.name)||'General')+'")'; catSel.appendChild(nw); if(curCatObj && s && (s.projects||[]).some(c=>c.id===curCatObj.id)) catSel.value=curCatObj.id; };
+      fillCats(); sqSel.onchange=fillCats;
+    }
+  }
   // multi-select tags
   const tagWrap=modal.querySelector('#m_tags');
   function renderTagPicker(){
@@ -4722,7 +4739,10 @@ function openPhaseModal(category,proj){
     const done = release==='released' || release==='completed';
     const teamList = [...new Set(teams.map(t=>t.trim()).filter(Boolean))];
     const finalTeams = teamList.length ? teamList : (ownSquadName?[ownSquadName]:[]);   // never leave a project team-less
-    if(editing){ proj.name=name; proj.start=start; proj.end=end; proj.tags=tagList; proj.size=size; proj.promo=promo; proj.openScale=openScale; proj.priority=priority; proj.jira=jira; proj.docs=docList; proj.note=note; proj.release=release; proj.done=done; proj.teams=finalTeams; }
+    if(editing){ proj.name=name; proj.start=start; proj.end=end; proj.tags=tagList; proj.size=size; proj.promo=promo; proj.openScale=openScale; proj.priority=priority; proj.jira=jira; proj.docs=docList; proj.note=note; proj.release=release; proj.done=done; proj.teams=finalTeams;
+      const sqSel=modal.querySelector('#m_squad'), catSel=modal.querySelector('#m_cat');
+      if(sqSel && catSel){ const curCatObj=category||catOfProject(proj.id); moveProjectTo(proj, sqSel.value, catSel.value, curCatObj?curCatObj.name:'General'); }
+    }
     else category.phases.push({id:uid(),name,start,end,tags:tagList,size,promo,openScale,priority,jira,docs:docList,note,release,done,teams:finalTeams,tasks:[]});
     closeModal();render();
   };
