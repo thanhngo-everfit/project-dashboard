@@ -203,6 +203,13 @@ saved via a targeted `patchWiki` action. Everyone can read; editing needs the **
 super-admin). An empty wiki offers a "Create starter pages" scaffold (Workflows · Claude skills ·
 Engineering · Product · References).
 
+**Import → AI page.** The wiki's **✨ Import (AI)** button takes raw pasted text (or a loaded
+.txt/.md file) and calls `POST /api/wiki-ai`, which uses OpenAI to clean and structure it into a
+wiki page (title + Markdown-ish body) without dropping details. It reuses the same OpenAI env vars
+as evaluations (`OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_BASE_URL`). The endpoint accepts any
+verified `@everfit.io` user (it only formats text); saving the resulting page still needs the
+**Wiki** grant.
+
 Grants are stored in `state.access = { "<email>": ["onboarding", ...] }` and saved via a targeted
 `patchAccess` action (super-admin only). Access is **enforced server-side**: `patchPeople`, `patchEvals`
 and `patchOnboarding` accept the super-admin *or* anyone holding the matching grant (`api/state.js`

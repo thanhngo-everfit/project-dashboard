@@ -5190,15 +5190,48 @@ function wikiSeedStarter(){
   _wikiSel=w.pages[w.pages.length-seed.length].id; _wikiEdit=false;
   saveWiki(); renderWikiPage();
 }
+// Import a raw document and let AI structure it into a wiki page (POST /api/wiki-ai).
+function openWikiImport(parentId){
+  if(!can('wiki')) return;
+  modal.style.width='680px';
+  const parentOpts=['<option value="">— Top level —</option>'].concat(wikiState().pages.slice().sort((a,b)=>(a.title||'').localeCompare(b.title||'')).map(p=>`<option value="${esc(p.id)}"${(parentId||'')===p.id?' selected':''}>${esc((p.icon?p.icon+' ':'')+(p.title||'Untitled'))}</option>`)).join('');
+  modal.innerHTML=`<h3>Import document → AI page</h3>
+    <div style="font-size:12.5px;color:var(--muted);margin:-6px 0 12px;">Paste raw text (notes, an exported doc, a transcript) or load a .txt / .md file. AI cleans and structures it into a wiki page — it keeps the details, just reorganizes. You can edit after.</div>
+    <div class="field"><label>Raw document</label><textarea id="wimp_raw" style="min-height:200px;resize:vertical;" placeholder="Paste the document text here…"></textarea></div>
+    <div class="field row2"><div><label>Or load a text file</label><input type="file" id="wimp_file" accept=".txt,.md,.markdown,.csv,.log,.json,.text"></div><div><label>Parent page</label><select id="wimp_parent">${parentOpts}</select></div></div>
+    <div class="field"><label>Title hint (optional)</label><input id="wimp_title" placeholder="Leave blank to let AI name it"></div>
+    <div id="wimp_status" style="font-size:12.5px;color:var(--muted);min-height:16px;"></div>
+    <div class="modal-actions"><button class="btn" id="wimp_cancel">Cancel</button><button class="btn primary" id="wimp_go">✨ Convert with AI</button></div>`;
+  const raw=modal.querySelector('#wimp_raw'), status=modal.querySelector('#wimp_status');
+  modal.querySelector('#wimp_file').onchange=e=>{ const f=e.target.files&&e.target.files[0]; if(!f) return; const fr=new FileReader(); fr.onload=()=>{ raw.value=String(fr.result||''); const tEl=modal.querySelector('#wimp_title'); if(!tEl.value) tEl.value=f.name.replace(/\.[a-z0-9]+$/i,''); }; fr.readAsText(f); };
+  modal.querySelector('#wimp_cancel').onclick=closeModal;
+  const go=modal.querySelector('#wimp_go');
+  go.onclick=async()=>{
+    const text=(raw.value||'').trim(); if(!text){ status.textContent='Paste some text or load a file first.'; raw.focus(); return; }
+    go.disabled=true; status.textContent='✨ Converting with AI… this can take a few seconds.';
+    try{
+      const r=await apiFetch('/api/wiki-ai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({raw:text, title:modal.querySelector('#wimp_title').value.trim()})});
+      const j=await r.json().catch(()=>({}));
+      if(r.status===401){ handleAuthExpired(); return; }
+      if(!r.ok){ status.textContent='Failed: '+(j.detail||j.error||('HTTP '+r.status)); go.disabled=false; return; }
+      const pid=modal.querySelector('#wimp_parent').value||''; const sib=wikiChildren(pid);
+      const p={id:'wk_'+uid(), title:(j.title||'Imported page'), icon:'📄', parentId:pid, order:(sib.length?Math.max(...sib.map(x=>x.order||0))+1:0), body:(j.body||''), updatedAt:nowMs(), updatedBy:currentEmail};
+      wikiState().pages.push(p); _wikiSel=p.id; _wikiEdit=false; _wikiDraft=null;
+      saveWiki(); closeModal(); showSection('wiki'); renderWikiPage();
+    }catch(e){ status.textContent='Error: '+(e&&e.message||e); go.disabled=false; }
+  };
+  modalBg.classList.add('open'); raw.focus();
+}
 function renderWikiPage(){
   const el=document.getElementById('wikiPage'); if(!el) return;
   const w=wikiState(); const editable=can('wiki');
   if(_wikiSel && !wikiPage(_wikiSel)) { _wikiSel=null; _wikiEdit=false; }
   el.innerHTML=`<div class="onb-head"><div class="onb-h1">📚 Wiki</div>
-      ${editable?'<div class="onb-actions"><button class="btn primary" id="wiki_new">＋ New page</button></div>':''}</div>
+      ${editable?'<div class="onb-actions"><button class="btn" id="wiki_import">✨ Import (AI)</button><button class="btn primary" id="wiki_new">＋ New page</button></div>':''}</div>
     <div class="wiki-wrap"><div class="wiki-side"><input class="wiki-search" id="wiki_q" placeholder="Search pages…" value="${esc(_wikiQuery)}"><div class="wiki-tree" id="wiki_tree"></div></div>
       <div class="wiki-main" id="wiki_main"></div></div>`;
   const nb=el.querySelector('#wiki_new'); if(nb) nb.onclick=()=>wikiCreate('');
+  const ib=el.querySelector('#wiki_import'); if(ib) ib.onclick=()=>openWikiImport('');
   const q=el.querySelector('#wiki_q'); if(q) q.oninput=()=>{ _wikiQuery=q.value; const t=el.querySelector('#wiki_tree'); t.innerHTML=wikiTreeHTML(w,'',0,_wikiQuery.trim().toLowerCase())||'<div class="wiki-empty-side">No matches</div>'; wireWikiTree(el); };
   el.querySelector('#wiki_tree').innerHTML=wikiTreeHTML(w,'',0,_wikiQuery.trim().toLowerCase()) || (w.pages.length?'<div class="wiki-empty-side">No matches</div>':'<div class="wiki-empty-side">No pages yet</div>');
   wireWikiTree(el);
@@ -5222,9 +5255,10 @@ function renderWikiMain(main, w, editable){
   if(!w.pages.length){
     main.innerHTML=`<div class="wiki-welcome"><div class="wiki-welcome-ic">📚</div><h2>Start your team wiki</h2>
       <p>Keep workflows, Claude skills, how-tos and references in one place. Pages can nest, so you can grow the structure over time.</p>
-      ${editable?`<div class="wiki-welcome-actions"><button class="btn primary" id="wiki_seed">✨ Create starter pages</button><button class="btn" id="wiki_first">＋ Blank page</button></div><p class="wiki-hint">Suggested top level: Workflows · Claude skills · Engineering · Product · References</p>`:'<p class="wiki-hint">No pages yet.</p>'}</div>`;
+      ${editable?`<div class="wiki-welcome-actions"><button class="btn primary" id="wiki_seed">✨ Create starter pages</button><button class="btn" id="wiki_imp2">✨ Import a document</button><button class="btn" id="wiki_first">＋ Blank page</button></div><p class="wiki-hint">Suggested top level: Workflows · Claude skills · Engineering · Product · References</p>`:'<p class="wiki-hint">No pages yet.</p>'}</div>`;
     const sd=main.querySelector('#wiki_seed'); if(sd) sd.onclick=wikiSeedStarter;
     const fp=main.querySelector('#wiki_first'); if(fp) fp.onclick=()=>wikiCreate('');
+    const im=main.querySelector('#wiki_imp2'); if(im) im.onclick=()=>openWikiImport('');
     return;
   }
   const p=wikiPage(_wikiSel);
