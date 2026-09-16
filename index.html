@@ -800,6 +800,8 @@
   .wiki-row.sel{background:#eef2ff;}
   .wiki-row[draggable=true]{cursor:grab;}
   .wiki-row.drop{outline:2px solid #4c6fff;outline-offset:-2px;background:#eef2ff;border-radius:7px;}
+  .wiki-row.drop-before{box-shadow:inset 0 3px 0 #4c6fff;}
+  .wiki-row.drop-after{box-shadow:inset 0 -3px 0 #4c6fff;}
   .wiki-caret{flex:none;width:16px;border:none;background:none;color:#98a2b3;font-size:10px;cursor:pointer;padding:0;line-height:1;}
   .wiki-caret:hover{color:#475467;}
   .wiki-caret-sp{flex:none;width:16px;}
@@ -5262,6 +5264,20 @@ function htmlToMarkdown(html){
   walk(root);
   return out.join('\n\n').replace(/\n{3,}/g,'\n\n').trim();
 }
+// Drag-drop move: pos 'inside' nests under target; 'before'/'after' reorders among target's siblings.
+function wikiMove(dragId, targetId, pos){
+  if(!can('wiki') || !dragId || !targetId || dragId===targetId) return;
+  const drag=wikiPage(dragId), target=wikiPage(targetId); if(!drag||!target) return;
+  if(pos==='inside'){ moveWikiPage(dragId, targetId); return; }
+  const newParent=target.parentId||'';
+  if(newParent && (newParent===dragId || wikiIsDescendant(newParent, dragId))) return;   // no cycles
+  drag.parentId=newParent;
+  const sibs=wikiChildren(newParent).filter(x=>x.id!==dragId);
+  let at=sibs.findIndex(x=>x.id===targetId); if(at<0) at=sibs.length; if(pos==='after') at++;
+  sibs.splice(at,0,drag); sibs.forEach((x,i)=>x.order=i);
+  if(newParent) _wikiCollapsed.delete(newParent);
+  saveWiki(); renderWikiPage();
+}
 // Download a page to the user's computer as a portable Markdown (.md) file.
 function downloadWikiPage(p){
   if(!p) return;
@@ -5485,13 +5501,22 @@ function wireWikiTree(el){
   el.querySelectorAll('.wiki-add[data-add]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); if(_wikiEdit && _wikiDirty() && !confirm('Discard unsaved changes?')) return; wikiCreate(b.dataset.pid, {folder:b.dataset.add==='folder'}); });
   el.querySelectorAll('.wiki-del-btn').forEach(b=>b.onclick=e=>{ e.stopPropagation(); wikiDelete(b.dataset.del); });
   if(can('wiki')){   // drag a page onto a folder/page to move it in; drop on empty space -> top level
+    const clearDrops=()=>el.querySelectorAll('.wiki-row.drop,.wiki-row.drop-before,.wiki-row.drop-after').forEach(r=>r.classList.remove('drop','drop-before','drop-after'));
     el.querySelectorAll('.wiki-row').forEach(row=>{
       row.setAttribute('draggable','true');
       row.ondragstart=e=>{ _wikiDrag=row.dataset.rid; e.dataTransfer.effectAllowed='move'; try{e.dataTransfer.setData('text/plain',_wikiDrag);}catch(_){} };
-      row.ondragend=()=>{ _wikiDrag=null; el.querySelectorAll('.wiki-row.drop').forEach(r=>r.classList.remove('drop')); };
-      row.ondragover=e=>{ if(!_wikiDrag||_wikiDrag===row.dataset.rid||wikiIsDescendant(row.dataset.rid,_wikiDrag))return; e.preventDefault(); e.dataTransfer.dropEffect='move'; row.classList.add('drop'); };
-      row.ondragleave=e=>{ if(!row.contains(e.relatedTarget)) row.classList.remove('drop'); };
-      row.ondrop=e=>{ e.preventDefault(); e.stopPropagation(); row.classList.remove('drop'); moveWikiPage(_wikiDrag||e.dataTransfer.getData('text/plain'), row.dataset.rid); };
+      row.ondragend=()=>{ _wikiDrag=null; clearDrops(); };
+      row.ondragover=e=>{
+        if(!_wikiDrag||_wikiDrag===row.dataset.rid) return;
+        e.preventDefault(); e.dataTransfer.dropEffect='move';
+        const r=row.getBoundingClientRect(), y=e.clientY-r.top;
+        let pos = y < r.height*0.30 ? 'before' : y > r.height*0.70 ? 'after' : 'inside';
+        if(pos==='inside' && wikiIsDescendant(row.dataset.rid,_wikiDrag)) pos='after';   // can't nest into own subtree
+        row.dataset.pos=pos; row.classList.remove('drop','drop-before','drop-after');
+        row.classList.add(pos==='before'?'drop-before':pos==='after'?'drop-after':'drop');
+      };
+      row.ondragleave=e=>{ if(!row.contains(e.relatedTarget)) row.classList.remove('drop','drop-before','drop-after'); };
+      row.ondrop=e=>{ e.preventDefault(); e.stopPropagation(); const pos=row.dataset.pos||'inside'; clearDrops(); wikiMove(_wikiDrag||e.dataTransfer.getData('text/plain'), row.dataset.rid, pos); };
     });
     const tree=el.querySelector('#wiki_tree');
     if(tree){ tree.ondragover=e=>{ if(_wikiDrag){ e.preventDefault(); } }; tree.ondrop=e=>{ if(!_wikiDrag)return; e.preventDefault(); moveWikiPage(_wikiDrag,''); }; }
