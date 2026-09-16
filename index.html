@@ -840,6 +840,34 @@
   .wiki-ed-lbl{font-size:12px;font-weight:700;color:#667085;}
   .wiki-ed-parent{border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-family:inherit;font-size:13px;background:#fff;}
   .wiki-ed-body{width:100%;box-sizing:border-box;min-height:340px;resize:vertical;border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;line-height:1.6;color:#344054;}
+  /* rich text toolbar + editor */
+  .wiki-tb{display:flex;flex-wrap:wrap;align-items:center;gap:2px;border:1px solid var(--border);border-bottom:none;border-radius:10px 10px 0 0;padding:5px 6px;background:#f9fafb;}
+  .wtb{border:1px solid transparent;background:none;font-family:inherit;font-size:12.5px;color:#475467;min-width:28px;height:28px;padding:0 7px;border-radius:6px;cursor:pointer;line-height:1;}
+  .wtb:hover{background:#fff;border-color:var(--border);color:#101828;}
+  .wtb b,.wtb i,.wtb u,.wtb s{pointer-events:none;}
+  .wtb-sep{width:1px;height:18px;background:var(--border);margin:0 4px;}
+  .wiki-rte{min-height:340px;border:1px solid var(--border);border-radius:0 0 10px 10px;padding:14px 16px;outline:none;font-size:14px;line-height:1.6;color:#344054;overflow-y:auto;}
+  .wiki-rte:focus{border-color:#4c6fff;box-shadow:0 0 0 3px rgba(76,111,255,.14);}
+  .wiki-ed-hint{font-size:11.5px;color:#98a2b3;margin-top:6px;}
+  /* shared rich rendering (editor + html page view) */
+  .wiki-rich{word-wrap:break-word;}
+  .wiki-rich h1{font-size:22px;font-weight:900;color:var(--text);margin:16px 0 8px;line-height:1.25;}
+  .wiki-rich h2{font-size:17px;font-weight:800;color:var(--text);margin:16px 0 6px;padding-top:8px;border-top:1px solid var(--border);}
+  .wiki-rich h3{font-size:14.5px;font-weight:800;color:#1849a9;margin:12px 0 4px;}
+  .wiki-rich h1:first-child,.wiki-rich h2:first-child,.wiki-rich h3:first-child{margin-top:0;padding-top:0;border-top:none;}
+  .wiki-rich p{margin:8px 0;}
+  .wiki-rich ul,.wiki-rich ol{margin:8px 0;padding-left:26px;}
+  .wiki-rich li{margin:3px 0;}
+  .wiki-rich a{color:#1570ef;word-break:break-word;}
+  .wiki-rich strong,.wiki-rich b{font-weight:800;color:var(--text);}
+  .wiki-rich em,.wiki-rich i{font-style:italic;}
+  .wiki-rich blockquote{margin:10px 0;padding:4px 14px;border-left:3px solid #c7d7fe;background:#f8faff;color:#475467;border-radius:0 8px 8px 0;}
+  .wiki-rich pre{background:#0b1020;color:#e6edf3;border-radius:9px;padding:12px 14px;overflow-x:auto;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.5;white-space:pre-wrap;}
+  .wiki-rich code{background:#f2f4f7;border:1px solid var(--border);border-radius:5px;padding:0 5px;font-size:12.5px;font-family:ui-monospace,Menlo,Consolas,monospace;}
+  .wiki-rich pre code{background:none;border:none;padding:0;}
+  .wiki-rich table{border-collapse:collapse;margin:8px 0;}
+  .wiki-rich td,.wiki-rich th{border:1px solid var(--border);padding:5px 9px;}
+  .wiki-rich img{max-width:100%;border-radius:8px;}
   .wiki-ed-actions{display:flex;gap:8px;margin-top:12px;}
   .wiki-del{margin-left:auto;color:#d92d20;}
   .wiki-del:hover{background:#fee4e2;border-color:#fda29b;}
@@ -5182,7 +5210,21 @@ function renderOrgPage(){ const el=document.getElementById('orgPage'); if(el){ e
 /* ============================ Wiki ============================ */
 // state.wiki = { pages:[ {id,title,icon,parentId,order,body,updatedAt,updatedBy} ] }. Pages nest via parentId
 // (a tree in the sidebar). Body is markdown-ish, rendered with formatDocHTML. Editing needs the 'wiki' grant.
-let _wikiSel=null, _wikiEdit=false, _wikiDraft=null, _wikiQuery='', _wikiCollapsed=new Set();
+let _wikiSel=null, _wikiEdit=false, _wikiDraft=null, _wikiQuery='', _wikiCollapsed=new Set(), _wikiDirtyFlag=false;
+// Light sanitizer for rich-text (contenteditable) HTML: drop dangerous tags, on* handlers, javascript:
+// URLs and inline styles/classes; force safe links. Trusted internal tool, but keep pasted junk out.
+function sanitizeHTML(html){
+  const d=document.createElement('div'); d.innerHTML=String(html||'');
+  d.querySelectorAll('script,style,iframe,object,embed,form,input,link,meta,title').forEach(n=>n.remove());
+  d.querySelectorAll('*').forEach(el=>{
+    [...el.attributes].forEach(a=>{ const n=a.name.toLowerCase();
+      if(n.startsWith('on')||n==='style'||n==='class'||n==='id') el.removeAttribute(a.name);
+      else if((n==='href'||n==='src')&&/^\s*javascript:/i.test(a.value||'')) el.removeAttribute(a.name);
+    });
+    if(el.tagName==='A' && el.getAttribute('href')){ el.setAttribute('target','_blank'); el.setAttribute('rel','noopener'); }
+  });
+  return d.innerHTML;
+}
 function wikiState(){ if(!state.wiki||typeof state.wiki!=='object'||Array.isArray(state.wiki)) state.wiki={pages:[]}; if(!Array.isArray(state.wiki.pages)) state.wiki.pages=[]; return state.wiki; }
 function wikiPage(id){ return wikiState().pages.find(p=>p.id===id)||null; }
 function wikiChildren(pid){ return wikiState().pages.filter(p=>(p.parentId||'')===(pid||'')).sort((a,b)=>(a.order||0)-(b.order||0)||(a.title||'').localeCompare(b.title||'')); }
@@ -5215,31 +5257,46 @@ function wikiSeedStarter(){
   _wikiSel=w.pages[w.pages.length-seed.length].id; _wikiEdit=false;
   saveWiki(); renderWikiPage();
 }
-// Extract text from a .docx (a ZIP of XML) entirely in the browser: read the central directory, inflate
-// word/document.xml with DecompressionStream, then convert the WordprocessingML to markdown-ish text.
-async function extractDocxText(buf){
+// Read one entry from a ZIP (docx/skill are ZIPs) in the browser via the central directory + DecompressionStream.
+// matchFn(name) picks the entry; returns decoded text, or null if no entry matches.
+async function unzipEntryText(buf, matchFn){
   const dv=new DataView(buf), u8=new Uint8Array(buf), td=new TextDecoder();
   let eocd=-1; for(let i=u8.length-22;i>=0 && i>=u8.length-22-65536;i--){ if(dv.getUint32(i,true)===0x06054b50){ eocd=i; break; } }
-  if(eocd<0) throw new Error('Not a valid .docx file');
+  if(eocd<0) throw new Error('Not a valid ZIP/office file');
   let p=dv.getUint32(eocd+16,true); const count=dv.getUint16(eocd+10,true); let target=null;
   for(let n=0;n<count;n++){
     if(dv.getUint32(p,true)!==0x02014b50) break;
     const method=dv.getUint16(p+10,true), compSize=dv.getUint32(p+20,true), nameLen=dv.getUint16(p+28,true), extraLen=dv.getUint16(p+30,true), commentLen=dv.getUint16(p+32,true), localOff=dv.getUint32(p+42,true);
     const name=td.decode(u8.subarray(p+46,p+46+nameLen));
-    if(name==='word/document.xml'){ target={method,compSize,localOff}; break; }
+    if(matchFn(name)){ target={method,compSize,localOff}; break; }
     p+=46+nameLen+extraLen+commentLen;
   }
-  if(!target) throw new Error('word/document.xml not found in .docx');
+  if(!target) return null;
   const lh=target.localOff, lNameLen=dv.getUint16(lh+26,true), lExtraLen=dv.getUint16(lh+28,true);
   const dataStart=lh+30+lNameLen+lExtraLen;
   const comp=u8.subarray(dataStart, dataStart+target.compSize);
-  let xmlBytes;
-  if(target.method===0){ xmlBytes=comp; }
-  else { if(typeof DecompressionStream==='undefined') throw new Error('This browser can’t unzip .docx — paste the text instead.');
-    const ds=new DecompressionStream('deflate-raw');
-    const stream=new Response(new Blob([comp])).body.pipeThrough(ds);
-    xmlBytes=new Uint8Array(await new Response(stream).arrayBuffer()); }
-  return docxXmlToText(td.decode(xmlBytes));
+  if(target.method===0) return td.decode(comp);
+  if(typeof DecompressionStream==='undefined') throw new Error('This browser can’t unzip files — paste the text instead.');
+  const stream=new Response(new Blob([comp])).body.pipeThrough(new DecompressionStream('deflate-raw'));
+  return td.decode(new Uint8Array(await new Response(stream).arrayBuffer()));
+}
+async function extractDocxText(buf){
+  const xml=await unzipEntryText(buf, n=>n==='word/document.xml');
+  if(xml==null) throw new Error('word/document.xml not found in .docx');
+  return docxXmlToText(xml);
+}
+// A .skill is usually a ZIP bundle containing SKILL.md (+ resources), or sometimes a plain markdown file.
+async function extractSkillText(file){
+  const head=new Uint8Array(await file.slice(0,2).arrayBuffer());
+  if(head[0]===0x50 && head[1]===0x4b){   // 'PK' -> zip bundle
+    const buf=await file.arrayBuffer();
+    let t=await unzipEntryText(buf, n=>/(^|\/)SKILL\.md$/i.test(n));
+    if(t==null) t=await unzipEntryText(buf, n=>/\.mdx?$|\.markdown$/i.test(n));
+    if(t==null) t=await unzipEntryText(buf, n=>/\.txt$/i.test(n));
+    if(t==null) throw new Error('No SKILL.md / markdown found in the .skill bundle');
+    return t;
+  }
+  return await file.text();   // plain-text skill file
 }
 function docxXmlToText(xml){
   const dec=s=>s.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&amp;/g,'&');
@@ -5271,24 +5328,36 @@ function openWikiImport(parentId){
   if(!can('wiki')) return;
   modal.style.width='680px';
   const parentOpts=['<option value="">— Top level —</option>'].concat(wikiState().pages.slice().sort((a,b)=>(a.title||'').localeCompare(b.title||'')).map(p=>`<option value="${esc(p.id)}"${(parentId||'')===p.id?' selected':''}>${esc((p.icon?p.icon+' ':'')+(p.title||'Untitled'))}</option>`)).join('');
-  modal.innerHTML=`<h3>Import document → AI page</h3>
-    <div style="font-size:12.5px;color:var(--muted);margin:-6px 0 12px;">Paste raw text (notes, an exported doc, a transcript) or load a .txt / .md file. AI cleans and structures it into a wiki page — it keeps the details, just reorganizes. You can edit after.</div>
+  modal.innerHTML=`<h3>Import document → wiki page</h3>
+    <div style="font-size:12.5px;color:var(--muted);margin:-6px 0 12px;">Paste raw text, or load a <b>.docx</b>, <b>.skill</b>, .txt or .md file. <b>Convert with AI</b> cleans and structures it; <b>Insert as-is</b> keeps it verbatim (best for already-formatted Markdown / skills). You can edit after either way.</div>
     <div class="field"><label>Raw document</label><textarea id="wimp_raw" style="min-height:200px;resize:vertical;" placeholder="Paste the document text here…"></textarea></div>
-    <div class="field row2"><div><label>Or load a file (.docx / .txt / .md)</label><input type="file" id="wimp_file" accept=".docx,.txt,.md,.markdown,.csv,.log,.json,.text"></div><div><label>Parent page</label><select id="wimp_parent">${parentOpts}</select></div></div>
+    <div class="field row2"><div><label>Or load a file (.docx / .skill / .txt / .md)</label><input type="file" id="wimp_file" accept=".docx,.skill,.txt,.md,.markdown,.mdx,.csv,.log,.json,.text"></div><div><label>Parent page</label><select id="wimp_parent">${parentOpts}</select></div></div>
     <div class="field"><label>Title hint (optional)</label><input id="wimp_title" placeholder="Leave blank to let AI name it"></div>
     <div id="wimp_status" style="font-size:12.5px;color:var(--muted);min-height:16px;"></div>
-    <div class="modal-actions"><button class="btn" id="wimp_cancel">Cancel</button><button class="btn primary" id="wimp_go">✨ Convert with AI</button></div>`;
+    <div class="modal-actions"><button class="btn" id="wimp_cancel">Cancel</button><button class="btn" id="wimp_asis">Insert as-is</button><button class="btn primary" id="wimp_go">✨ Convert with AI</button></div>`;
   const raw=modal.querySelector('#wimp_raw'), status=modal.querySelector('#wimp_status');
   modal.querySelector('#wimp_file').onchange=async e=>{
     const f=e.target.files&&e.target.files[0]; if(!f) return;
     const tEl=modal.querySelector('#wimp_title'); if(!tEl.value) tEl.value=f.name.replace(/\.[a-z0-9]+$/i,'');
-    if(/\.docx$/i.test(f.name)){
-      status.textContent='Reading .docx…';
-      try{ raw.value=await extractDocxText(await f.arrayBuffer()); status.textContent='Loaded '+raw.value.length.toLocaleString()+' chars from '+esc(f.name)+'. Review, then Convert.'; }
-      catch(err){ status.textContent='Could not read .docx: '+(err&&err.message||err)+'. Try pasting the text.'; }
-    } else { const fr=new FileReader(); fr.onload=()=>{ raw.value=String(fr.result||''); status.textContent='Loaded '+f.name; }; fr.readAsText(f); }
+    try{
+      if(/\.docx$/i.test(f.name)){ status.textContent='Reading .docx…'; raw.value=await extractDocxText(await f.arrayBuffer()); }
+      else if(/\.skill$/i.test(f.name)){ status.textContent='Reading .skill…'; raw.value=await extractSkillText(f); }
+      else { raw.value=await f.text(); }
+      status.textContent='Loaded '+raw.value.length.toLocaleString()+' chars from '+f.name+'. Review, then Convert or Insert.';
+    }catch(err){ status.textContent='Could not read '+f.name+': '+(err&&err.message||err)+'. Try pasting the text.'; }
   };
   modal.querySelector('#wimp_cancel').onclick=closeModal;
+  const newPageFrom=(title, body, isHtml)=>{
+    const pid=modal.querySelector('#wimp_parent').value||''; const sib=wikiChildren(pid);
+    const p={id:'wk_'+uid(), title:title||'Imported page', icon:'📄', parentId:pid, order:(sib.length?Math.max(...sib.map(x=>x.order||0))+1:0), body:body||'', html:!!isHtml, updatedAt:nowMs(), updatedBy:currentEmail};
+    wikiState().pages.push(p); _wikiSel=p.id; _wikiEdit=false; _wikiDraft=null; saveWiki(); closeModal(); showSection('wiki'); renderWikiPage();
+  };
+  modal.querySelector('#wimp_asis').onclick=()=>{
+    const text=(raw.value||'').trim(); if(!text){ status.textContent='Paste some text or load a file first.'; raw.focus(); return; }
+    // strip a leading YAML frontmatter block (--- ... ---) that skill/md files carry, keep the rest as Markdown
+    const body=text.replace(/^﻿?---\n[\s\S]*?\n---\n/, '');
+    newPageFrom(modal.querySelector('#wimp_title').value.trim(), body, false);
+  };
   const go=modal.querySelector('#wimp_go');
   go.onclick=async()=>{
     const text=(raw.value||'').trim(); if(!text){ status.textContent='Paste some text or load a file first.'; raw.focus(); return; }
@@ -5343,7 +5412,7 @@ function wireWikiTree(el){
   el.querySelectorAll('.wiki-caret').forEach(b=>b.onclick=e=>{ e.stopPropagation(); const id=b.dataset.caret; if(_wikiCollapsed.has(id)) _wikiCollapsed.delete(id); else _wikiCollapsed.add(id); renderWikiPage(); });
   el.querySelectorAll('.wiki-add').forEach(b=>b.onclick=e=>{ e.stopPropagation(); if(_wikiEdit && _wikiDirty() && !confirm('Discard unsaved changes?')) return; wikiCreate(b.dataset.pid, {folder:b.dataset.add==='folder'}); });
 }
-function _wikiDirty(){ const p=wikiPage(_wikiSel); if(!p||!_wikiDraft) return false; return (_wikiDraft.title||'')!==(p.title||'')||(_wikiDraft.icon||'')!==(p.icon||'')||(_wikiDraft.parentId||'')!==(p.parentId||'')||(_wikiDraft.body||'')!==(p.body||''); }
+function _wikiDirty(){ return _wikiEdit && _wikiDirtyFlag; }
 function renderWikiMain(main, w, editable){
   if(!main) return;
   if(!w.pages.length){
@@ -5367,7 +5436,7 @@ function renderWikiMain(main, w, editable){
     <div class="wiki-doc-head"><div class="wiki-doc-title">${p.icon?esc(p.icon)+' ':''}${esc(p.title||'Untitled')}</div>
       ${editable?`<div class="wiki-doc-actions"><button class="btn" id="wiki_edit">✎ Edit</button><button class="btn" id="wiki_sub">＋ Subpage</button><button class="btn" id="wiki_fold">📁 Folder</button></div>`:''}</div>
     ${meta?`<div class="wiki-doc-meta">${meta}</div>`:''}
-    <div class="wiki-doc-body sp-doc">${p.body&&p.body.trim()?formatDocHTML(p.body):'<div class="wiki-empty-body">This page is empty.'+(editable?' Click <b>Edit</b> to add content.':'')+'</div>'}</div>
+    <div class="wiki-doc-body ${p.html?'wiki-rich':'sp-doc'}">${p.body&&p.body.trim()?(p.html?sanitizeHTML(p.body):formatDocHTML(p.body)):'<div class="wiki-empty-body">This page is empty.'+(editable?' Click <b>Edit</b> to add content.':'')+'</div>'}</div>
     ${kids.length?`<div class="wiki-children"><div class="wiki-children-h">Subpages</div>${kids.map(k=>`<button class="wiki-childlink" data-id="${esc(k.id)}">${k.icon?esc(k.icon)+' ':'📄 '}${esc(k.title||'Untitled')}</button>`).join('')}</div>`:''}`;
   main.querySelectorAll('.wiki-crumb,.wiki-childlink').forEach(c=>{ if(c.dataset.id) c.onclick=()=>{ _wikiSel=c.dataset.id; _wikiEdit=false; renderWikiPage(); }; });
   const eb=main.querySelector('#wiki_edit'); if(eb) eb.onclick=()=>{ _wikiEdit=true; _wikiDraft={title:p.title,icon:p.icon||'',parentId:p.parentId||'',body:p.body||''}; renderWikiPage(); };
@@ -5375,24 +5444,56 @@ function renderWikiMain(main, w, editable){
   const fb=main.querySelector('#wiki_fold'); if(fb) fb.onclick=()=>wikiCreate(p.id,{folder:true});
 }
 function renderWikiEditor(main, p){
-  const d=_wikiDraft||(_wikiDraft={title:p.title,icon:p.icon||'',parentId:p.parentId||'',body:p.body||''});
+  const d=_wikiDraft||(_wikiDraft={title:p.title,icon:p.icon||'',parentId:p.parentId||''});
   // parent options: any page except itself or its own descendants (avoid cycles)
   const banned=new Set([p.id]); (function collect(pid){ wikiChildren(pid).forEach(c=>{ banned.add(c.id); collect(c.id); }); })(p.id);
   const opts=['<option value="">— Top level —</option>'].concat(wikiState().pages.filter(x=>!banned.has(x.id)).sort((a,b)=>(a.title||'').localeCompare(b.title||'')).map(x=>`<option value="${esc(x.id)}"${(d.parentId||'')===x.id?' selected':''}>${esc((x.icon?x.icon+' ':'')+(x.title||'Untitled'))}</option>`)).join('');
+  const initialHTML = (p.body&&p.body.trim()) ? (p.html?sanitizeHTML(p.body):formatDocHTML(p.body)) : '';   // legacy markdown -> HTML so it edits richly
+  const tb=(attr,val,label,title)=>`<button type="button" class="wtb" data-${attr}="${val}" title="${esc(title)}">${label}</button>`;
   main.innerHTML=`
     <div class="wiki-ed-head"><input class="wiki-ed-icon" id="wk_icon" maxlength="2" placeholder="📄" value="${esc(d.icon||'')}"><input class="wiki-ed-title" id="wk_title" placeholder="Page title" value="${esc(d.title||'')}"></div>
     <div class="wiki-ed-row"><label class="wiki-ed-lbl">Parent</label><select class="wiki-ed-parent" id="wk_parent">${opts}</select></div>
-    <textarea class="wiki-ed-body" id="wk_body" placeholder="Write with Markdown — ## Heading, - bullet, **bold**, \`code\`, tables with |, and paste links.">${esc(d.body||'')}</textarea>
+    <div class="wiki-tb" id="wk_tb">
+      ${tb('cmd','bold','<b>B</b>','Bold (⌘B)')}${tb('cmd','italic','<i>I</i>','Italic (⌘I)')}${tb('cmd','underline','<u>U</u>','Underline (⌘U)')}${tb('cmd','strikeThrough','<s>S</s>','Strikethrough')}
+      <span class="wtb-sep"></span>
+      ${tb('block','h1','H1','Heading 1')}${tb('block','h2','H2','Heading 2')}${tb('block','h3','H3','Heading 3')}${tb('block','p','¶','Normal text')}
+      <span class="wtb-sep"></span>
+      ${tb('cmd','insertUnorderedList','• List','Bulleted list')}${tb('cmd','insertOrderedList','1. List','Numbered list')}${tb('block','blockquote','❝','Quote')}${tb('block','pre','&lt;/&gt;','Code block')}
+      <span class="wtb-sep"></span>
+      ${tb('act','link','🔗','Add link')}${tb('act','unlink','⛓','Remove link')}${tb('act','clear','⌫','Clear formatting')}
+    </div>
+    <div class="wiki-rte wiki-rich" id="wk_body" contenteditable="true" spellcheck="true"></div>
+    <div class="wiki-ed-hint">Use ⌘/Ctrl + B, I, U — or the toolbar. Bulleted/numbered lists, headings, quotes, code and links supported.</div>
     <div class="wiki-ed-actions"><button class="btn primary" id="wk_save">Save</button><button class="btn" id="wk_cancel">Cancel</button><button class="btn wiki-del" id="wk_del">Delete page</button></div>`;
-  const gather=()=>{ d.icon=main.querySelector('#wk_icon').value.trim(); d.title=main.querySelector('#wk_title').value; d.parentId=main.querySelector('#wk_parent').value; d.body=main.querySelector('#wk_body').value; };
-  main.querySelectorAll('#wk_icon,#wk_title,#wk_parent,#wk_body').forEach(i=>i.oninput=gather);
-  main.querySelector('#wk_save').onclick=()=>{ gather(); p.title=(d.title||'').trim()||'Untitled'; p.icon=d.icon||''; p.parentId=d.parentId||''; p.body=d.body||''; p.updatedAt=nowMs(); p.updatedBy=currentEmail; _wikiEdit=false; _wikiDraft=null; saveWiki(); renderWikiPage(); };
-  main.querySelector('#wk_cancel').onclick=()=>{ _wikiEdit=false; _wikiDraft=null; renderWikiPage(); };
+  const body=main.querySelector('#wk_body'); body.innerHTML=initialHTML;
+  _wikiDirtyFlag=false; const mark=()=>{ _wikiDirtyFlag=true; };
+  main.querySelectorAll('#wk_icon,#wk_title,#wk_parent').forEach(i=>i.oninput=mark);
+  body.oninput=mark;
+  main.querySelectorAll('#wk_tb .wtb').forEach(btn=>{
+    btn.onmousedown=e=>e.preventDefault();   // keep the selection in the editor
+    btn.onclick=()=>{
+      body.focus();
+      if(btn.dataset.cmd) document.execCommand(btn.dataset.cmd,false,null);
+      else if(btn.dataset.block) document.execCommand('formatBlock',false,'<'+btn.dataset.block+'>');
+      else if(btn.dataset.act==='link'){ const u=prompt('Link URL:','https://'); if(u) document.execCommand('createLink',false,u); }
+      else if(btn.dataset.act==='unlink') document.execCommand('unlink',false,null);
+      else if(btn.dataset.act==='clear'){ document.execCommand('removeFormat',false,null); document.execCommand('formatBlock',false,'<p>'); }
+      mark();
+    };
+  });
+  main.querySelector('#wk_save').onclick=()=>{
+    p.title=(main.querySelector('#wk_title').value||'').trim()||'Untitled';
+    p.icon=main.querySelector('#wk_icon').value.trim()||'';
+    p.parentId=main.querySelector('#wk_parent').value||'';
+    p.body=sanitizeHTML(body.innerHTML); p.html=true; p.updatedAt=nowMs(); p.updatedBy=currentEmail;
+    _wikiEdit=false; _wikiDraft=null; _wikiDirtyFlag=false; saveWiki(); renderWikiPage();
+  };
+  main.querySelector('#wk_cancel').onclick=()=>{ _wikiEdit=false; _wikiDraft=null; _wikiDirtyFlag=false; renderWikiPage(); };
   main.querySelector('#wk_del').onclick=()=>{
     if(!confirm('Delete “'+(p.title||'Untitled')+'”?'+(wikiChildren(p.id).length?' Its subpages move up to its parent.':''))) return;
     wikiChildren(p.id).forEach(c=>{ c.parentId=p.parentId||''; });   // reparent children up
     const w=wikiState(); w.pages=w.pages.filter(x=>x.id!==p.id);
-    _wikiSel=p.parentId||null; _wikiEdit=false; _wikiDraft=null; saveWiki(); renderWikiPage();
+    _wikiSel=p.parentId||null; _wikiEdit=false; _wikiDraft=null; _wikiDirtyFlag=false; saveWiki(); renderWikiPage();
   };
   main.querySelector('#wk_title').focus();
 }
