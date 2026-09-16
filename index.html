@@ -705,7 +705,7 @@
   .appnav-btn.active{background:#eef2ff;color:#3538cd;}
   .app-section{flex:1 1 auto;min-height:0;}                                  /* fills the space under the topbar */
   #section-roadmap{display:flex;flex-direction:column;min-height:0;}         /* so .gantt (flex:1) can scroll again */
-  #section-home,#section-organization,#section-onboarding,#section-admin{overflow:auto;}    /* page sections scroll vertically */
+  #section-home,#section-organization,#section-onboarding,#section-admin,#section-wiki{overflow:auto;}    /* page sections scroll vertically */
   .hub{max-width:1000px;margin:0 auto;padding:56px 24px;}
   .hub-head{text-align:center;margin-bottom:40px;}
   .hub-title{font-size:34px;font-weight:900;letter-spacing:-.5px;color:var(--text);}
@@ -788,6 +788,52 @@
   .adm-sw input:checked + .adm-slider:before{transform:translateX(16px);}
   .adm-sw input:disabled + .adm-slider{opacity:.55;cursor:not-allowed;}
   .adm-note{font-size:12.5px;color:#b54708;background:#fffaeb;border:1px solid #fedf89;border-radius:9px;padding:9px 12px;margin-top:12px;}
+  /* Wiki */
+  .wiki{max-width:1200px;margin:0 auto;padding:22px 24px 60px;}
+  .wiki-wrap{display:flex;gap:18px;align-items:flex-start;}
+  .wiki-side{width:250px;flex:none;position:sticky;top:0;}
+  .wiki-search{width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:9px;padding:8px 11px;font-family:inherit;font-size:13px;margin-bottom:10px;}
+  .wiki-search:focus{outline:none;border-color:#4c6fff;box-shadow:0 0 0 3px rgba(76,111,255,.14);}
+  .wiki-tree{display:flex;flex-direction:column;gap:1px;}
+  .wiki-item{display:flex;align-items:center;gap:7px;text-align:left;border:none;background:none;font-family:inherit;font-size:13px;color:#344054;padding:6px 10px;border-radius:7px;cursor:pointer;width:100%;}
+  .wiki-item:hover{background:#f2f5fb;color:#101828;}
+  .wiki-item.sel{background:#eef2ff;color:#3538cd;font-weight:700;}
+  .wiki-item-ic{flex:none;}
+  .wiki-item-t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .wiki-empty-side{font-size:12px;color:var(--muted);padding:8px 10px;}
+  .wiki-main{flex:1;min-width:0;border:1px solid var(--border);border-radius:12px;padding:20px 26px 28px;background:var(--panel);}
+  .wiki-crumbs{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:12px;color:#98a2b3;margin-bottom:8px;}
+  .wiki-crumb{cursor:pointer;}
+  .wiki-crumb:hover{color:#3538cd;text-decoration:underline;}
+  .wiki-crumb-sep{color:#d0d5dd;}
+  .wiki-doc-head{display:flex;align-items:flex-start;gap:12px;}
+  .wiki-doc-title{flex:1;font-size:24px;font-weight:800;color:#101828;line-height:1.2;}
+  .wiki-doc-actions{display:flex;gap:6px;flex:none;}
+  .wiki-doc-meta{font-size:11.5px;color:#98a2b3;margin-top:4px;}
+  .wiki-doc-body{margin-top:16px;font-size:14px;line-height:1.6;}
+  .wiki-empty-body{font-size:13px;color:var(--muted);}
+  .wiki-children{margin-top:22px;border-top:1px solid var(--border);padding-top:14px;}
+  .wiki-children-h{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:#98a2b3;margin-bottom:8px;}
+  .wiki-childlink{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);background:#fcfcfd;border-radius:8px;padding:7px 11px;margin:0 6px 6px 0;font-family:inherit;font-size:13px;font-weight:600;color:#344054;cursor:pointer;}
+  .wiki-childlink:hover{border-color:#b2ccff;color:#3538cd;}
+  .wiki-welcome{max-width:520px;margin:22px auto;text-align:center;color:#475467;}
+  .wiki-welcome-ic{font-size:40px;}
+  .wiki-welcome h2{font-size:20px;color:#101828;margin:8px 0;}
+  .wiki-welcome p{font-size:13.5px;line-height:1.6;}
+  .wiki-welcome-actions{display:flex;gap:8px;justify-content:center;margin:16px 0 6px;}
+  .wiki-hint{font-size:12px;color:#98a2b3;}
+  .wiki-ed-head{display:flex;gap:8px;margin-bottom:10px;}
+  .wiki-ed-icon{width:52px;flex:none;text-align:center;border:1px solid var(--border);border-radius:9px;padding:8px;font-family:inherit;font-size:18px;}
+  .wiki-ed-title{flex:1;border:1px solid var(--border);border-radius:9px;padding:8px 12px;font-family:inherit;font-size:18px;font-weight:800;color:#101828;}
+  .wiki-ed-icon:focus,.wiki-ed-title:focus,.wiki-ed-parent:focus,.wiki-ed-body:focus{outline:none;border-color:#4c6fff;box-shadow:0 0 0 3px rgba(76,111,255,.14);}
+  .wiki-ed-row{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+  .wiki-ed-lbl{font-size:12px;font-weight:700;color:#667085;}
+  .wiki-ed-parent{border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-family:inherit;font-size:13px;background:#fff;}
+  .wiki-ed-body{width:100%;box-sizing:border-box;min-height:340px;resize:vertical;border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;line-height:1.6;color:#344054;}
+  .wiki-ed-actions{display:flex;gap:8px;margin-top:12px;}
+  .wiki-del{margin-left:auto;color:#d92d20;}
+  .wiki-del:hover{background:#fee4e2;border-color:#fda29b;}
+  @media(max-width:760px){ .wiki-wrap{flex-direction:column;} .wiki-side{width:100%;position:static;} }
   .onb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;}
   .onb-card.sel{box-shadow:0 0 0 2px #c7d7fe;}
   /* hire selector chips */
@@ -1095,6 +1141,11 @@
           <div class="hub-name">Onboarding</div>
           <div class="hub-desc">Onboard new hires with role-based checklists.</div>
         </button>
+        <button class="hub-card" data-sec="wiki">
+          <div class="hub-ico">📚</div>
+          <div class="hub-name">Wiki</div>
+          <div class="hub-desc">Team docs — workflows, Claude skills, how-tos.</div>
+        </button>
         <button class="hub-card" data-sec="admin" id="hubAdmin" style="display:none">
           <div class="hub-ico">🔐</div>
           <div class="hub-name">Admin</div>
@@ -1112,6 +1163,11 @@
   <!-- ============ ONBOARDING ============ -->
   <div class="app-section" id="section-onboarding" style="display:none">
     <div class="onb" id="onbPage"></div>
+  </div>
+
+  <!-- ============ WIKI ============ -->
+  <div class="app-section" id="section-wiki" style="display:none">
+    <div class="wiki" id="wikiPage"></div>
   </div>
 
   <!-- ============ ADMIN ============ -->
@@ -1259,6 +1315,7 @@ const ACCESS_AREAS = [
   {key:'people',      label:'People',      desc:'Edit the people directory & squads'},
   {key:'evaluations', label:'Evaluations', desc:'View & edit performance evaluations'},
   {key:'jira',        label:'Jira sync',   desc:'Run Jira sync and import data'},
+  {key:'wiki',        label:'Wiki',        desc:'Create & edit wiki pages'},
 ];
 let currentEmail = '';
 let currentAccess = [];   // permission-area keys granted to the signed-in user (super-admin implies all)
@@ -2227,6 +2284,7 @@ function adoptRemoteData(data, updatedAt, tribesUpdatedAt){
   if(data.evals && typeof data.evals==='object') state.evals = data.evals;   // performance evaluations
   if(data.onboarding && typeof data.onboarding==='object') state.onboarding = data.onboarding;   // onboarding hires + templates
   if(data.access && typeof data.access==='object') state.access = data.access;   // per-person permission grants
+  if(data.wiki && typeof data.wiki==='object') state.wiki = data.wiki;   // team wiki pages
   refreshAccess();
   if(!state.tribes.find(t=>t.id===state.activeTribe) && state.tribes[0]) state.activeTribe=state.tribes[0].id;
   if(!activeVirtual()){
@@ -5083,7 +5141,7 @@ const SECTION_KEY='hq_section';
 function loadSection(){ try{ return localStorage.getItem(SECTION_KEY); }catch(e){ return null; } }
 let currentSection='home';
 function showSection(name){
-  const secs=['home','roadmap','organization','onboarding','admin'];
+  const secs=['home','roadmap','organization','onboarding','wiki','admin'];
   if(!secs.includes(name)) name='home';
   if(name==='admin' && !isSuperAdmin()) name='home';   // Admin page is super-admin only
   currentSection=name;
@@ -5094,9 +5152,123 @@ function showSection(name){
   if(name==='roadmap') render();
   else if(name==='organization') renderOrgPage();
   else if(name==='onboarding') renderOnboarding();
+  else if(name==='wiki') renderWikiPage();
   else if(name==='admin') renderAdminPage();
 }
 function renderOrgPage(){ const el=document.getElementById('orgPage'); if(el){ el.innerHTML=''; renderOrgChart(el); } }
+/* ============================ Wiki ============================ */
+// state.wiki = { pages:[ {id,title,icon,parentId,order,body,updatedAt,updatedBy} ] }. Pages nest via parentId
+// (a tree in the sidebar). Body is markdown-ish, rendered with formatDocHTML. Editing needs the 'wiki' grant.
+let _wikiSel=null, _wikiEdit=false, _wikiDraft=null, _wikiQuery='';
+function wikiState(){ if(!state.wiki||typeof state.wiki!=='object'||Array.isArray(state.wiki)) state.wiki={pages:[]}; if(!Array.isArray(state.wiki.pages)) state.wiki.pages=[]; return state.wiki; }
+function wikiPage(id){ return wikiState().pages.find(p=>p.id===id)||null; }
+function wikiChildren(pid){ return wikiState().pages.filter(p=>(p.parentId||'')===(pid||'')).sort((a,b)=>(a.order||0)-(b.order||0)||(a.title||'').localeCompare(b.title||'')); }
+async function saveWiki(){
+  if(!idToken||updateAvailable||saveBlocked) return;
+  setSync('Saving wiki…');
+  try{ const r=await apiFetch('/api/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'patchWiki', wiki:wikiState()})});
+    if(r.status===401){ handleAuthExpired(); return; }
+    if(r.ok){ const j=await r.json().catch(()=>({})); checkVersion(j.version); setSync('Wiki saved','ok'); } else setSync('Wiki save failed','bad');
+  }catch(e){ setSync('Wiki save failed — offline','bad'); }
+}
+function wikiCreate(parentId){
+  const w=wikiState(); const sib=wikiChildren(parentId||'');
+  const p={id:'wk_'+uid(), title:'Untitled', icon:'', parentId:parentId||'', order:(sib.length?Math.max(...sib.map(x=>x.order||0))+1:0), body:''};
+  w.pages.push(p); _wikiSel=p.id; _wikiEdit=true; _wikiDraft={title:p.title,icon:p.icon,parentId:p.parentId,body:p.body};
+  renderWikiPage();
+}
+function wikiSeedStarter(){
+  const w=wikiState();
+  const seed=[
+    {t:'Workflows',ic:'🔀',b:'## Workflows\nHow the team works day to day.\n\n- Squad workflow\n- Release process\n- Incident handling'},
+    {t:'Claude skills',ic:'🤖',b:'## Claude skills\nPrompts, skills and automations we reuse.\n\n- What worked well\n- Reusable prompts\n- Gotchas'},
+    {t:'Engineering',ic:'🛠️',b:'## Engineering\nSetup, conventions and how-tos.\n\n- Local setup\n- Coding conventions\n- Deploy'},
+    {t:'Product',ic:'🎯',b:'## Product\nProduct context and decisions.\n\n- Roadmap notes\n- Decisions log'},
+    {t:'References',ic:'🔗',b:'## References\nLinks and external docs.\n\n- Dashboards\n- Tickets\n- Design files'},
+  ];
+  seed.forEach((s,i)=>{ w.pages.push({id:'wk_'+uid(), title:s.t, icon:s.ic, parentId:'', order:i, body:s.b}); });
+  _wikiSel=w.pages[w.pages.length-seed.length].id; _wikiEdit=false;
+  saveWiki(); renderWikiPage();
+}
+function renderWikiPage(){
+  const el=document.getElementById('wikiPage'); if(!el) return;
+  const w=wikiState(); const editable=can('wiki');
+  if(_wikiSel && !wikiPage(_wikiSel)) { _wikiSel=null; _wikiEdit=false; }
+  el.innerHTML=`<div class="onb-head"><div class="onb-h1">📚 Wiki</div>
+      ${editable?'<div class="onb-actions"><button class="btn primary" id="wiki_new">＋ New page</button></div>':''}</div>
+    <div class="wiki-wrap"><div class="wiki-side"><input class="wiki-search" id="wiki_q" placeholder="Search pages…" value="${esc(_wikiQuery)}"><div class="wiki-tree" id="wiki_tree"></div></div>
+      <div class="wiki-main" id="wiki_main"></div></div>`;
+  const nb=el.querySelector('#wiki_new'); if(nb) nb.onclick=()=>wikiCreate('');
+  const q=el.querySelector('#wiki_q'); if(q) q.oninput=()=>{ _wikiQuery=q.value; const t=el.querySelector('#wiki_tree'); t.innerHTML=wikiTreeHTML(w,'',0,_wikiQuery.trim().toLowerCase())||'<div class="wiki-empty-side">No matches</div>'; wireWikiTree(el); };
+  el.querySelector('#wiki_tree').innerHTML=wikiTreeHTML(w,'',0,_wikiQuery.trim().toLowerCase()) || (w.pages.length?'<div class="wiki-empty-side">No matches</div>':'<div class="wiki-empty-side">No pages yet</div>');
+  wireWikiTree(el);
+  renderWikiMain(el.querySelector('#wiki_main'), w, editable);
+}
+function wikiTreeHTML(w, parent, depth, q){
+  let h='';
+  wikiChildren(parent).forEach(p=>{
+    const child=wikiTreeHTML(w, p.id, depth+1, q);
+    const match=!q || (p.title||'').toLowerCase().includes(q) || (p.body||'').toLowerCase().includes(q);
+    if(!match && !child) return;
+    h+=`<button class="wiki-item${p.id===_wikiSel?' sel':''}" data-id="${esc(p.id)}" style="padding-left:${10+depth*14}px"><span class="wiki-item-ic">${p.icon?esc(p.icon):'📄'}</span><span class="wiki-item-t">${esc(p.title||'Untitled')}</span></button>`;
+    h+=child;
+  });
+  return h;
+}
+function wireWikiTree(el){ el.querySelectorAll('.wiki-item').forEach(b=>b.onclick=()=>{ if(_wikiEdit && _wikiDirty() && !confirm('Discard unsaved changes?')) return; _wikiSel=b.dataset.id; _wikiEdit=false; _wikiDraft=null; renderWikiPage(); }); }
+function _wikiDirty(){ const p=wikiPage(_wikiSel); if(!p||!_wikiDraft) return false; return (_wikiDraft.title||'')!==(p.title||'')||(_wikiDraft.icon||'')!==(p.icon||'')||(_wikiDraft.parentId||'')!==(p.parentId||'')||(_wikiDraft.body||'')!==(p.body||''); }
+function renderWikiMain(main, w, editable){
+  if(!main) return;
+  if(!w.pages.length){
+    main.innerHTML=`<div class="wiki-welcome"><div class="wiki-welcome-ic">📚</div><h2>Start your team wiki</h2>
+      <p>Keep workflows, Claude skills, how-tos and references in one place. Pages can nest, so you can grow the structure over time.</p>
+      ${editable?`<div class="wiki-welcome-actions"><button class="btn primary" id="wiki_seed">✨ Create starter pages</button><button class="btn" id="wiki_first">＋ Blank page</button></div><p class="wiki-hint">Suggested top level: Workflows · Claude skills · Engineering · Product · References</p>`:'<p class="wiki-hint">No pages yet.</p>'}</div>`;
+    const sd=main.querySelector('#wiki_seed'); if(sd) sd.onclick=wikiSeedStarter;
+    const fp=main.querySelector('#wiki_first'); if(fp) fp.onclick=()=>wikiCreate('');
+    return;
+  }
+  const p=wikiPage(_wikiSel);
+  if(!p){ main.innerHTML='<div class="wiki-welcome"><div class="wiki-welcome-ic">👈</div><h2>Pick a page</h2><p>Select a page on the left, or create a new one.</p></div>'; return; }
+  if(_wikiEdit && editable){ renderWikiEditor(main, p); return; }
+  // View mode
+  const crumbs=[]; let cur=p; while(cur){ crumbs.unshift(cur); cur=cur.parentId?wikiPage(cur.parentId):null; }
+  const kids=wikiChildren(p.id);
+  const meta=p.updatedAt?('Updated '+fmtWikiTime(p.updatedAt)+(p.updatedBy?(' · '+esc(p.updatedBy)):'')):'';
+  main.innerHTML=`
+    <div class="wiki-crumbs">${crumbs.map((c,i)=>`${i?'<span class="wiki-crumb-sep">›</span>':''}<span class="wiki-crumb" data-id="${esc(c.id)}">${c.icon?esc(c.icon)+' ':''}${esc(c.title||'Untitled')}</span>`).join('')}</div>
+    <div class="wiki-doc-head"><div class="wiki-doc-title">${p.icon?esc(p.icon)+' ':''}${esc(p.title||'Untitled')}</div>
+      ${editable?`<div class="wiki-doc-actions"><button class="btn" id="wiki_edit">✎ Edit</button><button class="btn" id="wiki_sub">＋ Subpage</button></div>`:''}</div>
+    ${meta?`<div class="wiki-doc-meta">${meta}</div>`:''}
+    <div class="wiki-doc-body sp-doc">${p.body&&p.body.trim()?formatDocHTML(p.body):'<div class="wiki-empty-body">This page is empty.'+(editable?' Click <b>Edit</b> to add content.':'')+'</div>'}</div>
+    ${kids.length?`<div class="wiki-children"><div class="wiki-children-h">Subpages</div>${kids.map(k=>`<button class="wiki-childlink" data-id="${esc(k.id)}">${k.icon?esc(k.icon)+' ':'📄 '}${esc(k.title||'Untitled')}</button>`).join('')}</div>`:''}`;
+  main.querySelectorAll('.wiki-crumb,.wiki-childlink').forEach(c=>{ if(c.dataset.id) c.onclick=()=>{ _wikiSel=c.dataset.id; _wikiEdit=false; renderWikiPage(); }; });
+  const eb=main.querySelector('#wiki_edit'); if(eb) eb.onclick=()=>{ _wikiEdit=true; _wikiDraft={title:p.title,icon:p.icon||'',parentId:p.parentId||'',body:p.body||''}; renderWikiPage(); };
+  const sb=main.querySelector('#wiki_sub'); if(sb) sb.onclick=()=>wikiCreate(p.id);
+}
+function renderWikiEditor(main, p){
+  const d=_wikiDraft||(_wikiDraft={title:p.title,icon:p.icon||'',parentId:p.parentId||'',body:p.body||''});
+  // parent options: any page except itself or its own descendants (avoid cycles)
+  const banned=new Set([p.id]); (function collect(pid){ wikiChildren(pid).forEach(c=>{ banned.add(c.id); collect(c.id); }); })(p.id);
+  const opts=['<option value="">— Top level —</option>'].concat(wikiState().pages.filter(x=>!banned.has(x.id)).sort((a,b)=>(a.title||'').localeCompare(b.title||'')).map(x=>`<option value="${esc(x.id)}"${(d.parentId||'')===x.id?' selected':''}>${esc((x.icon?x.icon+' ':'')+(x.title||'Untitled'))}</option>`)).join('');
+  main.innerHTML=`
+    <div class="wiki-ed-head"><input class="wiki-ed-icon" id="wk_icon" maxlength="2" placeholder="📄" value="${esc(d.icon||'')}"><input class="wiki-ed-title" id="wk_title" placeholder="Page title" value="${esc(d.title||'')}"></div>
+    <div class="wiki-ed-row"><label class="wiki-ed-lbl">Parent</label><select class="wiki-ed-parent" id="wk_parent">${opts}</select></div>
+    <textarea class="wiki-ed-body" id="wk_body" placeholder="Write with Markdown — ## Heading, - bullet, **bold**, \`code\`, tables with |, and paste links.">${esc(d.body||'')}</textarea>
+    <div class="wiki-ed-actions"><button class="btn primary" id="wk_save">Save</button><button class="btn" id="wk_cancel">Cancel</button><button class="btn wiki-del" id="wk_del">Delete page</button></div>`;
+  const gather=()=>{ d.icon=main.querySelector('#wk_icon').value.trim(); d.title=main.querySelector('#wk_title').value; d.parentId=main.querySelector('#wk_parent').value; d.body=main.querySelector('#wk_body').value; };
+  main.querySelectorAll('#wk_icon,#wk_title,#wk_parent,#wk_body').forEach(i=>i.oninput=gather);
+  main.querySelector('#wk_save').onclick=()=>{ gather(); p.title=(d.title||'').trim()||'Untitled'; p.icon=d.icon||''; p.parentId=d.parentId||''; p.body=d.body||''; p.updatedAt=nowMs(); p.updatedBy=currentEmail; _wikiEdit=false; _wikiDraft=null; saveWiki(); renderWikiPage(); };
+  main.querySelector('#wk_cancel').onclick=()=>{ _wikiEdit=false; _wikiDraft=null; renderWikiPage(); };
+  main.querySelector('#wk_del').onclick=()=>{
+    if(!confirm('Delete “'+(p.title||'Untitled')+'”?'+(wikiChildren(p.id).length?' Its subpages move up to its parent.':''))) return;
+    wikiChildren(p.id).forEach(c=>{ c.parentId=p.parentId||''; });   // reparent children up
+    const w=wikiState(); w.pages=w.pages.filter(x=>x.id!==p.id);
+    _wikiSel=p.parentId||null; _wikiEdit=false; _wikiDraft=null; saveWiki(); renderWikiPage();
+  };
+  main.querySelector('#wk_title').focus();
+}
+function fmtWikiTime(ts){ try{ const d=new Date(ts); return MONTHS[d.getMonth()]+' '+d.getDate()+', '+d.getFullYear(); }catch(e){ return ''; } }
+function nowMs(){ try{ return Date.now(); }catch(e){ return 0; } }
 // Persist one person's permission grants via a targeted patch (super-admin only, server-enforced).
 async function saveAccess(email, areas){
   if(!isSuperAdmin()) return;

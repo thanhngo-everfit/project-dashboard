@@ -28,7 +28,7 @@ const oauth = new OAuth2Client(CLIENT_ID);
 
 // Permission grants live in state.access = { "<email>": ["onboarding","people",...] }. The super-admin
 // (ADMIN_EMAIL) implicitly has every area. allowArea() is the server-side enforcement of the Admin page.
-const ACCESS_AREA_KEYS = ['roadmap', 'onboarding', 'people', 'evaluations', 'jira'];
+const ACCESS_AREA_KEYS = ['roadmap', 'onboarding', 'people', 'evaluations', 'jira', 'wiki'];
 function grantedAreas(state, email) {
   const a = state && state.access;
   const e = (email || '').toLowerCase();
@@ -154,6 +154,19 @@ export default async function handler(req, res) {
         res.status(200).json({ ok: true, updatedAt: record.updatedAt, version: VERSION });
         return;
       }
+      // Targeted replace of the wiki only — never touches tribes/people/evals/onboarding.
+      if (body.action === 'patchWiki') {
+        const wiki = (body.wiki && typeof body.wiki === 'object' && !Array.isArray(body.wiki)) ? body.wiki : null;
+        if (!wiki) { res.status(400).json({ error: 'missing_wiki' }); return; }
+        const cur = await redis.get(KEY);
+        const state = (cur && cur.state) ? cur.state : { tribes: [] };
+        if (!allowArea(user, state, 'wiki')) { res.status(403).json({ error: 'forbidden' }); return; }   // super-admin or 'wiki' grant
+        state.wiki = wiki;
+        const record = { state, updatedAt: Date.now(), updatedBy: user.email, tribesUpdatedAt: (cur && (cur.tribesUpdatedAt || cur.updatedAt)) || Date.now() };
+        await redis.set(KEY, record);
+        res.status(200).json({ ok: true, updatedAt: record.updatedAt, version: VERSION });
+        return;
+      }
       // Targeted merge of permission grants only (super-admin only). value: array of areas, or null = revoke all.
       if (body.action === 'patchAccess') {
         if ((user.email || '').toLowerCase() !== ADMIN_EMAIL) { res.status(403).json({ error: 'forbidden' }); return; }   // only the super-admin grants permissions
@@ -235,6 +248,7 @@ export default async function handler(req, res) {
         if (body.state.evals == null && existing.state.evals) body.state.evals = existing.state.evals;
         if (body.state.onboarding == null && existing.state.onboarding) body.state.onboarding = existing.state.onboarding;
         if (body.state.access == null && existing.state.access) body.state.access = existing.state.access;
+        if (body.state.wiki == null && existing.state.wiki) body.state.wiki = existing.state.wiki;
       }
       // Snapshot the version we're about to replace so any bad save is recoverable (keep last 30).
       // Skip when only metadata changed (e.g. auto-sync bumping lastJiraSync with identical tribes) so

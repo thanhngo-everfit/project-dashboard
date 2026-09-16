@@ -192,6 +192,16 @@ It opens a permissions page where the super-admin can grant teammates access to 
 - **People** — edit the people directory & squads.
 - **Evaluations** — view & edit performance evaluations.
 - **Jira sync** — run Jira sync and import data.
+- **Wiki** — create & edit wiki pages.
+
+## Wiki (Home → 📚 Wiki)
+
+A team wiki for docs — workflows, Claude skills, how-tos, references. Pages nest via `parentId`
+(sidebar tree) and bodies are Markdown-ish (rendered by `formatDocHTML`: `##`/`###` headings, `-`
+bullets, `**bold**`, `` `code` ``, `|` tables, links). Stored in `state.wiki = { pages: [...] }` and
+saved via a targeted `patchWiki` action. Everyone can read; editing needs the **Wiki** grant (or
+super-admin). An empty wiki offers a "Create starter pages" scaffold (Workflows · Claude skills ·
+Engineering · Product · References).
 
 Grants are stored in `state.access = { "<email>": ["onboarding", ...] }` and saved via a targeted
 `patchAccess` action (super-admin only). Access is **enforced server-side**: `patchPeople`, `patchEvals`
