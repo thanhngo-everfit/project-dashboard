@@ -986,6 +986,19 @@
   .sp-tbl{border-collapse:collapse;width:100%;font-size:12.5px;}
   .sp-tbl td{border:1px solid var(--border);padding:5px 8px;vertical-align:top;}
   .sp-tbl tr:first-child td{background:#f7f9fc;font-weight:700;}
+  .sp-doc .sp-h0{font-size:19px;font-weight:900;color:var(--text);margin:18px 0 8px;line-height:1.25;}
+  .sp-doc .sp-h0:first-child{margin-top:0;}
+  .sp-doc em{font-style:italic;}
+  .sp-doc del{color:#98a2b3;}
+  .sp-doc .sp-ol{margin:5px 0 5px 2px;padding-left:22px;}
+  .sp-doc .sp-ol .sp-li{list-style:decimal;}
+  .sp-doc .sp-quote{margin:8px 0;padding:2px 12px;border-left:3px solid #c7d7fe;background:#f8faff;color:#475467;border-radius:0 8px 8px 0;}
+  .sp-doc .sp-quote .sp-para{margin:4px 0;}
+  .sp-doc .sp-hr{border:none;border-top:1px solid var(--border);margin:14px 0;}
+  .sp-doc .sp-code{background:#0b1020;color:#e6edf3;border-radius:9px;padding:11px 13px;overflow-x:auto;margin:8px 0;font-size:12.5px;line-height:1.5;}
+  .sp-doc .sp-code code{background:none;border:none;padding:0;color:inherit;font-family:ui-monospace,Menlo,Consolas,monospace;white-space:pre;}
+  .sp-doc .sp-task{list-style:none;margin-left:-16px;}
+  .sp-doc .sp-task input{margin-right:7px;vertical-align:middle;}
   /* template manager step detail fields */
   .tm-stepwrap{margin:6px 0;padding-bottom:6px;border-bottom:1px dashed #eef0f3;}
   .tm-s-more{margin:4px 0 0 4px;}
@@ -5190,6 +5203,57 @@ function wikiSeedStarter(){
   _wikiSel=w.pages[w.pages.length-seed.length].id; _wikiEdit=false;
   saveWiki(); renderWikiPage();
 }
+// Extract text from a .docx (a ZIP of XML) entirely in the browser: read the central directory, inflate
+// word/document.xml with DecompressionStream, then convert the WordprocessingML to markdown-ish text.
+async function extractDocxText(buf){
+  const dv=new DataView(buf), u8=new Uint8Array(buf), td=new TextDecoder();
+  let eocd=-1; for(let i=u8.length-22;i>=0 && i>=u8.length-22-65536;i--){ if(dv.getUint32(i,true)===0x06054b50){ eocd=i; break; } }
+  if(eocd<0) throw new Error('Not a valid .docx file');
+  let p=dv.getUint32(eocd+16,true); const count=dv.getUint16(eocd+10,true); let target=null;
+  for(let n=0;n<count;n++){
+    if(dv.getUint32(p,true)!==0x02014b50) break;
+    const method=dv.getUint16(p+10,true), compSize=dv.getUint32(p+20,true), nameLen=dv.getUint16(p+28,true), extraLen=dv.getUint16(p+30,true), commentLen=dv.getUint16(p+32,true), localOff=dv.getUint32(p+42,true);
+    const name=td.decode(u8.subarray(p+46,p+46+nameLen));
+    if(name==='word/document.xml'){ target={method,compSize,localOff}; break; }
+    p+=46+nameLen+extraLen+commentLen;
+  }
+  if(!target) throw new Error('word/document.xml not found in .docx');
+  const lh=target.localOff, lNameLen=dv.getUint16(lh+26,true), lExtraLen=dv.getUint16(lh+28,true);
+  const dataStart=lh+30+lNameLen+lExtraLen;
+  const comp=u8.subarray(dataStart, dataStart+target.compSize);
+  let xmlBytes;
+  if(target.method===0){ xmlBytes=comp; }
+  else { if(typeof DecompressionStream==='undefined') throw new Error('This browser can’t unzip .docx — paste the text instead.');
+    const ds=new DecompressionStream('deflate-raw');
+    const stream=new Response(new Blob([comp])).body.pipeThrough(ds);
+    xmlBytes=new Uint8Array(await new Response(stream).arrayBuffer()); }
+  return docxXmlToText(td.decode(xmlBytes));
+}
+function docxXmlToText(xml){
+  const dec=s=>s.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&amp;/g,'&');
+  const runText=r=>{ let t=''; r.replace(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g,(m,x)=>{t+=x;return m;}); if(/<w:tab\b/.test(r)) t+='\t'; t=dec(t); if(!t.trim()) return t; const bold=/<w:b\/>|<w:b [^>]*(?!w:val="0")\/>|<w:b>/.test(r); return bold?('**'+t+'**'):t; };
+  const paraText=p=>{ let s=''; p.replace(/<w:r[ >][\s\S]*?<\/w:r>/g,m=>{s+=runText(m);return m;}); return s.trim(); };
+  const lines=[]; const re=/<w:tbl[ >][\s\S]*?<\/w:tbl>|<w:p[ >][\s\S]*?<\/w:p>/g; let m;
+  while((m=re.exec(xml))){
+    const block=m[0];
+    if(block.startsWith('<w:tbl')){
+      block.replace(/<w:tr[ >][\s\S]*?<\/w:tr>/g,tr=>{ const cells=[]; tr.replace(/<w:tc[ >]([\s\S]*?)<\/w:tc>/g,(tc,inner)=>{ let c=''; inner.replace(/<w:p[ >][\s\S]*?<\/w:p>/g,pp=>{ const x=paraText(pp); if(x) c+=(c?' ':'')+x; return pp; }); cells.push(c); return tc; }); if(cells.length) lines.push(cells.join(' | ')); return tr; });
+      lines.push('');
+    } else {
+      const style=(block.match(/<w:pStyle w:val="([^"]+)"/)||[])[1]||'';
+      const txt=paraText(block);
+      if(!txt){ lines.push(''); continue; }
+      let pre='';
+      if(/^title$/i.test(style)||/heading\s*1/i.test(style)) pre='# ';
+      else if(/heading\s*2/i.test(style)) pre='## ';
+      else if(/heading\s*3/i.test(style)) pre='### ';
+      else if(/heading\s*[4-9]/i.test(style)) pre='#### ';
+      else if(/<w:numPr[ >]/.test(block)) pre='- ';
+      lines.push(pre+txt);
+    }
+  }
+  return lines.join('\n').replace(/\n{3,}/g,'\n\n').trim();
+}
 // Import a raw document and let AI structure it into a wiki page (POST /api/wiki-ai).
 function openWikiImport(parentId){
   if(!can('wiki')) return;
@@ -5198,12 +5262,20 @@ function openWikiImport(parentId){
   modal.innerHTML=`<h3>Import document → AI page</h3>
     <div style="font-size:12.5px;color:var(--muted);margin:-6px 0 12px;">Paste raw text (notes, an exported doc, a transcript) or load a .txt / .md file. AI cleans and structures it into a wiki page — it keeps the details, just reorganizes. You can edit after.</div>
     <div class="field"><label>Raw document</label><textarea id="wimp_raw" style="min-height:200px;resize:vertical;" placeholder="Paste the document text here…"></textarea></div>
-    <div class="field row2"><div><label>Or load a text file</label><input type="file" id="wimp_file" accept=".txt,.md,.markdown,.csv,.log,.json,.text"></div><div><label>Parent page</label><select id="wimp_parent">${parentOpts}</select></div></div>
+    <div class="field row2"><div><label>Or load a file (.docx / .txt / .md)</label><input type="file" id="wimp_file" accept=".docx,.txt,.md,.markdown,.csv,.log,.json,.text"></div><div><label>Parent page</label><select id="wimp_parent">${parentOpts}</select></div></div>
     <div class="field"><label>Title hint (optional)</label><input id="wimp_title" placeholder="Leave blank to let AI name it"></div>
     <div id="wimp_status" style="font-size:12.5px;color:var(--muted);min-height:16px;"></div>
     <div class="modal-actions"><button class="btn" id="wimp_cancel">Cancel</button><button class="btn primary" id="wimp_go">✨ Convert with AI</button></div>`;
   const raw=modal.querySelector('#wimp_raw'), status=modal.querySelector('#wimp_status');
-  modal.querySelector('#wimp_file').onchange=e=>{ const f=e.target.files&&e.target.files[0]; if(!f) return; const fr=new FileReader(); fr.onload=()=>{ raw.value=String(fr.result||''); const tEl=modal.querySelector('#wimp_title'); if(!tEl.value) tEl.value=f.name.replace(/\.[a-z0-9]+$/i,''); }; fr.readAsText(f); };
+  modal.querySelector('#wimp_file').onchange=async e=>{
+    const f=e.target.files&&e.target.files[0]; if(!f) return;
+    const tEl=modal.querySelector('#wimp_title'); if(!tEl.value) tEl.value=f.name.replace(/\.[a-z0-9]+$/i,'');
+    if(/\.docx$/i.test(f.name)){
+      status.textContent='Reading .docx…';
+      try{ raw.value=await extractDocxText(await f.arrayBuffer()); status.textContent='Loaded '+raw.value.length.toLocaleString()+' chars from '+esc(f.name)+'. Review, then Convert.'; }
+      catch(err){ status.textContent='Could not read .docx: '+(err&&err.message||err)+'. Try pasting the text.'; }
+    } else { const fr=new FileReader(); fr.onload=()=>{ raw.value=String(fr.result||''); status.textContent='Loaded '+f.name; }; fr.readAsText(f); }
+  };
   modal.querySelector('#wimp_cancel').onclick=closeModal;
   const go=modal.querySelector('#wimp_go');
   go.onclick=async()=>{
@@ -5544,32 +5616,58 @@ function onbMediaHTML(url){
 // Inline styling: **bold**, `code`, and bare URLs -> links. Escapes first, so it's safe.
 function fmtInline(s){
   s=esc(s);
-  s=s.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
-  s=s.replace(/`([^`]+)`/g,'<code>$1</code>');
-  s=s.replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1" target="_blank" rel="noopener">$1</a>');
+  const stash=[]; const keep=h=>{ stash.push(h); return ' '+(stash.length-1)+' '; };
+  s=s.replace(/`([^`]+)`/g,(m,c)=>keep('<code>'+c+'</code>'));                                   // inline code
+  s=s.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,(m,t,u)=>keep('<a href="'+u+'" target="_blank" rel="noopener">'+t+'</a>'));   // [text](url)
+  s=s.replace(/(^|[^"'>=])(https?:\/\/[^\s<]+)/g,(m,pre,u)=>pre+keep('<a href="'+u+'" target="_blank" rel="noopener">'+u+'</a>'));   // bare URL
+  s=s.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
+  s=s.replace(/__([^_]+)__/g,'<strong>$1</strong>');
+  s=s.replace(/~~([^~]+)~~/g,'<del>$1</del>');
+  s=s.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g,'$1<em>$2</em>');                                    // *italic*
+  s=s.replace(/ (\d+) /g,(m,i)=>stash[+i]);
   return s;
 }
-// Render extracted doc / rich description text: ## ### #### headings, "- " bullets, "a | b | c" tables,
-// **bold** inline. Whitespace-indented "- " become nested bullets.
+// Render doc / wiki text with lightweight markup: # ## ### #### headings, "- "/"* " bullets (indent to
+// nest) incl. "- [ ]" task items, "1." ordered lists, "> " blockquotes, "---" rules, ``` code fences,
+// "a | b | c" tables, and **bold** / *italic* / `code` / ~~strike~~ / [text](url) inline.
 function formatDocHTML(t){
-  const lines=String(t).split('\n'); let out=''; let inList=false, inTable=false;
-  const closeList=()=>{ if(inList){ out+='</ul>'; inList=false; } };
+  const lines=String(t).replace(/\r\n?/g,'\n').split('\n');
+  let out='', inUL=false, inOL=false, inTable=false, inQuote=false, inFence=false, fence=[];
+  const closeUL=()=>{ if(inUL){ out+='</ul>'; inUL=false; } };
+  const closeOL=()=>{ if(inOL){ out+='</ol>'; inOL=false; } };
   const closeTable=()=>{ if(inTable){ out+='</tbody></table></div>'; inTable=false; } };
+  const closeQuote=()=>{ if(inQuote){ out+='</blockquote>'; inQuote=false; } };
+  const closeAll=()=>{ closeUL(); closeOL(); closeTable(); closeQuote(); };
   for(let raw of lines){
     const line=raw.replace(/\s+$/,'');
-    if(!line.trim()){ closeList(); closeTable(); out+='<div class="sp-gap"></div>'; continue; }
-    const mBul=line.match(/^(\s*)-\s+(.*)$/);
-    const isTable=/\s\|\s/.test(line) && !line.startsWith('#');
-    if(mBul){ closeTable(); if(!inList){ out+='<ul class="sp-ul">'; inList=true; } const ind=Math.floor(mBul[1].length/2); out+='<li class="sp-li'+(ind>0?' sp-li-'+Math.min(ind,3):'')+'">'+fmtInline(mBul[2])+'</li>'; continue; }
-    closeList();
+    const fenceMark=line.trim().match(/^```/);
+    if(inFence){ if(fenceMark){ out+='<pre class="sp-code"><code>'+esc(fence.join('\n'))+'</code></pre>'; inFence=false; fence=[]; } else fence.push(raw); continue; }
+    if(fenceMark){ closeAll(); inFence=true; fence=[]; continue; }
+    if(!line.trim()){ closeAll(); out+='<div class="sp-gap"></div>'; continue; }
+    if(/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)){ closeAll(); out+='<hr class="sp-hr">'; continue; }   // --- rule
+    const mQ=line.match(/^\s*>\s?(.*)$/);
+    if(mQ){ closeUL(); closeOL(); closeTable(); if(!inQuote){ out+='<blockquote class="sp-quote">'; inQuote=true; } out+='<p class="sp-para">'+fmtInline(mQ[1])+'</p>'; continue; }
+    closeQuote();
+    const mBul=line.match(/^(\s*)[-*]\s+(.*)$/);
+    const mNum=line.match(/^(\s*)\d+[.)]\s+(.*)$/);
+    const isTable=/\s\|\s/.test(line) && !/^\s*#/.test(line);
+    if(mBul){ closeOL(); closeTable(); if(!inUL){ out+='<ul class="sp-ul">'; inUL=true; } const ind=Math.floor(mBul[1].length/2); const task=mBul[2].match(/^\[([ xX])\]\s+(.*)$/);
+      if(task) out+='<li class="sp-li sp-task'+(ind>0?' sp-li-'+Math.min(ind,3):'')+'"><input type="checkbox" disabled'+(/[xX]/.test(task[1])?' checked':'')+'>'+fmtInline(task[2])+'</li>';
+      else out+='<li class="sp-li'+(ind>0?' sp-li-'+Math.min(ind,3):'')+'">'+fmtInline(mBul[2])+'</li>';
+      continue; }
+    closeUL();
+    if(mNum){ closeTable(); if(!inOL){ out+='<ol class="sp-ol">'; inOL=true; } out+='<li class="sp-li">'+fmtInline(mNum[2])+'</li>'; continue; }
+    closeOL();
     if(isTable){ if(!inTable){ out+='<div class="sp-tblwrap"><table class="sp-tbl"><tbody>'; inTable=true; } out+='<tr>'+line.split('|').map(c=>'<td>'+fmtInline(c.trim())+'</td>').join('')+'</tr>'; continue; }
     closeTable();
-    if(line.startsWith('## ')) out+='<h4 class="sp-h1">'+fmtInline(line.slice(3))+'</h4>';
+    if(line.startsWith('#### ')) out+='<div class="sp-h3">'+fmtInline(line.slice(5))+'</div>';
     else if(line.startsWith('### ')) out+='<h5 class="sp-h2">'+fmtInline(line.slice(4))+'</h5>';
-    else if(line.startsWith('#### ')) out+='<div class="sp-h3">'+fmtInline(line.slice(5))+'</div>';
+    else if(line.startsWith('## ')) out+='<h4 class="sp-h1">'+fmtInline(line.slice(3))+'</h4>';
+    else if(line.startsWith('# ')) out+='<h3 class="sp-h0">'+fmtInline(line.slice(2))+'</h3>';
     else out+='<p class="sp-para">'+fmtInline(line)+'</p>';
   }
-  closeList(); closeTable();
+  if(inFence) out+='<pre class="sp-code"><code>'+esc(fence.join('\n'))+'</code></pre>';
+  closeAll();
   return out;
 }
 let _spTab='overview';
