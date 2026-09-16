@@ -795,11 +795,21 @@
   .wiki-search{width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:9px;padding:8px 11px;font-family:inherit;font-size:13px;margin-bottom:10px;}
   .wiki-search:focus{outline:none;border-color:#4c6fff;box-shadow:0 0 0 3px rgba(76,111,255,.14);}
   .wiki-tree{display:flex;flex-direction:column;gap:1px;}
-  .wiki-item{display:flex;align-items:center;gap:7px;text-align:left;border:none;background:none;font-family:inherit;font-size:13px;color:#344054;padding:6px 10px;border-radius:7px;cursor:pointer;width:100%;}
-  .wiki-item:hover{background:#f2f5fb;color:#101828;}
-  .wiki-item.sel{background:#eef2ff;color:#3538cd;font-weight:700;}
+  .wiki-row{display:flex;align-items:center;gap:1px;border-radius:7px;padding-right:3px;}
+  .wiki-row:hover{background:#f2f5fb;}
+  .wiki-row.sel{background:#eef2ff;}
+  .wiki-caret{flex:none;width:16px;border:none;background:none;color:#98a2b3;font-size:10px;cursor:pointer;padding:0;line-height:1;}
+  .wiki-caret:hover{color:#475467;}
+  .wiki-caret-sp{flex:none;width:16px;}
+  .wiki-item{flex:1;min-width:0;display:flex;align-items:center;gap:7px;text-align:left;border:none;background:none;font-family:inherit;font-size:13px;color:#344054;padding:6px 4px;cursor:pointer;}
+  .wiki-row:hover .wiki-item{color:#101828;}
+  .wiki-row.sel .wiki-item{color:#3538cd;font-weight:700;}
   .wiki-item-ic{flex:none;}
   .wiki-item-t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .wiki-row-actions{display:none;gap:1px;flex:none;}
+  .wiki-row:hover .wiki-row-actions{display:flex;}
+  .wiki-add{border:none;background:none;color:#98a2b3;font-size:12px;width:22px;height:22px;border-radius:5px;cursor:pointer;padding:0;line-height:1;}
+  .wiki-add:hover{background:#e0e9ff;color:#3538cd;}
   .wiki-empty-side{font-size:12px;color:var(--muted);padding:8px 10px;}
   .wiki-main{flex:1;min-width:0;border:1px solid var(--border);border-radius:12px;padding:20px 26px 28px;background:var(--panel);}
   .wiki-crumbs{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:12px;color:#98a2b3;margin-bottom:8px;}
@@ -5172,7 +5182,7 @@ function renderOrgPage(){ const el=document.getElementById('orgPage'); if(el){ e
 /* ============================ Wiki ============================ */
 // state.wiki = { pages:[ {id,title,icon,parentId,order,body,updatedAt,updatedBy} ] }. Pages nest via parentId
 // (a tree in the sidebar). Body is markdown-ish, rendered with formatDocHTML. Editing needs the 'wiki' grant.
-let _wikiSel=null, _wikiEdit=false, _wikiDraft=null, _wikiQuery='';
+let _wikiSel=null, _wikiEdit=false, _wikiDraft=null, _wikiQuery='', _wikiCollapsed=new Set();
 function wikiState(){ if(!state.wiki||typeof state.wiki!=='object'||Array.isArray(state.wiki)) state.wiki={pages:[]}; if(!Array.isArray(state.wiki.pages)) state.wiki.pages=[]; return state.wiki; }
 function wikiPage(id){ return wikiState().pages.find(p=>p.id===id)||null; }
 function wikiChildren(pid){ return wikiState().pages.filter(p=>(p.parentId||'')===(pid||'')).sort((a,b)=>(a.order||0)-(b.order||0)||(a.title||'').localeCompare(b.title||'')); }
@@ -5184,10 +5194,12 @@ async function saveWiki(){
     if(r.ok){ const j=await r.json().catch(()=>({})); checkVersion(j.version); setSync('Wiki saved','ok'); } else setSync('Wiki save failed','bad');
   }catch(e){ setSync('Wiki save failed — offline','bad'); }
 }
-function wikiCreate(parentId){
+function wikiCreate(parentId, opts){
+  opts=opts||{};
   const w=wikiState(); const sib=wikiChildren(parentId||'');
-  const p={id:'wk_'+uid(), title:'Untitled', icon:'', parentId:parentId||'', order:(sib.length?Math.max(...sib.map(x=>x.order||0))+1:0), body:''};
-  w.pages.push(p); _wikiSel=p.id; _wikiEdit=true; _wikiDraft={title:p.title,icon:p.icon,parentId:p.parentId,body:p.body};
+  const p={id:'wk_'+uid(), title:opts.folder?'New folder':'Untitled', icon:opts.folder?'📁':'', parentId:parentId||'', order:(sib.length?Math.max(...sib.map(x=>x.order||0))+1:0), body:''};
+  w.pages.push(p); if(parentId) _wikiCollapsed.delete(parentId);   // reveal the parent's children
+  _wikiSel=p.id; _wikiEdit=true; _wikiDraft={title:p.title,icon:p.icon,parentId:p.parentId,body:p.body};
   renderWikiPage();
 }
 function wikiSeedStarter(){
@@ -5310,17 +5322,27 @@ function renderWikiPage(){
   renderWikiMain(el.querySelector('#wiki_main'), w, editable);
 }
 function wikiTreeHTML(w, parent, depth, q){
-  let h='';
+  const canEdit=can('wiki'); let h='';
   wikiChildren(parent).forEach(p=>{
     const child=wikiTreeHTML(w, p.id, depth+1, q);
     const match=!q || (p.title||'').toLowerCase().includes(q) || (p.body||'').toLowerCase().includes(q);
     if(!match && !child) return;
-    h+=`<button class="wiki-item${p.id===_wikiSel?' sel':''}" data-id="${esc(p.id)}" style="padding-left:${10+depth*14}px"><span class="wiki-item-ic">${p.icon?esc(p.icon):'📄'}</span><span class="wiki-item-t">${esc(p.title||'Untitled')}</span></button>`;
-    h+=child;
+    const hasKids=wikiChildren(p.id).length>0;
+    const collapsed=hasKids && _wikiCollapsed.has(p.id) && !q;   // search always expands
+    h+=`<div class="wiki-row${p.id===_wikiSel?' sel':''}" style="padding-left:${5+depth*13}px">`
+      +(hasKids?`<button class="wiki-caret" data-caret="${esc(p.id)}" title="${collapsed?'Expand':'Collapse'}">${collapsed?'▸':'▾'}</button>`:'<span class="wiki-caret-sp"></span>')
+      +`<button class="wiki-item" data-id="${esc(p.id)}"><span class="wiki-item-ic">${p.icon?esc(p.icon):'📄'}</span><span class="wiki-item-t">${esc(p.title||'Untitled')}</span></button>`
+      +(canEdit?`<span class="wiki-row-actions"><button class="wiki-add" data-add="page" data-pid="${esc(p.id)}" title="Add subpage">＋</button><button class="wiki-add" data-add="folder" data-pid="${esc(p.id)}" title="Add folder">📁</button></span>`:'')
+      +`</div>`;
+    if(!collapsed) h+=child;
   });
   return h;
 }
-function wireWikiTree(el){ el.querySelectorAll('.wiki-item').forEach(b=>b.onclick=()=>{ if(_wikiEdit && _wikiDirty() && !confirm('Discard unsaved changes?')) return; _wikiSel=b.dataset.id; _wikiEdit=false; _wikiDraft=null; renderWikiPage(); }); }
+function wireWikiTree(el){
+  el.querySelectorAll('.wiki-item').forEach(b=>b.onclick=()=>{ if(_wikiEdit && _wikiDirty() && !confirm('Discard unsaved changes?')) return; _wikiSel=b.dataset.id; _wikiEdit=false; _wikiDraft=null; renderWikiPage(); });
+  el.querySelectorAll('.wiki-caret').forEach(b=>b.onclick=e=>{ e.stopPropagation(); const id=b.dataset.caret; if(_wikiCollapsed.has(id)) _wikiCollapsed.delete(id); else _wikiCollapsed.add(id); renderWikiPage(); });
+  el.querySelectorAll('.wiki-add').forEach(b=>b.onclick=e=>{ e.stopPropagation(); if(_wikiEdit && _wikiDirty() && !confirm('Discard unsaved changes?')) return; wikiCreate(b.dataset.pid, {folder:b.dataset.add==='folder'}); });
+}
 function _wikiDirty(){ const p=wikiPage(_wikiSel); if(!p||!_wikiDraft) return false; return (_wikiDraft.title||'')!==(p.title||'')||(_wikiDraft.icon||'')!==(p.icon||'')||(_wikiDraft.parentId||'')!==(p.parentId||'')||(_wikiDraft.body||'')!==(p.body||''); }
 function renderWikiMain(main, w, editable){
   if(!main) return;
@@ -5343,13 +5365,14 @@ function renderWikiMain(main, w, editable){
   main.innerHTML=`
     <div class="wiki-crumbs">${crumbs.map((c,i)=>`${i?'<span class="wiki-crumb-sep">›</span>':''}<span class="wiki-crumb" data-id="${esc(c.id)}">${c.icon?esc(c.icon)+' ':''}${esc(c.title||'Untitled')}</span>`).join('')}</div>
     <div class="wiki-doc-head"><div class="wiki-doc-title">${p.icon?esc(p.icon)+' ':''}${esc(p.title||'Untitled')}</div>
-      ${editable?`<div class="wiki-doc-actions"><button class="btn" id="wiki_edit">✎ Edit</button><button class="btn" id="wiki_sub">＋ Subpage</button></div>`:''}</div>
+      ${editable?`<div class="wiki-doc-actions"><button class="btn" id="wiki_edit">✎ Edit</button><button class="btn" id="wiki_sub">＋ Subpage</button><button class="btn" id="wiki_fold">📁 Folder</button></div>`:''}</div>
     ${meta?`<div class="wiki-doc-meta">${meta}</div>`:''}
     <div class="wiki-doc-body sp-doc">${p.body&&p.body.trim()?formatDocHTML(p.body):'<div class="wiki-empty-body">This page is empty.'+(editable?' Click <b>Edit</b> to add content.':'')+'</div>'}</div>
     ${kids.length?`<div class="wiki-children"><div class="wiki-children-h">Subpages</div>${kids.map(k=>`<button class="wiki-childlink" data-id="${esc(k.id)}">${k.icon?esc(k.icon)+' ':'📄 '}${esc(k.title||'Untitled')}</button>`).join('')}</div>`:''}`;
   main.querySelectorAll('.wiki-crumb,.wiki-childlink').forEach(c=>{ if(c.dataset.id) c.onclick=()=>{ _wikiSel=c.dataset.id; _wikiEdit=false; renderWikiPage(); }; });
   const eb=main.querySelector('#wiki_edit'); if(eb) eb.onclick=()=>{ _wikiEdit=true; _wikiDraft={title:p.title,icon:p.icon||'',parentId:p.parentId||'',body:p.body||''}; renderWikiPage(); };
   const sb=main.querySelector('#wiki_sub'); if(sb) sb.onclick=()=>wikiCreate(p.id);
+  const fb=main.querySelector('#wiki_fold'); if(fb) fb.onclick=()=>wikiCreate(p.id,{folder:true});
 }
 function renderWikiEditor(main, p){
   const d=_wikiDraft||(_wikiDraft={title:p.title,icon:p.icon||'',parentId:p.parentId||'',body:p.body||''});
