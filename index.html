@@ -798,6 +798,8 @@
   .wiki-row{display:flex;align-items:center;gap:1px;border-radius:7px;padding-right:3px;}
   .wiki-row:hover{background:#f2f5fb;}
   .wiki-row.sel{background:#eef2ff;}
+  .wiki-row[draggable=true]{cursor:grab;}
+  .wiki-row.drop{outline:2px solid #4c6fff;outline-offset:-2px;background:#eef2ff;border-radius:7px;}
   .wiki-caret{flex:none;width:16px;border:none;background:none;color:#98a2b3;font-size:10px;cursor:pointer;padding:0;line-height:1;}
   .wiki-caret:hover{color:#475467;}
   .wiki-caret-sp{flex:none;width:16px;}
@@ -5211,7 +5213,28 @@ function renderOrgPage(){ const el=document.getElementById('orgPage'); if(el){ e
 /* ============================ Wiki ============================ */
 // state.wiki = { pages:[ {id,title,icon,parentId,order,body,updatedAt,updatedBy} ] }. Pages nest via parentId
 // (a tree in the sidebar). Body is markdown-ish, rendered with formatDocHTML. Editing needs the 'wiki' grant.
-let _wikiSel=null, _wikiEdit=false, _wikiDraft=null, _wikiQuery='', _wikiCollapsed=new Set(), _wikiDirtyFlag=false;
+let _wikiSel=null, _wikiEdit=false, _wikiDraft=null, _wikiQuery='', _wikiCollapsed=new Set(), _wikiDirtyFlag=false, _wikiDrag=null;
+function wikiIsDescendant(id, ofId){ let cur=wikiPage(id); while(cur && cur.parentId){ if(cur.parentId===ofId) return true; cur=wikiPage(cur.parentId); } return false; }
+// Move a page under a new parent ('' = top level). Guards against cycles (can't drop into its own subtree).
+function moveWikiPage(dragId, newParentId){
+  if(!can('wiki') || !dragId || dragId===newParentId) return;
+  if(newParentId && wikiIsDescendant(newParentId, dragId)) return;
+  const p=wikiPage(dragId); if(!p || (p.parentId||'')===(newParentId||'')) return;
+  const sib=wikiChildren(newParentId||''); p.parentId=newParentId||''; p.order=(sib.length?Math.max(...sib.map(x=>x.order||0))+1:0);
+  if(newParentId) _wikiCollapsed.delete(newParentId);
+  saveWiki(); renderWikiPage();
+}
+// Download a page to the user's computer as a self-contained .html file.
+function downloadWikiPage(p){
+  if(!p) return;
+  const bodyHtml = (p.body&&p.body.trim()) ? (p.html?sanitizeHTML(p.body):formatDocHTML(p.body)) : '<p><em>(empty page)</em></p>';
+  const title=(p.title||'Untitled');
+  const doc='<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+esc(title)+'</title>'
+    +'<style>body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;max-width:760px;margin:40px auto;padding:0 20px;color:#1a2233;line-height:1.6}h1,h2,h3{line-height:1.25}h2{border-top:1px solid #e4e7ec;padding-top:8px}blockquote{border-left:3px solid #c7d7fe;background:#f8faff;margin:10px 0;padding:4px 14px;border-radius:0 8px 8px 0;color:#475467}pre{background:#0b1020;color:#e6edf3;padding:12px 14px;border-radius:9px;overflow:auto}code{background:#f2f4f7;border:1px solid #e4e7ec;border-radius:5px;padding:0 5px;font-family:ui-monospace,Menlo,Consolas,monospace}pre code{background:none;border:none;padding:0}table{border-collapse:collapse}td,th{border:1px solid #e4e7ec;padding:5px 9px}img{max-width:100%}a{color:#1570ef}</style></head><body><h1>'+esc(title)+'</h1>'+bodyHtml+'</body></html>';
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([doc],{type:'text/html'}));
+  a.download=(title.replace(/[^\w\- ]+/g,'').trim()||'page')+'.html';
+  document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },200);
+}
 // Light sanitizer for rich-text (contenteditable) HTML: drop dangerous tags, on* handlers, javascript:
 // URLs and inline styles/classes; force safe links. Trusted internal tool, but keep pasted junk out.
 function sanitizeHTML(html){
@@ -5410,7 +5433,7 @@ function wikiTreeHTML(w, parent, depth, q){
     if(!match && !child) return;
     const hasKids=wikiChildren(p.id).length>0;
     const collapsed=hasKids && _wikiCollapsed.has(p.id) && !q;   // search always expands
-    h+=`<div class="wiki-row${p.id===_wikiSel?' sel':''}" style="padding-left:${5+depth*13}px">`
+    h+=`<div class="wiki-row${p.id===_wikiSel?' sel':''}" data-rid="${esc(p.id)}" style="padding-left:${5+depth*13}px">`
       +(hasKids?`<button class="wiki-caret" data-caret="${esc(p.id)}" title="${collapsed?'Expand':'Collapse'}">${collapsed?'▸':'▾'}</button>`:'<span class="wiki-caret-sp"></span>')
       +`<button class="wiki-item" data-id="${esc(p.id)}"><span class="wiki-item-ic">${p.icon?esc(p.icon):'📄'}</span><span class="wiki-item-t">${esc(p.title||'Untitled')}</span></button>`
       +(canEdit?`<span class="wiki-row-actions"><button class="wiki-add" data-add="page" data-pid="${esc(p.id)}" title="Add subpage">＋</button><button class="wiki-add" data-add="folder" data-pid="${esc(p.id)}" title="Add folder">📁</button><button class="wiki-add wiki-del-btn" data-del="${esc(p.id)}" title="Delete">🗑</button></span>`:'')
@@ -5424,6 +5447,18 @@ function wireWikiTree(el){
   el.querySelectorAll('.wiki-caret').forEach(b=>b.onclick=e=>{ e.stopPropagation(); const id=b.dataset.caret; if(_wikiCollapsed.has(id)) _wikiCollapsed.delete(id); else _wikiCollapsed.add(id); renderWikiPage(); });
   el.querySelectorAll('.wiki-add[data-add]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); if(_wikiEdit && _wikiDirty() && !confirm('Discard unsaved changes?')) return; wikiCreate(b.dataset.pid, {folder:b.dataset.add==='folder'}); });
   el.querySelectorAll('.wiki-del-btn').forEach(b=>b.onclick=e=>{ e.stopPropagation(); wikiDelete(b.dataset.del); });
+  if(can('wiki')){   // drag a page onto a folder/page to move it in; drop on empty space -> top level
+    el.querySelectorAll('.wiki-row').forEach(row=>{
+      row.setAttribute('draggable','true');
+      row.ondragstart=e=>{ _wikiDrag=row.dataset.rid; e.dataTransfer.effectAllowed='move'; try{e.dataTransfer.setData('text/plain',_wikiDrag);}catch(_){} };
+      row.ondragend=()=>{ _wikiDrag=null; el.querySelectorAll('.wiki-row.drop').forEach(r=>r.classList.remove('drop')); };
+      row.ondragover=e=>{ if(!_wikiDrag||_wikiDrag===row.dataset.rid||wikiIsDescendant(row.dataset.rid,_wikiDrag))return; e.preventDefault(); e.dataTransfer.dropEffect='move'; row.classList.add('drop'); };
+      row.ondragleave=e=>{ if(!row.contains(e.relatedTarget)) row.classList.remove('drop'); };
+      row.ondrop=e=>{ e.preventDefault(); e.stopPropagation(); row.classList.remove('drop'); moveWikiPage(_wikiDrag||e.dataTransfer.getData('text/plain'), row.dataset.rid); };
+    });
+    const tree=el.querySelector('#wiki_tree');
+    if(tree){ tree.ondragover=e=>{ if(_wikiDrag){ e.preventDefault(); } }; tree.ondrop=e=>{ if(!_wikiDrag)return; e.preventDefault(); moveWikiPage(_wikiDrag,''); }; }
+  }
 }
 function _wikiDirty(){ return _wikiEdit && _wikiDirtyFlag; }
 function renderWikiMain(main, w, editable){
@@ -5447,11 +5482,12 @@ function renderWikiMain(main, w, editable){
   main.innerHTML=`
     <div class="wiki-crumbs">${crumbs.map((c,i)=>`${i?'<span class="wiki-crumb-sep">›</span>':''}<span class="wiki-crumb" data-id="${esc(c.id)}">${c.icon?esc(c.icon)+' ':''}${esc(c.title||'Untitled')}</span>`).join('')}</div>
     <div class="wiki-doc-head"><div class="wiki-doc-title">${p.icon?esc(p.icon)+' ':''}${esc(p.title||'Untitled')}</div>
-      ${editable?`<div class="wiki-doc-actions"><button class="btn" id="wiki_edit">✎ Edit</button><button class="btn" id="wiki_sub">＋ Subpage</button><button class="btn" id="wiki_fold">📁 Folder</button></div>`:''}</div>
+      <div class="wiki-doc-actions"><button class="btn" id="wiki_dl" title="Download this page">⬇ Download</button>${editable?`<button class="btn" id="wiki_edit">✎ Edit</button><button class="btn" id="wiki_sub">＋ Subpage</button><button class="btn" id="wiki_fold">📁 Folder</button>`:''}</div></div>
     ${meta?`<div class="wiki-doc-meta">${meta}</div>`:''}
     <div class="wiki-doc-body ${p.html?'wiki-rich':'sp-doc'}">${p.body&&p.body.trim()?(p.html?sanitizeHTML(p.body):formatDocHTML(p.body)):'<div class="wiki-empty-body">This page is empty.'+(editable?' Click <b>Edit</b> to add content.':'')+'</div>'}</div>
     ${kids.length?`<div class="wiki-children"><div class="wiki-children-h">Subpages</div>${kids.map(k=>`<button class="wiki-childlink" data-id="${esc(k.id)}">${k.icon?esc(k.icon)+' ':'📄 '}${esc(k.title||'Untitled')}</button>`).join('')}</div>`:''}`;
   main.querySelectorAll('.wiki-crumb,.wiki-childlink').forEach(c=>{ if(c.dataset.id) c.onclick=()=>{ _wikiSel=c.dataset.id; _wikiEdit=false; renderWikiPage(); }; });
+  const dl=main.querySelector('#wiki_dl'); if(dl) dl.onclick=()=>downloadWikiPage(p);
   const eb=main.querySelector('#wiki_edit'); if(eb) eb.onclick=()=>{ _wikiEdit=true; _wikiDraft={title:p.title,icon:p.icon||'',parentId:p.parentId||'',body:p.body||''}; renderWikiPage(); };
   const sb=main.querySelector('#wiki_sub'); if(sb) sb.onclick=()=>wikiCreate(p.id);
   const fb=main.querySelector('#wiki_fold'); if(fb) fb.onclick=()=>wikiCreate(p.id,{folder:true});
