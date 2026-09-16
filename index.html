@@ -5189,28 +5189,51 @@ function showApp(auth){
     const ha=document.getElementById('hubAdmin'); if(ha) ha.style.display=isSuperAdmin()?'':'none';
     if(ensureBacklogSquad()) scheduleSave();   // one-time: create the Backlog parking squad (admin only)
     if(_squadWFseededNow && can('onboarding')){ _squadWFseededNow=false; saveOnboarding(); }   // persist the one-time import
-    const deep = pendingViewSlug || pendingTribeSlug;   // ?view= / ?tribe= deep link -> go straight to roadmap
-    showSection(deep ? 'roadmap' : (loadSection()||'home'));
+    const route = routeFromHash();                      // #wiki/<id>, #organization, … deep link wins
+    const deep = pendingViewSlug || pendingTribeSlug;    // ?view= / ?tribe= roadmap deep link
+    if(route){ if(route.section==='wiki' && route.wikiPage) _wikiSel=route.wikiPage; showSection(route.section); }
+    else showSection(deep ? 'roadmap' : (loadSection()||'home'));
   });
 }
 const SECTION_KEY='hq_section';
 function loadSection(){ try{ return localStorage.getItem(SECTION_KEY); }catch(e){ return null; } }
+const SECTIONS=['home','roadmap','organization','onboarding','wiki','admin'];
 let currentSection='home';
+// URL hash routing: #roadmap, #wiki, #wiki/<pageId>, etc. Roadmap keeps its ?tribe/?view query too.
+function routeFromHash(){
+  const h=(location.hash||'').replace(/^#\/?/, '').trim(); if(!h) return null;
+  const parts=h.split('/'); const sec=parts[0];
+  if(sec==='wiki') return {section:'wiki', wikiPage:parts[1]||null};
+  if(SECTIONS.includes(sec)) return {section:sec};
+  return null;
+}
+function syncSectionUrl(){
+  try{ const u=new URL(location.href);
+    if(currentSection!=='roadmap'){ u.searchParams.delete('tribe'); u.searchParams.delete('view'); }   // roadmap-only params
+    u.hash = (currentSection==='wiki' && _wikiSel) ? ('wiki/'+_wikiSel) : currentSection;
+    history.replaceState(null,'',u);
+  }catch(e){}
+}
 function showSection(name){
-  const secs=['home','roadmap','organization','onboarding','wiki','admin'];
-  if(!secs.includes(name)) name='home';
+  if(!SECTIONS.includes(name)) name='home';
   if(name==='admin' && !isSuperAdmin()) name='home';   // Admin page is super-admin only
   currentSection=name;
   try{ localStorage.setItem(SECTION_KEY,name); }catch(e){}
-  secs.forEach(s=>{ const el=document.getElementById('section-'+s); if(el) el.style.display=(s===name)?'':'none'; });
+  SECTIONS.forEach(s=>{ const el=document.getElementById('section-'+s); if(el) el.style.display=(s===name)?'':'none'; });
   document.querySelectorAll('.appnav-btn').forEach(b=>b.classList.toggle('active', b.dataset.sec===name));
   const vt=document.getElementById('viewToggle'); if(vt) vt.style.display = (name==='roadmap')?'':'none';   // roadmap-only control
+  syncSectionUrl();
   if(name==='roadmap') render();
   else if(name==='organization') renderOrgPage();
   else if(name==='onboarding') renderOnboarding();
   else if(name==='wiki') renderWikiPage();
   else if(name==='admin') renderAdminPage();
 }
+window.addEventListener('hashchange',()=>{   // browser back/forward or manual URL edit
+  const r=routeFromHash(); if(!r || !idToken) return;
+  if(r.section==='wiki'){ _wikiSel=r.wikiPage||_wikiSel; if(currentSection==='wiki'){ renderWikiPage(); return; } }
+  if(r.section!==currentSection) showSection(r.section);
+});
 function renderOrgPage(){ const el=document.getElementById('orgPage'); if(el){ el.innerHTML=''; renderOrgChart(el); } }
 /* ============================ Wiki ============================ */
 // state.wiki = { pages:[ {id,title,icon,parentId,order,body,updatedAt,updatedBy} ] }. Pages nest via parentId
@@ -5477,6 +5500,7 @@ function renderWikiPage(){
   el.querySelector('#wiki_tree').innerHTML=wikiTreeHTML(w,'',0,_wikiQuery.trim().toLowerCase()) || (w.pages.length?'<div class="wiki-empty-side">No matches</div>':'<div class="wiki-empty-side">No pages yet</div>');
   wireWikiTree(el);
   renderWikiMain(el.querySelector('#wiki_main'), w, editable);
+  if(currentSection==='wiki') syncSectionUrl();   // reflect the open page in the URL
 }
 function wikiTreeHTML(w, parent, depth, q){
   const canEdit=can('wiki'); let h='';
