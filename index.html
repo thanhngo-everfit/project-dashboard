@@ -5311,17 +5311,21 @@ function downloadWikiPage(p){
   a.download=(title.replace(/[^\w\- ]+/g,'').trim()||'page')+'.md';
   document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },200);
 }
-// Light sanitizer for rich-text (contenteditable) HTML: drop dangerous tags, on* handlers, javascript:
-// URLs and inline styles/classes; force safe links. Trusted internal tool, but keep pasted junk out.
+// Sanitizer for rich-text / imported HTML. Removes only what's dangerous (scripts, event handlers,
+// javascript: URLs, framing/forms) while KEEPING inline styles, images and tables so pasted/exported
+// slide & document layouts render faithfully. Trusted internal tool.
 function sanitizeHTML(html){
   const d=document.createElement('div'); d.innerHTML=String(html||'');
-  d.querySelectorAll('script,style,iframe,object,embed,form,input,link,meta,title').forEach(n=>n.remove());
+  d.querySelectorAll('script,iframe,object,embed,form,input,button,link,meta,title,base,noscript').forEach(n=>n.remove());
   d.querySelectorAll('*').forEach(el=>{
-    [...el.attributes].forEach(a=>{ const n=a.name.toLowerCase();
-      if(n.startsWith('on')||n==='style'||n==='class'||n==='id') el.removeAttribute(a.name);
-      else if((n==='href'||n==='src')&&/^\s*javascript:/i.test(a.value||'')) el.removeAttribute(a.name);
+    [...el.attributes].forEach(a=>{ const n=a.name.toLowerCase(), v=a.value||'';
+      if(n.startsWith('on')) el.removeAttribute(a.name);                                   // event handlers
+      else if(n==='id'||n==='srcdoc'||n==='sandbox') el.removeAttribute(a.name);
+      else if((n==='href'||n==='src'||n==='xlink:href')&&/^\s*(javascript|vbscript|file):/i.test(v)) el.removeAttribute(a.name);
+      else if(n==='style' && /(expression|javascript:|url\(\s*['"]?\s*javascript)/i.test(v)) el.removeAttribute(a.name);
     });
     if(el.tagName==='A' && el.getAttribute('href')){ el.setAttribute('target','_blank'); el.setAttribute('rel','noopener'); }
+    if(el.tagName==='IMG'){ el.style.maxWidth='100%'; el.setAttribute('loading','lazy'); }
   });
   return d.innerHTML;
 }
@@ -5641,15 +5645,20 @@ function renderWikiEditor(main, p){
       <span class="wtb-sep"></span>
       ${tb('cmd','insertUnorderedList','• List','Bulleted list')}${tb('cmd','insertOrderedList','1. List','Numbered list')}${tb('block','blockquote','❝','Quote')}${tb('block','pre','&lt;/&gt;','Code block')}
       <span class="wtb-sep"></span>
-      ${tb('act','link','🔗','Add link')}${tb('act','unlink','⛓','Remove link')}${tb('act','clear','⌫','Clear formatting')}
+      ${tb('act','link','🔗','Add link')}${tb('act','unlink','⛓','Remove link')}${tb('act','image','🖼','Insert image')}${tb('act','clear','⌫','Clear formatting')}
+      <input type="file" id="wk_img" accept="image/*" style="display:none">
     </div>
     <div class="wiki-rte wiki-rich" id="wk_body" contenteditable="true" spellcheck="true"></div>
-    <div class="wiki-ed-hint">Use ⌘/Ctrl + B, I, U — or the toolbar. Bulleted/numbered lists, headings, quotes, code and links supported.</div>
+    <div class="wiki-ed-hint">Use ⌘/Ctrl + B, I, U — or the toolbar. Paste or drop images and formatted content (e.g. from slides) to keep its layout.</div>
     <div class="wiki-ed-actions"><button class="btn primary" id="wk_save">Save</button><button class="btn" id="wk_cancel">Cancel</button><button class="btn wiki-del" id="wk_del">Delete page</button></div>`;
   const body=main.querySelector('#wk_body'); body.innerHTML=initialHTML;
   _wikiDirtyFlag=false; const mark=()=>{ _wikiDirtyFlag=true; };
   main.querySelectorAll('#wk_icon,#wk_title,#wk_parent').forEach(i=>i.oninput=mark);
   body.oninput=mark;
+  const imgInput=main.querySelector('#wk_img');
+  const insertImg=src=>{ body.focus(); document.execCommand('insertImage',false,src); mark(); };
+  const fileToImg=file=>{ if(!file||!/^image\//.test(file.type)) return; const fr=new FileReader(); fr.onload=()=>insertImg(String(fr.result||'')); fr.readAsDataURL(file); };
+  imgInput.onchange=e=>{ const f=e.target.files&&e.target.files[0]; if(f) fileToImg(f); e.target.value=''; };
   main.querySelectorAll('#wk_tb .wtb').forEach(btn=>{
     btn.onmousedown=e=>e.preventDefault();   // keep the selection in the editor
     btn.onclick=()=>{
@@ -5658,10 +5667,15 @@ function renderWikiEditor(main, p){
       else if(btn.dataset.block) document.execCommand('formatBlock',false,'<'+btn.dataset.block+'>');
       else if(btn.dataset.act==='link'){ const u=prompt('Link URL:','https://'); if(u) document.execCommand('createLink',false,u); }
       else if(btn.dataset.act==='unlink') document.execCommand('unlink',false,null);
+      else if(btn.dataset.act==='image'){ const u=prompt('Image URL (or Cancel to upload a file):',''); if(u) insertImg(u.trim()); else imgInput.click(); }
       else if(btn.dataset.act==='clear'){ document.execCommand('removeFormat',false,null); document.execCommand('formatBlock',false,'<p>'); }
       mark();
     };
   });
+  // Paste / drop images (e.g. a slide screenshot) -> embed inline; keep pasted formatting via sanitize on save.
+  body.addEventListener('paste',e=>{ const items=(e.clipboardData&&e.clipboardData.items)||[]; for(const it of items){ if(it.type&&it.type.indexOf('image')===0){ const f=it.getAsFile(); if(f){ e.preventDefault(); fileToImg(f); return; } } } });
+  body.addEventListener('dragover',e=>{ if(e.dataTransfer&&[...e.dataTransfer.types].includes('Files')) e.preventDefault(); });
+  body.addEventListener('drop',e=>{ const files=(e.dataTransfer&&e.dataTransfer.files)||[]; const imgs=[...files].filter(f=>/^image\//.test(f.type)); if(imgs.length){ e.preventDefault(); imgs.forEach(fileToImg); } });
   main.querySelector('#wk_save').onclick=()=>{
     p.title=(main.querySelector('#wk_title').value||'').trim()||'Untitled';
     p.icon=main.querySelector('#wk_icon').value.trim()||'';
