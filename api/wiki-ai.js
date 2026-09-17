@@ -39,7 +39,11 @@ export default async function handler(req, res) {
   const b = req.body || {};
   const raw = String(b.raw || '').slice(0, 60000).trim();   // bound the prompt
   const hintTitle = String(b.title || '').trim().slice(0, 200);
-  if (!raw) { res.status(400).json({ error: 'missing_raw', detail: 'Paste some document text to convert.' }); return; }
+  // PDF path: the client sends the file as base64; the model reads it natively (no server-side PDF parser).
+  const pdf = b.pdfBase64 ? String(b.pdfBase64) : '';
+  const pdfName = String(b.filename || 'document.pdf').replace(/[^\w.\- ]+/g, '').slice(0, 120) || 'document.pdf';
+  if (!raw && !pdf) { res.status(400).json({ error: 'missing_raw', detail: 'Paste text or attach a PDF to convert.' }); return; }
+  if (pdf && pdf.length > 12_000_000) { res.status(413).json({ error: 'pdf_too_large', detail: 'PDF is too large — keep it under ~8MB.' }); return; }
 
   const sys = 'You are a technical writer who turns messy raw documents (pasted notes, exported docs, transcripts) '
     + 'into a single clean, well-structured internal wiki page. '
@@ -56,18 +60,26 @@ export default async function handler(req, res) {
     + 'Write a short, specific page title (Title Case, no trailing punctuation). '
     + 'Return STRICT JSON only: {"title": string, "body": string}.';
 
-  const usr = (hintTitle ? ('Suggested title (use or improve): ' + hintTitle + '\n\n') : '')
-    + 'RAW DOCUMENT:\n' + raw;
+  let userContent;
+  if (pdf) {
+    const dataUrl = pdf.startsWith('data:') ? pdf : ('data:application/pdf;base64,' + pdf);
+    userContent = [
+      { type: 'text', text: 'Convert the attached PDF into a clean wiki page, preserving all substantive content.' + (hintTitle ? (' Suggested title: ' + hintTitle) : '') },
+      { type: 'file', file: { filename: pdfName, file_data: dataUrl } },
+    ];
+  } else {
+    userContent = (hintTitle ? ('Suggested title (use or improve): ' + hintTitle + '\n\n') : '') + 'RAW DOCUMENT:\n' + raw;
+  }
 
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 55000);
+    const timer = setTimeout(() => controller.abort(), 90000);   // PDFs take longer to read
     const r = await fetch(BASE + '/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + KEY },
       body: JSON.stringify({
         model: MODEL,
-        messages: [{ role: 'system', content: sys }, { role: 'user', content: usr }],
+        messages: [{ role: 'system', content: sys }, { role: 'user', content: userContent }],
         response_format: { type: 'json_object' },
         temperature: 0.2,
       }),
@@ -84,7 +96,7 @@ export default async function handler(req, res) {
     let parsed;
     try { parsed = JSON.parse(content); } catch (e) { res.status(502).json({ error: 'bad_ai_json', detail: String(content).slice(0, 500) }); return; }
     res.status(200).json({
-      title: String(parsed.title || hintTitle || 'Imported page').slice(0, 200),
+      title: String(parsed.title || hintTitle || pdfName.replace(/\.pdf$/i, '') || 'Imported page').slice(0, 200),
       body: String(parsed.body || '').slice(0, 60000),
       model: MODEL,
       generatedAt: Date.now(),

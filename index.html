@@ -5439,24 +5439,33 @@ function openWikiImport(parentId){
   if(!can('wiki')) return;
   modal.style.width='680px';
   const parentOpts=['<option value="">— Top level —</option>'].concat(wikiState().pages.slice().sort((a,b)=>(a.title||'').localeCompare(b.title||'')).map(p=>`<option value="${esc(p.id)}"${(parentId||'')===p.id?' selected':''}>${esc((p.icon?p.icon+' ':'')+(p.title||'Untitled'))}</option>`)).join('');
+  let pendingPdf=null;   // {base64, name} when a PDF is loaded (read by AI, not shown in the textarea)
   modal.innerHTML=`<h3>Import document → wiki page</h3>
-    <div style="font-size:12.5px;color:var(--muted);margin:-6px 0 12px;">Paste raw text, or load a <b>.docx</b>, <b>.skill</b>, .txt or .md file. <b>Convert with AI</b> cleans and structures it; <b>Insert as-is</b> keeps it verbatim (best for already-formatted Markdown / skills). You can edit after either way.</div>
+    <div style="font-size:12.5px;color:var(--muted);margin:-6px 0 12px;">Paste raw text, or load a <b>.pdf</b>, <b>.docx</b>, <b>.skill</b>, .txt or .md file. <b>Convert with AI</b> cleans and structures it (PDFs are read by AI); <b>Insert as-is</b> keeps text verbatim. You can edit after either way.</div>
     <div class="field"><label>Raw document</label><textarea id="wimp_raw" style="min-height:200px;resize:vertical;" placeholder="Paste the document text here…"></textarea></div>
-    <div class="field row2"><div><label>Or load a file (.docx / .skill / .txt / .md)</label><input type="file" id="wimp_file" accept=".docx,.skill,.txt,.md,.markdown,.mdx,.csv,.log,.json,.text"></div><div><label>Parent page</label><select id="wimp_parent">${parentOpts}</select></div></div>
+    <div class="field row2"><div><label>Or load a file (.pdf / .docx / .skill / .txt / .md)</label><input type="file" id="wimp_file" accept=".pdf,.docx,.skill,.txt,.md,.markdown,.mdx,.csv,.log,.json,.text"></div><div><label>Parent page</label><select id="wimp_parent">${parentOpts}</select></div></div>
     <div class="field"><label>Title hint (optional)</label><input id="wimp_title" placeholder="Leave blank to let AI name it"></div>
     <div id="wimp_status" style="font-size:12.5px;color:var(--muted);min-height:16px;"></div>
     <div class="modal-actions"><button class="btn" id="wimp_cancel">Cancel</button><button class="btn" id="wimp_asis">Insert as-is</button><button class="btn primary" id="wimp_go">✨ Convert with AI</button></div>`;
   const raw=modal.querySelector('#wimp_raw'), status=modal.querySelector('#wimp_status');
+  const toBase64=buf=>{ const b=new Uint8Array(buf); let s=''; const CH=0x8000; for(let i=0;i<b.length;i+=CH) s+=String.fromCharCode.apply(null,b.subarray(i,i+CH)); return btoa(s); };
   modal.querySelector('#wimp_file').onchange=async e=>{
     const f=e.target.files&&e.target.files[0]; if(!f) return;
     const tEl=modal.querySelector('#wimp_title'); if(!tEl.value) tEl.value=f.name.replace(/\.[a-z0-9]+$/i,'');
+    pendingPdf=null;
     try{
+      if(/\.pdf$/i.test(f.name)){
+        if(f.size>8*1024*1024){ status.textContent='PDF is large ('+(f.size/1048576).toFixed(1)+'MB) — keep it under ~8MB.'; return; }
+        pendingPdf={base64:toBase64(await f.arrayBuffer()), name:f.name}; raw.value='';
+        status.textContent='📄 '+f.name+' ready — click ✨ Convert with AI (the PDF is read by AI).'; return;
+      }
       if(/\.docx$/i.test(f.name)){ status.textContent='Reading .docx…'; raw.value=await extractDocxText(await f.arrayBuffer()); }
       else if(/\.skill$/i.test(f.name)){ status.textContent='Reading .skill…'; raw.value=await extractSkillText(f); }
       else { raw.value=await f.text(); }
       status.textContent='Loaded '+raw.value.length.toLocaleString()+' chars from '+f.name+'. Review, then Convert or Insert.';
     }catch(err){ status.textContent='Could not read '+f.name+': '+(err&&err.message||err)+'. Try pasting the text.'; }
   };
+  raw.oninput=()=>{ if(raw.value.trim()) pendingPdf=null; };   // typing replaces a staged PDF
   modal.querySelector('#wimp_cancel').onclick=closeModal;
   const newPageFrom=(title, body, isHtml)=>{
     const pid=modal.querySelector('#wimp_parent').value||''; const sib=wikiChildren(pid);
@@ -5464,6 +5473,7 @@ function openWikiImport(parentId){
     wikiState().pages.push(p); _wikiSel=p.id; _wikiEdit=false; _wikiDraft=null; saveWiki(); closeModal(); showSection('wiki'); renderWikiPage();
   };
   modal.querySelector('#wimp_asis').onclick=()=>{
+    if(pendingPdf){ status.textContent='A PDF can only be imported with ✨ Convert with AI.'; return; }
     const text=(raw.value||'').trim(); if(!text){ status.textContent='Paste some text or load a file first.'; raw.focus(); return; }
     // strip a leading YAML frontmatter block (--- ... ---) that skill/md files carry, keep the rest as Markdown
     const body=text.replace(/^﻿?---\n[\s\S]*?\n---\n/, '');
@@ -5471,17 +5481,16 @@ function openWikiImport(parentId){
   };
   const go=modal.querySelector('#wimp_go');
   go.onclick=async()=>{
-    const text=(raw.value||'').trim(); if(!text){ status.textContent='Paste some text or load a file first.'; raw.focus(); return; }
-    go.disabled=true; status.textContent='✨ Converting with AI… this can take a few seconds.';
+    const text=(raw.value||'').trim();
+    if(!text && !pendingPdf){ status.textContent='Paste some text or load a file first.'; raw.focus(); return; }
+    go.disabled=true; status.textContent=pendingPdf?'✨ Reading the PDF with AI… this can take up to a minute.':'✨ Converting with AI… this can take a few seconds.';
     try{
-      const r=await apiFetch('/api/wiki-ai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({raw:text, title:modal.querySelector('#wimp_title').value.trim()})});
+      const payload = pendingPdf ? {pdfBase64:pendingPdf.base64, filename:pendingPdf.name, title:modal.querySelector('#wimp_title').value.trim()} : {raw:text, title:modal.querySelector('#wimp_title').value.trim()};
+      const r=await apiFetch('/api/wiki-ai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
       const j=await r.json().catch(()=>({}));
       if(r.status===401){ handleAuthExpired(); return; }
       if(!r.ok){ status.textContent='Failed: '+(j.detail||j.error||('HTTP '+r.status)); go.disabled=false; return; }
-      const pid=modal.querySelector('#wimp_parent').value||''; const sib=wikiChildren(pid);
-      const p={id:'wk_'+uid(), title:(j.title||'Imported page'), icon:'📄', parentId:pid, order:(sib.length?Math.max(...sib.map(x=>x.order||0))+1:0), body:(j.body||''), updatedAt:nowMs(), updatedBy:currentEmail};
-      wikiState().pages.push(p); _wikiSel=p.id; _wikiEdit=false; _wikiDraft=null;
-      saveWiki(); closeModal(); showSection('wiki'); renderWikiPage();
+      newPageFrom(j.title||'Imported page', j.body||'', false);
     }catch(e){ status.textContent='Error: '+(e&&e.message||e); go.disabled=false; }
   };
   modalBg.classList.add('open'); raw.focus();
