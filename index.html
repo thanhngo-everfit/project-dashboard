@@ -5409,6 +5409,36 @@ async function extractSkillText(file){
   }
   return await file.text();   // plain-text skill file
 }
+// Best-effort PDF text extraction in the browser (no library, no AI). Works on text-based PDFs whose
+// content streams are FlateDecode/plain; returns '' for scanned or custom-font PDFs (caller falls back).
+function _pdfUnescape(s){ return s.replace(/\\n/g,'\n').replace(/\\r/g,'\n').replace(/\\t/g,'\t').replace(/\\b/g,'').replace(/\\f/g,'').replace(/\\\(/g,'(').replace(/\\\)/g,')').replace(/\\\\/g,'\\').replace(/\\(\d{1,3})/g,(m,o)=>{ const c=parseInt(o,8); return c?String.fromCharCode(c):''; }); }
+function _pdfTextOps(s){
+  let res=''; const re=/\(((?:\\.|[^()\\]|\((?:\\.|[^()\\])*\))*)\)\s*(Tj|'|")|\[((?:\\.|[^\]\\])*)\]\s*TJ|(T\*|Td|TD|ET)/g; let m;
+  while((m=re.exec(s))){
+    if(m[1]!=null){ res+=_pdfUnescape(m[1]); if(m[2]==="'"||m[2]==='"') res+='\n'; }
+    else if(m[3]!=null){ m[3].replace(/\(((?:\\.|[^()\\])*)\)/g,(mm,str)=>{ res+=_pdfUnescape(str); return mm; }); }
+    else if(m[4]) res+='\n';
+  }
+  return res;
+}
+async function extractPdfText(buf){
+  const u8=new Uint8Array(buf);
+  const latin=b=>{ let s=''; const CH=0x8000; for(let i=0;i<b.length;i+=CH) s+=String.fromCharCode.apply(null,b.subarray(i,i+CH)); return s; };
+  const raw=latin(u8); const parts=[]; let idx=0;
+  while(true){
+    const s=raw.indexOf('stream', idx); if(s<0) break;
+    let ds=s+6; if(raw[ds]==='\r') ds++; if(raw[ds]==='\n') ds++;
+    const e=raw.indexOf('endstream', ds); if(e<0) break;
+    const bytes=u8.subarray(ds, e);
+    let content=null;
+    try{ const dstream=new Response(new Blob([bytes])).body.pipeThrough(new DecompressionStream('deflate')); content=latin(new Uint8Array(await new Response(dstream).arrayBuffer())); }catch(_){ content=null; }
+    if(content==null){ const t=latin(bytes); if(/\)\s*Tj|\]\s*TJ|BT\b/.test(t)) content=t; }
+    if(content && /\)\s*Tj|\]\s*TJ|BT\b/.test(content)) parts.push(content);
+    idx=e+9;
+  }
+  const text=parts.map(_pdfTextOps).join('\n').replace(/[ \t]+\n/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
+  return text;
+}
 function docxXmlToText(xml){
   const dec=s=>s.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&amp;/g,'&');
   const runText=r=>{ let t=''; r.replace(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g,(m,x)=>{t+=x;return m;}); if(/<w:tab\b/.test(r)) t+='\t'; t=dec(t); if(!t.trim()) return t; const bold=/<w:b\/>|<w:b [^>]*(?!w:val="0")\/>|<w:b>/.test(r); return bold?('**'+t+'**'):t; };
@@ -5439,33 +5469,38 @@ function openWikiImport(parentId){
   if(!can('wiki')) return;
   modal.style.width='680px';
   const parentOpts=['<option value="">— Top level —</option>'].concat(wikiState().pages.slice().sort((a,b)=>(a.title||'').localeCompare(b.title||'')).map(p=>`<option value="${esc(p.id)}"${(parentId||'')===p.id?' selected':''}>${esc((p.icon?p.icon+' ':'')+(p.title||'Untitled'))}</option>`)).join('');
-  let pendingPdf=null;   // {base64, name} when a PDF is loaded (read by AI, not shown in the textarea)
+  let pendingPdf=null;    // {base64, name} kept for the AI fallback when a PDF has no extractable text
+  let pendingHtml=null;   // {html, name} when an .html file is loaded -> becomes a rich page as-is
   modal.innerHTML=`<h3>Import document → wiki page</h3>
-    <div style="font-size:12.5px;color:var(--muted);margin:-6px 0 12px;">Paste raw text, or load a <b>.pdf</b>, <b>.docx</b>, <b>.skill</b>, .txt or .md file. <b>Convert with AI</b> cleans and structures it (PDFs are read by AI); <b>Insert as-is</b> keeps text verbatim. You can edit after either way.</div>
+    <div style="font-size:12.5px;color:var(--muted);margin:-6px 0 12px;">Paste raw text, or load a <b>.pdf</b>, <b>.html</b>, <b>.docx</b>, <b>.skill</b>, .txt or .md file. <b>Insert as-is</b> keeps it verbatim (no AI); <b>Convert with AI</b> cleans and restructures it. You can edit after either way.</div>
     <div class="field"><label>Raw document</label><textarea id="wimp_raw" style="min-height:200px;resize:vertical;" placeholder="Paste the document text here…"></textarea></div>
-    <div class="field row2"><div><label>Or load a file (.pdf / .docx / .skill / .txt / .md)</label><input type="file" id="wimp_file" accept=".pdf,.docx,.skill,.txt,.md,.markdown,.mdx,.csv,.log,.json,.text"></div><div><label>Parent page</label><select id="wimp_parent">${parentOpts}</select></div></div>
+    <div class="field row2"><div><label>Or load a file (.pdf / .html / .docx / .skill / .txt / .md)</label><input type="file" id="wimp_file" accept=".pdf,.html,.htm,.docx,.skill,.txt,.md,.markdown,.mdx,.csv,.log,.json,.text"></div><div><label>Parent page</label><select id="wimp_parent">${parentOpts}</select></div></div>
     <div class="field"><label>Title hint (optional)</label><input id="wimp_title" placeholder="Leave blank to let AI name it"></div>
     <div id="wimp_status" style="font-size:12.5px;color:var(--muted);min-height:16px;"></div>
-    <div class="modal-actions"><button class="btn" id="wimp_cancel">Cancel</button><button class="btn" id="wimp_asis">Insert as-is</button><button class="btn primary" id="wimp_go">✨ Convert with AI</button></div>`;
+    <div class="modal-actions"><button class="btn" id="wimp_cancel">Cancel</button><button class="btn primary" id="wimp_asis">Insert as-is</button><button class="btn" id="wimp_go">✨ Convert with AI</button></div>`;
   const raw=modal.querySelector('#wimp_raw'), status=modal.querySelector('#wimp_status');
   const toBase64=buf=>{ const b=new Uint8Array(buf); let s=''; const CH=0x8000; for(let i=0;i<b.length;i+=CH) s+=String.fromCharCode.apply(null,b.subarray(i,i+CH)); return btoa(s); };
+  const clearStaged=()=>{ pendingPdf=null; pendingHtml=null; };
   modal.querySelector('#wimp_file').onchange=async e=>{
     const f=e.target.files&&e.target.files[0]; if(!f) return;
     const tEl=modal.querySelector('#wimp_title'); if(!tEl.value) tEl.value=f.name.replace(/\.[a-z0-9]+$/i,'');
-    pendingPdf=null;
+    clearStaged();
     try{
       if(/\.pdf$/i.test(f.name)){
-        if(f.size>3*1024*1024){ status.textContent='PDF is '+(f.size/1048576).toFixed(1)+'MB — uploads are capped near ~3MB. Split it, or paste the text.'; return; }
-        pendingPdf={base64:toBase64(await f.arrayBuffer()), name:f.name}; raw.value='';
-        status.textContent='📄 '+f.name+' ready — click ✨ Convert with AI (the PDF is read by AI).'; return;
+        status.textContent='Reading PDF text…';
+        const buf=await f.arrayBuffer(); const txt=await extractPdfText(buf);
+        if(txt && txt.length>40){ raw.value=txt; status.textContent='Extracted '+txt.length.toLocaleString()+' chars from '+f.name+'. Insert as-is, or Convert with AI to tidy it.'; }
+        else { if(f.size>3*1024*1024){ status.textContent='No selectable text found and the file is large — paste the text instead.'; return; } pendingPdf={base64:toBase64(buf), name:f.name}; raw.value=''; status.textContent='No selectable text found in '+f.name+' (scanned/custom fonts). Use ✨ Convert with AI to read it.'; }
+        return;
       }
+      if(/\.html?$/i.test(f.name)){ pendingHtml={html:await f.text(), name:f.name}; raw.value=''; status.textContent='🌐 '+f.name+' ready — Insert as-is keeps its formatting.'; return; }
       if(/\.docx$/i.test(f.name)){ status.textContent='Reading .docx…'; raw.value=await extractDocxText(await f.arrayBuffer()); }
       else if(/\.skill$/i.test(f.name)){ status.textContent='Reading .skill…'; raw.value=await extractSkillText(f); }
       else { raw.value=await f.text(); }
-      status.textContent='Loaded '+raw.value.length.toLocaleString()+' chars from '+f.name+'. Review, then Convert or Insert.';
+      status.textContent='Loaded '+raw.value.length.toLocaleString()+' chars from '+f.name+'. Review, then Insert or Convert.';
     }catch(err){ status.textContent='Could not read '+f.name+': '+(err&&err.message||err)+'. Try pasting the text.'; }
   };
-  raw.oninput=()=>{ if(raw.value.trim()) pendingPdf=null; };   // typing replaces a staged PDF
+  raw.oninput=()=>{ if(raw.value.trim()) clearStaged(); };   // typing replaces a staged file
   modal.querySelector('#wimp_cancel').onclick=closeModal;
   const newPageFrom=(title, body, isHtml)=>{
     const pid=modal.querySelector('#wimp_parent').value||''; const sib=wikiChildren(pid);
@@ -5473,19 +5508,21 @@ function openWikiImport(parentId){
     wikiState().pages.push(p); _wikiSel=p.id; _wikiEdit=false; _wikiDraft=null; saveWiki(); closeModal(); showSection('wiki'); renderWikiPage();
   };
   modal.querySelector('#wimp_asis').onclick=()=>{
-    if(pendingPdf){ status.textContent='A PDF can only be imported with ✨ Convert with AI.'; return; }
+    const titleHint=modal.querySelector('#wimp_title').value.trim();
+    if(pendingHtml){ newPageFrom(titleHint||pendingHtml.name.replace(/\.[a-z0-9]+$/i,''), sanitizeHTML(pendingHtml.html), true); return; }
+    if(pendingPdf){ status.textContent='This PDF has no selectable text — use ✨ Convert with AI, or paste the text.'; return; }
     const text=(raw.value||'').trim(); if(!text){ status.textContent='Paste some text or load a file first.'; raw.focus(); return; }
-    // strip a leading YAML frontmatter block (--- ... ---) that skill/md files carry, keep the rest as Markdown
-    const body=text.replace(/^﻿?---\n[\s\S]*?\n---\n/, '');
-    newPageFrom(modal.querySelector('#wimp_title').value.trim(), body, false);
+    const body=text.replace(/^﻿?---\n[\s\S]*?\n---\n/, '');   // drop leading YAML frontmatter (skills/md)
+    newPageFrom(titleHint, body, false);
   };
   const go=modal.querySelector('#wimp_go');
   go.onclick=async()=>{
     const text=(raw.value||'').trim();
-    if(!text && !pendingPdf){ status.textContent='Paste some text or load a file first.'; raw.focus(); return; }
+    const rawForAi = pendingHtml ? pendingHtml.html : text;
+    if(!rawForAi && !pendingPdf){ status.textContent='Paste some text or load a file first.'; raw.focus(); return; }
     go.disabled=true; status.textContent=pendingPdf?'✨ Reading the PDF with AI… this can take up to a minute.':'✨ Converting with AI… this can take a few seconds.';
     try{
-      const payload = pendingPdf ? {pdfBase64:pendingPdf.base64, filename:pendingPdf.name, title:modal.querySelector('#wimp_title').value.trim()} : {raw:text, title:modal.querySelector('#wimp_title').value.trim()};
+      const payload = pendingPdf ? {pdfBase64:pendingPdf.base64, filename:pendingPdf.name, title:modal.querySelector('#wimp_title').value.trim()} : {raw:rawForAi, title:modal.querySelector('#wimp_title').value.trim()};
       const r=await apiFetch('/api/wiki-ai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
       const j=await r.json().catch(()=>({}));
       if(r.status===401){ handleAuthExpired(); return; }

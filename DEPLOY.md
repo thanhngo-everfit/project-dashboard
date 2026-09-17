@@ -206,10 +206,12 @@ wiki offers a "Create starter pages" scaffold (Workflows · Claude skills · Eng
 References).
 
 **Import.** The wiki's **✨ Import** button takes raw pasted text or a loaded file — **.pdf**
-(sent as base64 to `wiki-ai` and read natively by the OpenAI model — needs a PDF-capable model like
-gpt-4o; no server-side PDF parser), **.docx** (unzipped in-browser via the central directory +
-`DecompressionStream`, WordML → text), **.skill** (a ZIP bundle → its `SKILL.md`, or a plain markdown
-skill file), or .txt/.md. Then either
+(text extracted **in-browser**, no AI: streams inflated via `DecompressionStream` + PDF text operators;
+scanned/custom-font PDFs with no selectable text fall back to base64 → `wiki-ai` read by a PDF-capable
+model like gpt-4o), **.html** (read + sanitized → a rich page as-is), **.docx** (unzipped in-browser,
+WordML → text), **.skill** (a ZIP bundle → its `SKILL.md`, or a plain markdown skill file), or .txt/.md.
+Two actions: **Insert as-is** (no AI — verbatim; HTML stays rich, others as Markdown) and **Convert
+with AI** (cleans + restructures). Then either
 **Convert with AI** (`POST /api/wiki-ai`, OpenAI cleans + structures it, keeping details) or
 **Insert as-is** (verbatim Markdown, leading YAML frontmatter stripped). `wiki-ai` reuses the same
 OpenAI env vars as evaluations (`OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_BASE_URL`) and accepts any
