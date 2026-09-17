@@ -5455,7 +5455,7 @@ function openWikiImport(parentId){
     pendingPdf=null;
     try{
       if(/\.pdf$/i.test(f.name)){
-        if(f.size>8*1024*1024){ status.textContent='PDF is large ('+(f.size/1048576).toFixed(1)+'MB) — keep it under ~8MB.'; return; }
+        if(f.size>3*1024*1024){ status.textContent='PDF is '+(f.size/1048576).toFixed(1)+'MB — uploads are capped near ~3MB. Split it, or paste the text.'; return; }
         pendingPdf={base64:toBase64(await f.arrayBuffer()), name:f.name}; raw.value='';
         status.textContent='📄 '+f.name+' ready — click ✨ Convert with AI (the PDF is read by AI).'; return;
       }

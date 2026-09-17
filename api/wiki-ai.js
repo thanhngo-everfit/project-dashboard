@@ -60,20 +60,30 @@ export default async function handler(req, res) {
     + 'Write a short, specific page title (Title Case, no trailing punctuation). '
     + 'Return STRICT JSON only: {"title": string, "body": string}.';
 
-  let userContent;
-  if (pdf) {
-    const dataUrl = pdf.startsWith('data:') ? pdf : ('data:application/pdf;base64,' + pdf);
-    userContent = [
-      { type: 'text', text: 'Convert the attached PDF into a clean wiki page, preserving all substantive content.' + (hintTitle ? (' Suggested title: ' + hintTitle) : '') },
-      { type: 'file', file: { filename: pdfName, file_data: dataUrl } },
-    ];
-  } else {
-    userContent = (hintTitle ? ('Suggested title (use or improve): ' + hintTitle + '\n\n') : '') + 'RAW DOCUMENT:\n' + raw;
-  }
-
   try {
+    let userContent, fileId = null;
+    if (pdf) {
+      // Upload the PDF to OpenAI's Files API, then reference it by id (most reliable PDF path).
+      const base64 = pdf.startsWith('data:') ? (pdf.split(',')[1] || '') : pdf;
+      let bytes; try { bytes = Buffer.from(base64, 'base64'); } catch (e) { res.status(400).json({ error: 'bad_pdf', detail: 'Could not decode the PDF.' }); return; }
+      const fd = new FormData();
+      fd.append('purpose', 'user_data');
+      fd.append('file', new Blob([bytes], { type: 'application/pdf' }), pdfName);
+      const upC = new AbortController(); const upT = setTimeout(() => upC.abort(), 30000);
+      const up = await fetch(BASE + '/files', { method: 'POST', headers: { 'Authorization': 'Bearer ' + KEY }, body: fd, signal: upC.signal }).finally(() => clearTimeout(upT));
+      if (!up.ok) { const t = await up.text().catch(() => ''); res.status(502).json({ error: 'openai_file_upload_failed', status: up.status, detail: t.slice(0, 600) }); return; }
+      const uj = await up.json().catch(() => ({})); fileId = uj && uj.id;
+      if (!fileId) { res.status(502).json({ error: 'openai_no_file_id' }); return; }
+      userContent = [
+        { type: 'text', text: 'Convert the attached PDF into a clean wiki page, preserving all substantive content.' + (hintTitle ? (' Suggested title: ' + hintTitle) : '') },
+        { type: 'file', file: { file_id: fileId } },
+      ];
+    } else {
+      userContent = (hintTitle ? ('Suggested title (use or improve): ' + hintTitle + '\n\n') : '') + 'RAW DOCUMENT:\n' + raw;
+    }
+
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 90000);   // PDFs take longer to read
+    const timer = setTimeout(() => controller.abort(), 60000);
     const r = await fetch(BASE + '/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + KEY },
@@ -84,7 +94,7 @@ export default async function handler(req, res) {
         temperature: 0.2,
       }),
       signal: controller.signal,
-    }).finally(() => clearTimeout(timer));
+    }).finally(() => { clearTimeout(timer); if (fileId) fetch(BASE + '/files/' + fileId, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + KEY } }).catch(() => {}); });
 
     if (!r.ok) {
       const text = await r.text().catch(() => '');
