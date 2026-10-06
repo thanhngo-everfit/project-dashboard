@@ -8,6 +8,7 @@
 // OpenAI credentials live in Vercel env vars: OPENAI_API_KEY, OPENAI_MODEL (opt), OPENAI_BASE_URL (opt).
 
 import { OAuth2Client } from 'google-auth-library';
+import { openaiConfig, redact } from './_openai.js';
 
 const CLIENT_ID = '292601272916-9kkgsjlp8fdo9eskuj0lelufve2h7cvq.apps.googleusercontent.com';
 const ALLOWED_DOMAIN = 'everfit.io';
@@ -31,10 +32,9 @@ export default async function handler(req, res) {
   const user = await verify(req);
   if (!user) { res.status(401).json({ error: 'unauthorized' }); return; }
 
-  const KEY = process.env.OPENAI_API_KEY;
-  if (!KEY) { res.status(500).json({ error: 'openai_not_configured', detail: 'Set OPENAI_API_KEY in Vercel env vars.' }); return; }
-  const MODEL = process.env.OPENAI_MODEL || 'gpt-4o';
-  const BASE = (process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '');
+  const cfg = openaiConfig();
+  if (cfg.error) { res.status(cfg.error.status).json(cfg.error.body); return; }
+  const KEY = cfg.key, MODEL = cfg.model, BASE = cfg.base;
 
   const b = req.body || {};
   const raw = String(b.raw || '').slice(0, 60000).trim();   // bound the prompt
@@ -71,7 +71,7 @@ export default async function handler(req, res) {
       fd.append('file', new Blob([bytes], { type: 'application/pdf' }), pdfName);
       const upC = new AbortController(); const upT = setTimeout(() => upC.abort(), 30000);
       const up = await fetch(BASE + '/files', { method: 'POST', headers: { 'Authorization': 'Bearer ' + KEY }, body: fd, signal: upC.signal }).finally(() => clearTimeout(upT));
-      if (!up.ok) { const t = await up.text().catch(() => ''); res.status(502).json({ error: 'openai_file_upload_failed', status: up.status, detail: t.slice(0, 600) }); return; }
+      if (!up.ok) { const t = await up.text().catch(() => ''); res.status(502).json({ error: 'openai_file_upload_failed', status: up.status, detail: redact(t).slice(0, 600) }); return; }
       const uj = await up.json().catch(() => ({})); fileId = uj && uj.id;
       if (!fileId) { res.status(502).json({ error: 'openai_no_file_id' }); return; }
       userContent = [
@@ -98,7 +98,7 @@ export default async function handler(req, res) {
 
     if (!r.ok) {
       const text = await r.text().catch(() => '');
-      res.status(502).json({ error: 'openai_error', status: r.status, detail: text.slice(0, 500) });
+      res.status(502).json({ error: 'openai_error', status: r.status, detail: redact(text).slice(0, 500) });
       return;
     }
     const data = await r.json();
@@ -113,6 +113,6 @@ export default async function handler(req, res) {
     });
   } catch (e) {
     const msg = (e && e.name === 'AbortError') ? 'timeout' : String(e && e.message || e);
-    res.status(500).json({ error: 'server_error', detail: msg });
+    res.status(500).json({ error: 'server_error', detail: redact(msg) });
   }
 }

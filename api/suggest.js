@@ -9,6 +9,7 @@
 // OpenAI credentials live in Vercel env vars: OPENAI_API_KEY, OPENAI_MODEL (opt), OPENAI_BASE_URL (opt).
 
 import { OAuth2Client } from 'google-auth-library';
+import { openaiConfig, redact } from './_openai.js';
 
 const CLIENT_ID = '292601272916-9kkgsjlp8fdo9eskuj0lelufve2h7cvq.apps.googleusercontent.com';
 const ALLOWED_DOMAIN = 'everfit.io';
@@ -38,10 +39,9 @@ export default async function handler(req, res) {
   if (!user) { res.status(401).json({ error: 'unauthorized' }); return; }
   if ((user.email || '').toLowerCase() !== ADMIN_EMAIL) { res.status(403).json({ error: 'forbidden' }); return; }
 
-  const KEY = process.env.OPENAI_API_KEY;
-  if (!KEY) { res.status(500).json({ error: 'openai_not_configured', detail: 'Set OPENAI_API_KEY in Vercel env vars.' }); return; }
-  const MODEL = process.env.OPENAI_MODEL || 'gpt-4o';
-  const BASE = (process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '');
+  const cfg = openaiConfig();
+  if (cfg.error) { res.status(cfg.error.status).json(cfg.error.body); return; }
+  const KEY = cfg.key, MODEL = cfg.model, BASE = cfg.base;
 
   const b = req.body || {};
   const opt = b.options || {};
@@ -88,7 +88,7 @@ export default async function handler(req, res) {
     }).finally(() => clearTimeout(timer));
     if (!r.ok) {
       const text = await r.text().catch(() => '');
-      res.status(502).json({ error: 'openai_error', status: r.status, detail: text.slice(0, 500) });
+      res.status(502).json({ error: 'openai_error', status: r.status, detail: redact(text).slice(0, 500) });
       return;
     }
     const data = await r.json();
@@ -116,6 +116,6 @@ export default async function handler(req, res) {
     res.status(200).json({ suggestions: out, model: MODEL, generatedAt: Date.now() });
   } catch (e) {
     const msg = (e && e.name === 'AbortError') ? 'timeout' : String(e && e.message || e);
-    res.status(500).json({ error: 'server_error', detail: msg });
+    res.status(500).json({ error: 'server_error', detail: redact(msg) });
   }
 }
