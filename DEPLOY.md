@@ -194,6 +194,16 @@ It opens a permissions page where the super-admin can grant teammates access to 
 - **Jira sync** — run Jira sync and import data.
 - **Wiki** — create & edit wiki pages.
 
+## Marketing view — private AI suggestions
+
+For the super-admin only, empty Marketing-view cells (Priority, Size, Promotion, Open Scale, Tags) show
+faded **✨ suggestion chips**. Click one to apply it (saved like any edit) or × to dismiss it. Suggestions
+come from `POST /api/suggest` (OpenAI, super-admin only, same env vars as evaluations), which is given
+the empty fields plus up to 60 already-filled projects as examples so it matches the team's conventions,
+and only returns allowed option values. Results are cached in **that browser's localStorage**
+(`mkt_ai_sugg_v1`) — never in shared state, so nobody else sees them — and each field is asked once;
+**↻ Re-suggest** clears the cache.
+
 ## Wiki (Home → 📚 Wiki)
 
 A team wiki for docs — workflows, Claude skills, how-tos, references. Pages nest via `parentId`

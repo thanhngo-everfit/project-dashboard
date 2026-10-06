@@ -564,6 +564,13 @@
   .mkt-row{display:grid;grid-template-columns:minmax(210px,2.1fr) 96px minmax(150px,1.3fr) 92px 92px 110px 138px 96px 92px 58px minmax(120px,1.3fr);gap:14px;align-items:center;padding:12px 18px;border-bottom:1px solid #f0f1f4;}
   .mkt-plan{display:inline-block;font-size:11.5px;font-weight:700;color:#6941c6;background:#f4f3ff;border:1px solid #d9d6fe;border-radius:6px;padding:2px 7px;text-decoration:none;white-space:nowrap;}
   .mkt-plan:hover{background:#ebe9fe;border-color:#bdb4fe;text-decoration:underline;}
+  .mkt-ai-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:#5925dc;background:#f9f5ff;border:1px dashed #d6bbfb;border-radius:10px;padding:8px 12px;margin:0 0 14px;}
+  .mkt-ai-bar .btn{margin-left:auto;padding:4px 10px;font-size:12px;}
+  .mkt-ai-status{color:#7f56d9;font-weight:700;}
+  .mkt-sugg{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:700;color:#6941c6;background:#faf8ff;border:1px dashed #b692f6;border-radius:999px;padding:2px 3px 2px 8px;cursor:pointer;white-space:nowrap;opacity:.8;max-width:100%;overflow:hidden;text-overflow:ellipsis;}
+  .mkt-sugg:hover{opacity:1;background:#f4ebff;border-style:solid;}
+  .mkt-sugg-x{font-size:13px;line-height:1;color:#9e77ed;padding:0 4px;border-radius:50%;}
+  .mkt-sugg-x:hover{background:#e9d7fe;color:#53389e;}
   .mkt-row:last-child{border-bottom:none;}
   .mkt-head{background:#f9fafb;font-size:10.5px;font-weight:800;color:#667085;text-transform:uppercase;letter-spacing:.5px;padding-top:10px;padding-bottom:10px;}
   .mkt-datehead{display:block;padding:9px 18px;background:#fbfcfe;border-bottom:1px solid #eef0f3;border-top:1px solid #eef0f3;font-size:13px;font-weight:800;color:#344054;}
@@ -2999,6 +3006,50 @@ function updateDesignReadyChips(){
 }
 
 // Marketing view: all projects across squads as a release calendar, grouped by release month.
+/* ---- Marketing view: private AI suggestions for empty cells (super-admin only, cached in this browser) ----
+   Cache: { [projId]: { asked:[field], s:{field:value}, x:{field:true /dismissed}, at } } in localStorage, so
+   suggestions are never shared and each field is asked once (Re-suggest clears the cache). */
+const MKT_SUGG_KEY='mkt_ai_sugg_v1';
+let _mktSugg=null, _mktSuggBusy=false, _mktSuggErr='';
+function mktSuggStore(){ if(_mktSugg) return _mktSugg; try{ _mktSugg=JSON.parse(localStorage.getItem(MKT_SUGG_KEY)||'{}')||{}; }catch(e){ _mktSugg={}; } return _mktSugg; }
+function mktSuggSave(){ try{ localStorage.setItem(MKT_SUGG_KEY, JSON.stringify(_mktSugg||{})); }catch(e){} }
+function mktMissing(p){ const m=[]; if(!p.priority)m.push('priority'); if(!p.size)m.push('size'); if(!p.promo)m.push('promo'); if(!p.openScale)m.push('openScale'); if((!p.tags||!p.tags.length)&&showTagsOn())m.push('tags'); return m; }
+function mktSuggFor(p, f){
+  if(!isSuperAdmin()) return null;
+  const e=mktSuggStore()[p.id]; if(!e||!e.s||(e.x&&e.x[f])) return null;
+  const v=e.s[f]; return (v==null||v===''||(Array.isArray(v)&&!v.length))?null:v;
+}
+function mktSuggChip(p, f){
+  const v=mktSuggFor(p,f); if(v==null) return '';
+  const label=Array.isArray(v)?v.join(' · '):(f==='promo'?(v==='Yes'?'Promotion':'No promo'):v);
+  return `<span class="mkt-sugg" data-f="${f}" title="AI suggestion — only you see this. Click to apply.">✨ ${esc(label)}<span class="mkt-sugg-x" title="Dismiss">×</span></span>`;
+}
+function mktSuggStatus(){ const el=document.getElementById('mkt_ai_status'); if(el) el.textContent=_mktSuggBusy?'Thinking…':(_mktSuggErr?('⚠ '+_mktSuggErr):''); }
+// Ask the AI (in batches of 40) for any visible project field that's empty and hasn't been asked yet.
+async function mktQueueSuggestions(items){
+  if(!isSuperAdmin() || _mktSuggBusy || _mktSuggErr || !idToken) return;
+  const store=mktSuggStore(), need=[];
+  items.forEach(({p,cat,squad})=>{ const asked=(store[p.id]&&store[p.id].asked)||[]; const todo=mktMissing(p).filter(f=>!asked.includes(f)); if(todo.length) need.push({p,cat,squad,todo}); });
+  if(!need.length) return;
+  const batch=need.slice(0,40);
+  const examples=allProjects().filter(({p})=>[p.priority,p.size,p.promo,p.openScale].filter(Boolean).length>=2).slice(0,60)
+    .map(({p,cat})=>({n:p.name,c:cat.name,p:p.priority||'',s:p.size||'',pr:p.promo||'',o:p.openScale||'',t:(p.tags||[]).slice(0,4)}));
+  const payload={
+    projects: batch.map(({p,cat,squad,todo})=>({id:p.id,name:p.name,category:cat.name,squad:(squad&&squad.name)||'',note:p.note||'',teams:p.teams||[],tags:p.tags||[],start:p.start||'',end:p.end||'',jira:jiraIssueKey(p.jira)||'',design:p.designStatus||'',missing:todo})),
+    examples, options:{priority:PRIORITIES,size:FEATURE_SIZES,openScale:OPEN_SCALES,tags:allUsedTags()},
+  };
+  _mktSuggBusy=true; mktSuggStatus();
+  try{
+    const r=await apiFetch('/api/suggest',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    if(r.status===401){ handleAuthExpired(); return; }
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok){ _mktSuggErr=j.detail||j.error||('HTTP '+r.status); return; }
+    const sg=j.suggestions||{};
+    batch.forEach(({p,todo})=>{ const e=store[p.id]||(store[p.id]={asked:[],s:{},x:{}}); e.asked=e.asked||[]; e.s=e.s||{}; todo.forEach(f=>{ if(!e.asked.includes(f)) e.asked.push(f); }); Object.assign(e.s, sg[p.id]||{}); e.at=Date.now(); });
+    mktSuggSave();
+  }catch(e){ _mktSuggErr=String(e&&e.message||e); }
+  finally{ _mktSuggBusy=false; mktSuggStatus(); const av=activeVirtual(); if(currentSection==='roadmap' && av && av.listByEnd) render(); }
+}
 function renderListByEnd(g){
   const q=(state.search||'').trim().toLowerCase();
   // Release calendar: show past releases too (so you can scroll up to earlier months). Only "Completed
@@ -3014,6 +3065,12 @@ function renderListByEnd(g){
   if(!keys.length){ const em=document.createElement('div'); em.className='empty'; em.textContent='No projects yet.'; g.appendChild(em); return; }
   const monthLabel=k=>{ if(!k) return 'No release date'; const [y,m]=k.split('-').map(Number); return MONTHS[m-1]+' '+y; };
   const curMonthKey=(()=>{ const n=new Date(); return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0'); })();
+  if(isSuperAdmin()){
+    const bar=document.createElement('div'); bar.className='mkt-ai-bar';
+    bar.innerHTML='✨ <b>AI suggestions</b> fill empty cells — only you can see them. Click one to apply, × to dismiss. <span id="mkt_ai_status" class="mkt-ai-status"></span><button class="btn" id="mkt_ai_refresh" title="Clear cached suggestions and ask again">↻ Re-suggest</button>';
+    bar.querySelector('#mkt_ai_refresh').onclick=()=>{ _mktSugg={}; mktSuggSave(); _mktSuggErr=''; render(); };
+    wrap.appendChild(bar);
+  }
   keys.forEach(k=>{
     const arr=map.get(k).slice().sort((a,b)=>(a.p.end||'').localeCompare(b.p.end||''));
     const sec=document.createElement('div'); sec.className='mkt-month'; if(k>=curMonthKey && k!=='') sec.dataset.cur='1';
@@ -3035,9 +3092,10 @@ function renderListByEnd(g){
       tbl.appendChild(dh);
       grpItems.forEach(({p,cat,squad})=>{
         const row=document.createElement('div'); row.className='mkt-row mkt-body'+(p.done?' done':'');
-        const size = p.size?`<span class="sizechip s-${esc(p.size)}">${esc(p.size)}</span>`:'<span class="mkt-dash">—</span>';
-        const promo = p.promo==='Yes'?'<span class="promochip">Promotion</span>':(p.promo==='No'?'<span class="mkt-dash">No</span>':'<span class="mkt-dash">—</span>');
-        const tags = (p.tags&&p.tags.length&&showTagsOn())?p.tags.map(t=>tagChip(t)).join(''):'';
+        const dash='<span class="mkt-dash">—</span>';
+        const size = p.size?`<span class="sizechip s-${esc(p.size)}">${esc(p.size)}</span>`:(mktSuggChip(p,'size')||dash);
+        const promo = p.promo==='Yes'?'<span class="promochip">Promotion</span>':(p.promo==='No'?'<span class="mkt-dash">No</span>':(mktSuggChip(p,'promo')||dash));
+        const tags = (p.tags&&p.tags.length&&showTagsOn())?p.tags.map(t=>tagChip(t)).join(''):(showTagsOn()?mktSuggChip(p,'tags'):'');
         const relLbl = releaseLabel(p);
         const done = p.done?`<span class="mkt-check" title="${relLbl}">✓</span>`:'';
         const rel = p.release==='released' ? '<span class="mkt-rel yes">Released</span>'
@@ -3045,7 +3103,7 @@ function renderListByEnd(g){
                   : (projStatusLabel(p)==='Waiting for Start') ? '<span class="mkt-rel wait">Waiting for Start</span>'
                   : (projStatusLabel(p)==='Overdue') ? '<span class="mkt-rel overdue">Overdue</span>'
                   : '<span class="mkt-rel no">Not yet</span>';
-        const scale = p.openScale ? `<span class="mkt-scale s-${esc(p.openScale.toLowerCase())}">${esc(p.openScale)}</span>` : '<span class="mkt-dash">—</span>';
+        const scale = p.openScale ? `<span class="mkt-scale s-${esc(p.openScale.toLowerCase())}">${esc(p.openScale)}</span>` : (mktSuggChip(p,'openScale')||dash);
         const linksHtml=indicatorsHTML(p);
         const planKey=jiraIssueKey(p.jira);
         const planCell=planKey?`<a class="mkt-plan" href="${esc(jiraBrowseBase(p.jira)+'/browse/'+planKey)}" target="_blank" rel="noopener" title="Open ${esc(planKey)} in Jira" onclick="event.stopPropagation()">${esc(planKey)}</a>`:'<span class="mkt-dash">—</span>';
@@ -3053,7 +3111,7 @@ function renderListByEnd(g){
           <span class="mkt-name">${done}<span class="dot" style="background:${cat.color||'#cdb4f6'}"></span><span class="txt">${esc(p.name)}</span></span>
           <span class="mkt-cell">${planCell}</span>
           <span class="mkt-meta"><span class="cat">${esc(cat.name)}</span></span>
-          <span class="mkt-cell">${priorityChipHTML(p)||'<span class="mkt-dash">—</span>'}</span>
+          <span class="mkt-cell">${priorityChipHTML(p)||mktSuggChip(p,'priority')||dash}</span>
           <span class="mkt-cell">${size}</span>
           <span class="mkt-cell">${promo}</span>
           <span class="mkt-date"><span class="rng">${fmtShort(p.start)} → ${fmtShort(p.end)}</span></span>
@@ -3062,6 +3120,15 @@ function renderListByEnd(g){
           <span class="mkt-cell mkt-links">${linksHtml||'<span class="mkt-dash">—</span>'}</span>
           <span class="mkt-tags">${tags||'<span class="mkt-dash">—</span>'}</span>`;
         row.onclick=()=>openProjectPanel(cat,p);
+        row.querySelectorAll('.mkt-sugg').forEach(ch=>ch.onclick=e=>{
+          e.stopPropagation(); const f=ch.dataset.f;
+          if(e.target.classList.contains('mkt-sugg-x')){   // dismiss: never show this suggestion again
+            const st=mktSuggStore(); const en=st[p.id]||(st[p.id]={asked:[],s:{},x:{}}); en.x=en.x||{}; en.x[f]=true; mktSuggSave(); render(); return;
+          }
+          const v=mktSuggFor(p,f); if(v==null) return;
+          if(f==='tags') p.tags=[...new Set([...(p.tags||[]), ...v])]; else p[f]=v;
+          render();   // persists like any project edit
+        });
         tbl.appendChild(row);
       });
     });
@@ -3069,6 +3136,8 @@ function renderListByEnd(g){
     wrap.appendChild(sec);
   });
   g.appendChild(wrap);
+  mktSuggStatus();
+  mktQueueSuggestions(items);   // admin-only, async; re-renders when suggestions arrive
   // On entering the view, land the scroll on the current/next month so past releases sit above (scroll up
   // to reach them). Don't re-snap on incidental re-renders while you stay on the view.
   const cur=wrap.querySelector('[data-cur]');
