@@ -200,7 +200,7 @@ export default async function handler(req, res) {
       if (typeof body.baseTribesUpdatedAt === 'number' && body.baseTribesUpdatedAt > 0 && exTribesUpdatedAt > body.baseTribesUpdatedAt) {
         let differs = true;
         try { differs = JSON.stringify((existing && existing.state && existing.state.tribes) || null) !== JSON.stringify((body.state && body.state.tribes) || null); } catch (e) {}
-        if (differs) { res.status(409).json({ error: 'conflict', currentUpdatedAt: existing.updatedAt }); return; }
+        if (differs) { res.status(409).json({ error: 'conflict', currentUpdatedAt: existing.updatedAt, updatedBy: existing.updatedBy || '' }); return; }
       }
       // Anti-wipe guard: never silently replace a populated board with a near-empty one (e.g. the
       // built-in seed). Applies to everyone, including the admin. Client may resend with force:true
@@ -260,7 +260,9 @@ export default async function handler(req, res) {
       }
       const now = Date.now();
       // tribesUpdatedAt only advances when the projects actually change (drives optimistic concurrency).
-      const record = { state: body.state, updatedAt: now, updatedBy: user.email, tribesUpdatedAt: tribesChanged ? now : (exTribesUpdatedAt || now) };
+      // Optional client-supplied source label (e.g. 'Jira auto-sync') so History / conflicts show WHAT saved, not just whose tab.
+      const via = (typeof body.via === 'string' && body.via.trim()) ? (' · ' + body.via.trim().replace(/[^\w .\-]/g, '').slice(0, 40)) : '';
+      const record = { state: body.state, updatedAt: now, updatedBy: user.email + via, tribesUpdatedAt: tribesChanged ? now : (exTribesUpdatedAt || now) };
       await redis.set(KEY, record);
       res.status(200).json({ ok: true, updatedAt: record.updatedAt, tribesUpdatedAt: record.tribesUpdatedAt, updatedBy: record.updatedBy });
       return;

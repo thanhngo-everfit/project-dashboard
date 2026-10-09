@@ -2130,7 +2130,7 @@ async function jiraSync(opts){
       rows.forEach(r=>{ if(r.changed){ const a=applyDesignSync(r.proj, r.newStart, r.newEnd, r.newStatus, r.est, r.figma, r.assignees, r.contributors, r.progress); const b=applyReleaseDate(r); if(a||b) applied++; } });
       state.lastJiraSync = j.syncedAt || Date.now();
       lastSyncedJSON=null;   // force a save so the sync time (and any applied changes) persist + debounce other viewers
-      save(); renderJiraSync(); if(applied) render();
+      _saveVia='Jira auto-sync'; save(); renderJiraSync(); if(applied) render();
       console.log('[Jira auto-sync] applied '+applied+' change(s) across '+rows.length+' linked project(s)');
     } else {
       openJiraReview(rows, j.syncedAt, {noData, errored});
@@ -2287,16 +2287,28 @@ async function openVersionHistory(){
   };
   modalBg.classList.add('open');
 }
+let _saveVia='';   // set to 'Jira auto-sync' when a silent sync triggers the save, so the server records the source
+// "Who changed it" text for the conflict banner: names a teammate from the directory, flags your own other
+// tab/window, and calls out Jira auto-sync (which saves under whoever's tab ran it).
+function conflictMessage(updatedBy, at){
+  const raw=String(updatedBy||''); const email=(raw.split(' · ')[0]||'').trim().toLowerCase(); const via=raw.includes(' · ')?raw.split(' · ').slice(1).join(' · '):'';
+  const person=Object.values(state.people||{}).find(m=>m&&(m.email||'').toLowerCase()===email);
+  const who = !email ? 'Someone else' : (email===currentEmail ? 'You, in another tab or window,' : ((person&&person.name)||email));
+  const when = at ? (' at '+fmtSyncTime(at)) : '';
+  const how = via ? (' (via '+via+')') : '';
+  return who+' updated the dashboard'+when+how+'. Refresh to load the latest before editing (your last change wasn’t saved).';
+}
 async function syncSave(){
   if(!idToken) return;
   const payload = dataJSON();
+  const via=_saveVia; _saveVia='';
   setSync('Saving…');
   try{
     const r = await apiFetch('/api/state', {
       // NOTE: `people` is intentionally omitted — it's updated only via action:'patchPeople' (a targeted
       // merge), and the server preserves the existing people when a save doesn't include it. This stops a
       // full dashboard save from clobbering a concurrent person edit.
-      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({state:{tribes:state.tribes, lastJiraSync:state.lastJiraSync||0, tagCreators:state.tagCreators||{}}, baseTribesUpdatedAt: baseTribesUpdatedAt})
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({state:{tribes:state.tribes, lastJiraSync:state.lastJiraSync||0, tagCreators:state.tagCreators||{}}, baseTribesUpdatedAt: baseTribesUpdatedAt, via})
     });
     if(r.status===401){ handleAuthExpired(); return; }
     if(r.status===409){
@@ -2305,7 +2317,8 @@ async function syncSave(){
         // someone else saved newer data since we loaded — don't overwrite it
         saveBlocked = true;
         setSync('Changed elsewhere — refresh to sync', 'bad');
-        showUpdateBanner('Someone else updated the dashboard. Refresh to load the latest before editing (your last change wasn’t saved).');
+        showUpdateBanner(conflictMessage(j.updatedBy, j.currentUpdatedAt));
+        console.warn('[save] conflict — newer version saved by', j.updatedBy||'(unknown)', 'at', j.currentUpdatedAt?new Date(j.currentUpdatedAt).toLocaleString():'?');
         return;
       }
       // server refused to overwrite a populated board with a near-empty one (anti-wipe guard)
