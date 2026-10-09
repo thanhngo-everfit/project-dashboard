@@ -564,6 +564,10 @@
   .mkt-row{display:grid;grid-template-columns:minmax(210px,2.1fr) 96px minmax(150px,1.3fr) 92px 92px 110px 138px 96px 92px 58px minmax(120px,1.3fr);gap:14px;align-items:center;padding:12px 18px;border-bottom:1px solid #f0f1f4;}
   .mkt-plan{display:inline-block;font-size:11.5px;font-weight:700;color:#6941c6;background:#f4f3ff;border:1px solid #d9d6fe;border-radius:6px;padding:2px 7px;text-decoration:none;white-space:nowrap;}
   .mkt-plan:hover{background:#ebe9fe;border-color:#bdb4fe;text-decoration:underline;}
+  .vo-pill{font-size:12px;font-weight:800;color:#b54708;background:#fffaeb;border:1px solid #fedf89;border-radius:999px;padding:4px 11px;white-space:nowrap;}
+  body.view-only .pp-editable{cursor:default;} body.view-only .pp-editable:hover{background:none;box-shadow:none;}
+  body.view-only .mkt-edit{cursor:default;} body.view-only .mkt-edit:hover{background:none;box-shadow:none;} body.view-only .mkt-caret{display:none;}
+  body.view-only .bar{cursor:pointer;} body.view-only .bar .handle{display:none;}
   .mkt-edit{display:inline-flex;align-items:center;gap:3px;cursor:pointer;border-radius:7px;padding:3px 5px;margin:-3px -5px;max-width:100%;min-height:20px;}
   .mkt-edit:hover{background:#eef2ff;box-shadow:inset 0 0 0 1px #d7e0ff;}
   .mkt-caret{font-size:9px;color:#98a2b3;opacity:0;transition:opacity .1s;flex:none;}
@@ -803,6 +807,7 @@
   .adm-slider{position:absolute;inset:0;background:#d0d5dd;border-radius:22px;transition:background .15s;}
   .adm-slider:before{content:'';position:absolute;width:16px;height:16px;left:3px;top:3px;background:#fff;border-radius:50%;transition:transform .15s;box-shadow:0 1px 2px rgba(16,24,40,.2);}
   .adm-sw input:checked + .adm-slider{background:#12b76a;}
+  .adm-sw input[data-area="viewonly"]:checked + .adm-slider{background:#d92d20;}   /* view-only is a restriction */
   .adm-sw input:checked + .adm-slider:before{transform:translateX(16px);}
   .adm-sw input:disabled + .adm-slider{opacity:.55;cursor:not-allowed;}
   .adm-note{font-size:12.5px;color:#b54708;background:#fffaeb;border:1px solid #fedf89;border-radius:9px;padding:9px 12px;margin-top:12px;}
@@ -1173,6 +1178,7 @@
     <input type="file" id="importFile" accept="application/json,.json,text/csv,.csv" style="display:none">
     <span id="syncStatus" style="font-size:12px;font-weight:600;color:var(--muted);min-width:80px;text-align:right;"></span>
     <div class="acct" id="acct">
+      <span class="vo-pill" id="viewOnlyPill" style="display:none" title="An admin set your access to view only — you can browse everything but not edit.">👁 View only</span>
       <div class="profile-wrap">
         <button class="profile-btn" id="profileBtn" title="Account"><span class="avatar" id="profileAvatar"></span></button>
         <div class="profile-menu" id="profileMenu" style="display:none">
@@ -1390,13 +1396,26 @@ const ACCESS_AREAS = [
   {key:'evaluations', label:'Evaluations', desc:'View & edit performance evaluations'},
   {key:'jira',        label:'Jira sync',   desc:'Run Jira sync and import data'},
   {key:'wiki',        label:'Wiki',        desc:'Create & edit wiki pages'},
+  {key:'viewonly',    label:'View only',   desc:'Can see everything but edit nothing (overrides the grants above)'},
 ];
 let currentEmail = '';
 let currentAccess = [];   // permission-area keys granted to the signed-in user (super-admin implies all)
 function accessMap(){ return (state && state.access && typeof state.access==='object' && !Array.isArray(state.access)) ? state.access : {}; }
 function isSuperAdmin(){ return currentEmail === ADMIN_EMAIL; }
-function refreshAccess(){ currentAccess = (accessMap()[currentEmail] || []).slice(); }
-function can(area){ return isSuperAdmin() || currentAccess.indexOf(area) >= 0; }   // area-scoped permission
+function refreshAccess(){
+  currentAccess = (accessMap()[currentEmail] || []).slice();
+  try{ document.body.classList.toggle('view-only', isViewOnly()); }catch(e){}
+  try{ const pill=document.getElementById('viewOnlyPill'); if(pill) pill.style.display=isViewOnly()?'':'none'; }catch(e){}
+}
+// View-only: a grant that REMOVES all edit rights (server enforces it too). Never applies to the super-admin.
+function isViewOnly(){ return !isSuperAdmin() && currentAccess.indexOf('viewonly') >= 0; }
+function can(area){ if(isViewOnly()) return false; return isSuperAdmin() || currentAccess.indexOf(area) >= 0; }   // area-scoped permission
+let _voNoticeAt=0;
+function viewOnlyBlocked(){   // call at an edit entry point: true (and a notice) when this user can't edit
+  if(!isViewOnly()) return false;
+  if(Date.now()-_voNoticeAt>1500){ _voNoticeAt=Date.now(); setSync('View-only access — editing is disabled','bad'); }
+  return true;
+}
 function isAdmin(){ return isSuperAdmin(); }   // structural roadmap changes + history stay super-admin only
 // Tribe (top level) > Squad > Category > Project
 function activeTribe(){ return (state.tribes||[]).find(t=>t.id===state.activeTribe) || (state.tribes||[])[0]; }
@@ -1887,7 +1906,14 @@ function save(){
   // NOTE: a newer deploy no longer blocks saving — the server rejects only genuinely-stale writes
   // (optimistic concurrency), so your own edits still save while real overwrites are prevented.
   if(dataJSON() === lastSyncedJSON) return;   // data unchanged (only view/UI changed) -> don't push
+  if(isViewOnly()){ revertViewOnlyEdit(); return; }   // safety net: an edit slipped through the UI -> undo, never push
   scheduleSave();
+}
+let _voRevertAt=0;
+function revertViewOnlyEdit(){
+  if(Date.now()-_voRevertAt<3000) return; _voRevertAt=Date.now();
+  setSync('View-only access — change not saved','bad');
+  syncLoad();   // reload the shared copy over the local edit
 }
 function scheduleSave(){
   if(saveTimer) clearTimeout(saveTimer);
@@ -2339,6 +2365,9 @@ async function syncSave(){
       if(j.error==='structure_change_forbidden'){
         setSync('Only Thanh can add/remove tribes or squads', 'bad');
         await syncLoad();   // revert local change to the shared copy
+      } else if(j.error==='view_only'){
+        setSync('View-only access — change not saved', 'bad');
+        await syncLoad();   // revert local change to the shared copy
       } else setSync('Save failed', 'bad');
     } else {
       const j = await r.json().catch(()=>({}));
@@ -2422,6 +2451,7 @@ const AUTO_JIRA_INTERVAL = 2*60*60*1000;   // 2 hours
 let autoJiraTimer=null, autoJiraBusy=false;
 async function autoJiraSync(){
   if(!idToken || !initialLoadDone || saveBlocked || busy || autoJiraBusy) return;
+  if(isViewOnly()) return;   // its save would be rejected; also avoids conflicts under their name
   if(modalBg.classList.contains('open')) return;              // don't disrupt an open editor / review popup
   if(dataJSON() !== lastSyncedJSON) return;                    // local unsaved edits pending -> don't clobber
   if(Date.now() - (state.lastJiraSync||0) < AUTO_JIRA_INTERVAL) return;   // debounced across everyone
@@ -2865,6 +2895,7 @@ function renderTabs(){
     tab.onclick=e=>{ if(e.target.classList.contains('x')||e.target.classList.contains('hide-toggle'))return; state.activeSquad=s.id; render(); };
     const nameEl=tab.querySelector('.tname');
     tab.querySelector('.tname').ondblclick=()=>{
+      if(viewOnlyBlocked()) return;
       nameEl.contentEditable='true'; nameEl.focus();
       document.execCommand('selectAll',false,null);
     };
@@ -2879,7 +2910,7 @@ function renderTabs(){
       render();
     };
     // drag to reorder tabs
-    tab.draggable=true;
+    tab.draggable=!isViewOnly();
     tab.addEventListener('dragstart',e=>{ dragTabId=s.id; tab.classList.add('tab-dragging'); e.dataTransfer.effectAllowed='move'; try{e.dataTransfer.setData('text/plain',s.id);}catch(_){} });
     tab.addEventListener('dragend',clearTabMarks);
     tab.addEventListener('dragover',e=>{
@@ -2948,7 +2979,7 @@ function renderGantt(){
   if(!inVirtual()){
     const addCat=document.createElement('button'); addCat.className='hdr-add'; addCat.textContent='+'; addCat.title='New category';
     addCat.onclick=()=>openProjectModal();
-    hl.appendChild(addCat);
+    if(!isViewOnly()) hl.appendChild(addCat);
   }
   const ht=document.createElement('div'); ht.className='track'; ht.style.width=tw+'px';
   if(hdView==='week'){
@@ -3094,6 +3125,7 @@ let _mktMenu=null;
 function closeMktMenu(){ if(_mktMenu){ _mktMenu.remove(); _mktMenu=null; } }
 function openMktMenu(anchor, p, f){
   closeMktMenu();
+  if(viewOnlyBlocked()) return;
   const cur=p[f]||'';
   const opts=[...MKT_EDIT_OPTS[f](), {v:'', html:'<span class="mkt-dash">None</span>'}];
   const m=document.createElement('div'); m.className='mkt-menu';
@@ -3913,6 +3945,7 @@ function buildMonthHeader(units,ht){
 
 function leftCell(level,caretState,dot,labelText,actions,opts){
   opts=opts||{};
+  if(isViewOnly()) actions=[];   // no add/rename/delete buttons for view-only users
   const left=document.createElement('div'); left.className='left';
   if(opts.connector){
     const tree=document.createElement('span'); tree.className='tree'+(opts.last?' last':'');
@@ -4332,6 +4365,7 @@ function attachDrag(bar,obj,units,kind,parent,fb){
     return Math.round(dx*dpp);
   }
   function move(e){
+    if(isViewOnly()) return;   // view-only: a click still opens the project, dragging does nothing
     const dx=e.clientX-startX; if(Math.abs(dx)>3)moved=true;
     const dd=dayDelta(dx);
     let ns=new Date(origStart), ne=new Date(origEnd);
@@ -4359,6 +4393,7 @@ function clearDropMarks(){
     .forEach(el=>el.classList.remove('drop-into','drop-before','row-dragging'));
 }
 function wireDropTarget(row,projectId,beforePhaseId){
+  if(isViewOnly()) return;
   row.addEventListener('dragover',e=>{
     if(!dragPhase)return;
     e.preventDefault(); e.dataTransfer.dropEffect='move';
@@ -4372,6 +4407,7 @@ function wireDropTarget(row,projectId,beforePhaseId){
   });
 }
 function makePhaseDraggable(left,row,projectId,phaseId){
+  if(isViewOnly()) return;
   left.setAttribute('draggable','true');
   left.classList.add('drag-src');
   left.addEventListener('dragstart',e=>{
@@ -4405,6 +4441,7 @@ function clearCatMarks(){
     .forEach(el=>el.classList.remove('cat-before','cat-after','cat-dragging'));
 }
 function makeCatDraggable(left,row,catId){
+  if(isViewOnly()) return;
   left.setAttribute('draggable','true');
   left.classList.add('drag-src');
   left.addEventListener('dragstart',e=>{
@@ -4416,6 +4453,7 @@ function makeCatDraggable(left,row,catId){
   left.addEventListener('dragend',()=>{ dragCat=null; clearCatMarks(); });
 }
 function wireCatDrop(row,catId){
+  if(isViewOnly()) return;
   row.addEventListener('dragover',e=>{
     if(!dragCat || dragCat===catId) return;
     e.preventDefault(); e.dataTransfer.dropEffect='move';
@@ -4527,6 +4565,7 @@ modalBg.onclick=e=>{if(e.target===modalBg)closeModal();};
 document.addEventListener('keydown',e=>{ if(e.key==='Escape' && modalBg.classList.contains('open')) closeModal(); });
 
 function openProjectModal(p){
+  if(viewOnlyBlocked()) return;
   hideNoteDock();
   const editing=!!p;
   let color = editing ? (p.color||PALETTE[0]) : PALETTE[activeSquad().projects.length%PALETTE.length];
@@ -4701,7 +4740,7 @@ function renderPanelView(panel, cat, proj){
     </div>
     <div class="pp-body">
       <div class="pp-sec">
-        <div class="pp-sec-h">Details <span style="margin-left:auto;font-weight:600;text-transform:none;letter-spacing:0;color:#b0b6c3;">click a field to edit</span></div>
+        <div class="pp-sec-h">Details <span style="margin-left:auto;font-weight:600;text-transform:none;letter-spacing:0;color:#b0b6c3;">${isViewOnly()?'view only':'click a field to edit'}</span></div>
         <div class="pp-meta">
           ${erow('category','Squad · Category', esc(((squadOfProject(proj.id)||{}).name||'')+(cat.name?(' · '+cat.name):'')))}
           ${erow('release','Status', chip(relLabel, STATUS_STYLE[relLabel]||{}))}
@@ -4744,7 +4783,7 @@ function renderPanelView(panel, cat, proj){
   // ---- click-to-edit ----
   const commit=()=>{ _ppEditField=null; render(); renderPanelView(panel, cat, proj); };
   const cancel=()=>{ _ppEditField=null; renderPanelView(panel, cat, proj); };
-  panel.querySelectorAll('.pp-editable').forEach(el=>{ el.onclick=e=>{ if(_ppEditField) return; _ppEditField=el.dataset.ef; renderPanelView(panel, cat, proj); }; });
+  if(!isViewOnly()) panel.querySelectorAll('.pp-editable').forEach(el=>{ el.onclick=e=>{ if(_ppEditField) return; _ppEditField=el.dataset.ef; renderPanelView(panel, cat, proj); }; });
   if(_ppEditField){
     const cell = _ppEditField==='name' ? panel.querySelector('.pp-title') : panel.querySelector('[data-ef="'+_ppEditField+'"]');
     if(cell){ cell.onclick=null; mountFieldEditor(_ppEditField, cell, proj, commit, cancel); }
@@ -4842,6 +4881,7 @@ function mountFieldEditor(fkey, cell, proj, commit, cancel){
   cancel();
 }
 function openPhaseModal(category,proj){
+  if(viewOnlyBlocked()) return;
   const editing=!!proj;
   const def=proj||{name:'',start:'',end:'',tags:[],size:'',promo:'',priority:'',jira:'',docs:[],note:'',release:'',teams:[],openScale:''};
   const tags=(def.tags||[]).slice();
@@ -5053,6 +5093,7 @@ function assigneesLineHTML(proj){
 }
 
 function openTaskModal(phase,t){
+  if(viewOnlyBlocked()) return;
   const editing=!!t;
   const used=phase.tasks.map(x=>x.type);
   const def=t||{type:(TASK_TYPES.find(tt=>tt.key!=='custom'&&!used.includes(tt.key))||TASK_TYPES[0]).key,start:'',end:'',progress:0,customName:'',note:''};
@@ -5918,7 +5959,7 @@ function renderAdminPage(){
   withEmail.forEach(p=>{
     const em=(p.email||'').toLowerCase();
     const isSA=em===ADMIN_EMAIL;
-    const granted=new Set(isSA?ACCESS_AREAS.map(a=>a.key):(acc[em]||[]));
+    const granted=new Set(isSA?ACCESS_AREAS.filter(a=>a.key!=='viewonly').map(a=>a.key):(acc[em]||[]));   // admin is never view-only
     const row=document.createElement('div'); row.className='adm-row';
     row.innerHTML=`<div class="adm-c-person">${personAvatarHTML({accountId:p.id,name:p.name,avatar:p.avatar})}<span class="adm-pi"><span class="adm-pn">${esc(p.name)}${isSA?' <span class="adm-sa">Admin</span>':''}</span><span class="adm-pe">${esc(p.email)}</span></span></div>`+
       ACCESS_AREAS.map(a=>`<div class="adm-c-perm"><label class="adm-sw"><input type="checkbox" data-em="${esc(em)}" data-area="${a.key}"${granted.has(a.key)?' checked':''}${isSA?' disabled':''}><span class="adm-slider"></span></label></div>`).join('');

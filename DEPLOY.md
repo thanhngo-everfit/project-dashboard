@@ -200,6 +200,9 @@ It opens a permissions page where the super-admin can grant teammates access to 
 - **Evaluations** — view & edit performance evaluations.
 - **Jira sync** — run Jira sync and import data.
 - **Wiki** — create & edit wiki pages.
+- **View only** — a *restriction*: the person can browse everything but edit nothing. It overrides any
+  other grant, hides edit controls, skips their tab's Jira auto-sync, and the server rejects every write
+  from them (`403 view_only`). Never applies to the super-admin.
 
 ## Marketing view — private AI suggestions
 

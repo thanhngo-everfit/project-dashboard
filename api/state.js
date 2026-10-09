@@ -28,15 +28,21 @@ const oauth = new OAuth2Client(CLIENT_ID);
 
 // Permission grants live in state.access = { "<email>": ["onboarding","people",...] }. The super-admin
 // (ADMIN_EMAIL) implicitly has every area. allowArea() is the server-side enforcement of the Admin page.
-const ACCESS_AREA_KEYS = ['roadmap', 'onboarding', 'people', 'evaluations', 'jira', 'wiki'];
+const ACCESS_AREA_KEYS = ['roadmap', 'onboarding', 'people', 'evaluations', 'jira', 'wiki', 'viewonly'];
 function grantedAreas(state, email) {
   const a = state && state.access;
   const e = (email || '').toLowerCase();
   return (a && typeof a === 'object' && !Array.isArray(a) && Array.isArray(a[e])) ? a[e] : [];
 }
+// 'viewonly' is a deny: that user may read but every write is rejected (never applies to the super-admin).
+function isViewOnlyUser(user, state) {
+  const e = (user.email || '').toLowerCase();
+  return e !== ADMIN_EMAIL && grantedAreas(state, e).indexOf('viewonly') >= 0;
+}
 function allowArea(user, state, area) {
   const e = (user.email || '').toLowerCase();
   if (e === ADMIN_EMAIL) return true;
+  if (isViewOnlyUser(user, state)) return false;
   return grantedAreas(state, e).indexOf(area) >= 0;
 }
 
@@ -192,6 +198,7 @@ export default async function handler(req, res) {
         return;
       }
       const existing = await redis.get(KEY);
+      if (isViewOnlyUser(user, existing && existing.state)) { res.status(403).json({ error: 'view_only' }); return; }   // read-only user: no dashboard writes
       const exTribesUpdatedAt = (existing && (existing.tribesUpdatedAt || existing.updatedAt)) || 0;
       // Optimistic concurrency (tribe-scoped): reject a save whose base predates the stored tribes, so a
       // stale tab can't overwrite newer project changes. Only tribe changes bump tribesUpdatedAt, so the
