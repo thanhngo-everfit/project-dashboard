@@ -161,7 +161,7 @@ the project bar. Story-point field is auto-detected by name; override with `JIRA
 (e.g. `customfield_10016`) in Vercel env vars if auto-detect picks the wrong one.
 
 ### Auto-sync
-The dashboard also **auto-syncs from Jira every 15 minutes** for anyone who has it open
+The dashboard also **auto-syncs from Jira every 2 hours** for anyone who has it open
 (on load, then on a timer). The cadence is coordinated across all viewers via a shared
 `lastJiraSync` timestamp, so it fires ~once per interval regardless of how many people are
 watching. Auto-sync applies changes silently (no review popup); the manual **Jira Sync**

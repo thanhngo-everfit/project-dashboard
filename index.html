@@ -2402,10 +2402,10 @@ async function pollRemote(){
 function startPolling(){ if(pollTimer) clearInterval(pollTimer); pollTimer = setInterval(pollRemote, 12000); }
 function stopPolling(){ if(pollTimer) clearInterval(pollTimer); pollTimer = null; stopAutoJiraSync(); }
 // ---- Auto Jira sync: pull from Jira for everyone who has the dashboard open ----
-// Runs silently on load and then on a timer. The 15-min cadence is coordinated across ALL viewers
+// Runs silently on load and then on a timer. The 2-hour cadence is coordinated across ALL viewers
 // via the shared `lastJiraSync` timestamp, so it fires roughly once per interval no matter how many
 // people are watching (whoever's tab fires first wins; the rest see the fresh timestamp and skip).
-const AUTO_JIRA_INTERVAL = 15*60*1000;
+const AUTO_JIRA_INTERVAL = 2*60*60*1000;   // 2 hours
 let autoJiraTimer=null, autoJiraBusy=false;
 async function autoJiraSync(){
   if(!idToken || !initialLoadDone || saveBlocked || busy || autoJiraBusy) return;
