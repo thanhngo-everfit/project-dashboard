@@ -1930,6 +1930,8 @@ function progressBucket(name, cat){
 }
 // A ticket is "to be confirmed" when its fix version is unset-in-spirit — literally "To be confirmed"/"TBC".
 function fvIsTBC(list){ return Array.isArray(list) && list.some(v=>{ const s=(v||'').trim().toLowerCase(); return s==='to be confirmed'||s==='tbc'; }); }
+// Project end date <- PLAN "Release Date" (prepared on the review row). Returns true if it changed.
+function applyReleaseDate(r){ if(!r || !r.relDiff || !r.newRelease) return false; if(r.proj.end===r.newRelease) return false; r.proj.end=r.newRelease; return true; }
 // Apply a synced Jira row: set design status, and the design work start/end (create the task if either date exists).
 function applyDesignSync(proj, startIso, endIso, status, est, figma, assignees, contributors, progress){
   let changed=false;
@@ -2096,7 +2098,13 @@ async function jiraSync(opts){
       const conKey=list=>JSON.stringify((list||[]).map(a=>a.accountId+':'+(Number(a.seconds)||0)+':'+stableObj(a.days)).sort());
       const assigneeDiff = asgKey(proj.assignees)!==asgKey(assignees) || conKey(proj.contributors)!==conKey(contributors);
       const progressDiff = JSON.stringify(proj.progress||null)!==JSON.stringify(progress||null);
-      if(!newStart && !end && !status && !hasEst && !newFigma.length && !assigneeDiff && !progressDiff){ noData++; return; }   // nothing to sync for this project
+      // Project END <- PLAN "Release Date" (not Release Target). Skip a date before the project start (would invert the bar).
+      const relRaw = (rec.releaseDate && validISO(rec.releaseDate)) ? rec.releaseDate : '';
+      const relSkipped = !!relRaw && validISO(proj.start) && relRaw < proj.start;
+      const newRelease = relSkipped ? '' : relRaw;
+      const curProjEnd = proj.end||'';
+      const relDiff = !!newRelease && curProjEnd!==newRelease;
+      if(!newStart && !end && !status && !hasEst && !newFigma.length && !assigneeDiff && !progressDiff && !relDiff){ noData++; return; }   // nothing to sync for this project
       const existing=(proj.tasks||[]).find(x=>x.type==='design');
       const curStart=existing?(existing.start||''):'';
       const curEnd=existing?(existing.end||''):'';
@@ -2105,20 +2113,21 @@ async function jiraSync(opts){
       const startDiff = !!newStart && curStart!==newStart;
       const statusDiff = curStatus!==status;
       const estDiff = JSON.stringify(proj.estimation||{})!==JSON.stringify(est);
-      const changed = endDiff || startDiff || statusDiff || estDiff || newFigma.length>0 || assigneeDiff || progressDiff || (!existing && (newStart||end));
+      const changed = endDiff || startDiff || statusDiff || estDiff || newFigma.length>0 || assigneeDiff || progressDiff || relDiff || (!existing && (newStart||end));
       const label = designStatusLabel(status, end||curEnd, newStart||curStart||'', proj.start||'');
       rows.push({proj, key:rec.key, name:proj.name, curStart, curEnd, newStart, newEnd:end, newStatus:status, est, figma, newFigma, assignees, contributors, progress, label,
+        curProjEnd, newRelease, relDiff, relSkipped:relSkipped?relRaw:'',
         action: (!existing&&(newStart||end))?'Create':(changed?'Update':'No change'), changed});
     });
     // Diagnostics (console)
     const loggedTotal=Object.values(epicPeople).reduce((s,p)=>s+((p.contributors||[]).reduce((n,a)=>n+(a.seconds||0),0)),0);
-    console.log('%c[Jira sync]','font-weight:bold','ETA:', j.fieldId, 'Start:', j.startFieldId, 'Status:', j.statusFieldId, 'Estimation:', j.estIds, 'epics:', epicKeys.length, 'LoggedTotal(s):', loggedTotal);
+    console.log('%c[Jira sync]','font-weight:bold','Release Date:', j.releaseFieldId, 'ETA:', j.fieldId, 'Start:', j.startFieldId, 'Status:', j.statusFieldId, 'Estimation:', j.estIds, 'epics:', epicKeys.length, 'LoggedTotal(s):', loggedTotal);
     console.table((j.results||[]).map(rec=>({ project:(targets[rec.id]&&targets[rec.id].proj.name)||'', key:rec.key,
-      designStart:rec.designStart||'', designEnd:rec.designEnd||'', designStatus:rec.designStatus||'', estimation:JSON.stringify(rec.est||{}), error:rec.error||'' })));
+      releaseDate:rec.releaseDate||'', designStart:rec.designStart||'', designEnd:rec.designEnd||'', designStatus:rec.designStatus||'', estimation:JSON.stringify(rec.est||{}), error:rec.error||'' })));
     if(silent){
       // auto-sync: apply every changed row straight away, then persist the new sync time
       let applied=0;
-      rows.forEach(r=>{ if(r.changed){ if(applyDesignSync(r.proj, r.newStart, r.newEnd, r.newStatus, r.est, r.figma, r.assignees, r.contributors, r.progress)) applied++; } });
+      rows.forEach(r=>{ if(r.changed){ const a=applyDesignSync(r.proj, r.newStart, r.newEnd, r.newStatus, r.est, r.figma, r.assignees, r.contributors, r.progress); const b=applyReleaseDate(r); if(a||b) applied++; } });
       state.lastJiraSync = j.syncedAt || Date.now();
       lastSyncedJSON=null;   // force a save so the sync time (and any applied changes) persist + debounce other viewers
       save(); renderJiraSync(); if(applied) render();
@@ -2145,7 +2154,9 @@ function openJiraReview(rows, syncedAt, stats){
     const endLine = r.newEnd
       ? `End: <span class="${eChanged?'old':''}">${d(r.curEnd)}</span>${eChanged?' → <span class="new">'+esc(r.newEnd)+'</span>':''}`
       : (r.curEnd?`End: ${d(r.curEnd)}`:'');
-    const dateLine = (startLine||endLine) ? `<div class="jr-dates">${startLine}${(startLine&&endLine)?' &nbsp;·&nbsp; ':''}${endLine}</div>` : '';
+    const dateLine = (startLine||endLine) ? `<div class="jr-dates">Design ${startLine}${(startLine&&endLine)?' &nbsp;·&nbsp; ':''}${endLine}</div>` : '';
+    const relLine = r.relDiff ? `<div class="jr-dates">Release date (project end): <span class="old">${d(r.curProjEnd)}</span> → <span class="new">${esc(r.newRelease)}</span></div>`
+      : r.relSkipped ? `<div class="jr-dates" style="color:#b54708">Release date ${esc(r.relSkipped)} is before the project start — not applied</div>` : '';
     const st=DESIGN_LABEL_STYLE[r.label]||{};
     const statusLine = `<div class="jr-dates">Status: <b>${esc(r.newStatus||'—')}</b> → <span class="jr-lbl" style="color:${st.c||''};background:${st.bg||''};border-color:${st.bd||''}">${esc(r.label||'')}</span></div>`;
     const estParts=EST_LABELS.filter(([k])=>r.est&&r.est[k]!=null).map(([k,lbl])=>lbl+' '+r.est[k]+'p');
@@ -2158,7 +2169,7 @@ function openJiraReview(rows, syncedAt, stats){
       <input type="checkbox" class="jr-cb" data-i="${i}" ${r.changed?'checked':''}>
       <span class="jr-main">
         <div><span class="jr-name">${esc(r.name)}</span> <span class="jr-key">${esc(r.key)}</span></div>
-        ${dateLine}${statusLine}${estLine}${figmaLine}${asgLine}${conLine}
+        ${relLine}${dateLine}${statusLine}${estLine}${figmaLine}${asgLine}${conLine}
       </span>
       <span class="jr-badge ${badgeCls}">${r.action}</span>
     </label>`;
@@ -2182,7 +2193,7 @@ function openJiraReview(rows, syncedAt, stats){
   modal.querySelector('#jr-cancel').onclick=closeModal;
   saveBtn.onclick=()=>{
     let applied=0;
-    cbs.forEach(c=>{ if(c.checked){ const r=rows[+c.dataset.i]; if(applyDesignSync(r.proj, r.newStart, r.newEnd, r.newStatus, r.est, r.figma, r.assignees, r.contributors, r.progress)) applied++; } });
+    cbs.forEach(c=>{ if(c.checked){ const r=rows[+c.dataset.i]; const a=applyDesignSync(r.proj, r.newStart, r.newEnd, r.newStatus, r.est, r.figma, r.assignees, r.contributors, r.progress); const b=applyReleaseDate(r); if(a||b) applied++; } });
     state.lastJiraSync = syncedAt || Date.now();
     lastSyncedJSON=null;   // force a save even if only the timestamp changed
     closeModal(); save(); renderJiraSync(); render();

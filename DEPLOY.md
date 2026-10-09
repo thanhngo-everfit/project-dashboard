@@ -122,6 +122,13 @@ that issue's **Design ETA**, and sets it as the End date of the project's design
      e.g. `customfield_12752`. If omitted, the field **named "Design Start"** is auto-detected.
 3. **Redeploy** so the function picks up the env vars.
 
+### Project end date ← Release Date
+The sync also sets each project's **end date** from the PLAN item's **Release Date** field
+(`customfield_12861`, a JPD date; a quarter range uses its last day). **Release Target**
+(`customfield_10255`, a multi-select of candidate dates) is ignored. Override the field with
+`JIRA_RELEASE_DATE_FIELD`. A Release Date earlier than the project's start is skipped (shown in the
+review popup) so the timeline bar can't invert.
+
 ### Linked delivery assignees
 For each JPD idea (PLAN item), the sync reads its **delivery links** ("Polaris work item link" —
 the delivery panel) to find the linked **Epics**, then collects the assignees of the **work inside

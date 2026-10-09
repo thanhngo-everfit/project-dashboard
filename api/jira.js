@@ -21,6 +21,10 @@ const START_FIELD_NAME = 'design start';     // -> design work START
 const END_FIELD_DEFAULT = 'customfield_10666';
 const START_FIELD_DEFAULT = 'customfield_12752';
 const STATUS_FIELD_DEFAULT = 'customfield_10139';   // design status (select/status)
+// Project END date comes from the PLAN item's "Release Date" (JPD interval) — NOT "Release Target"
+// (customfield_10255, a multi-select of candidate dates). Override with env JIRA_RELEASE_DATE_FIELD.
+const RELEASE_FIELD_NAME = 'release date';
+const RELEASE_FIELD_DEFAULT = 'customfield_12861';
 // Per-discipline effort estimation (number fields). Auto-detected by name; override via env.
 const EST_FIELDS = [
   { key: 'api',     name: 'api estimation',     env: 'JIRA_EST_API_FIELD' },
@@ -306,9 +310,10 @@ export default async function handler(req, res) {
     let fieldId = process.env.JIRA_DESIGN_ETA_FIELD || END_FIELD_DEFAULT || '';        // design work END
     let startFieldId = process.env.JIRA_DESIGN_START_FIELD || START_FIELD_DEFAULT || ''; // design work START
     let statusFieldId = process.env.JIRA_DESIGN_STATUS_FIELD || STATUS_FIELD_DEFAULT || ''; // design status
+    let releaseFieldId = process.env.JIRA_RELEASE_DATE_FIELD || RELEASE_FIELD_DEFAULT || ''; // project END (Release Date)
     const estIds = {};   // discipline key -> field id (env override or auto-detected)
     EST_FIELDS.forEach(f => { const v = process.env[f.env] || f.def; if (v) estIds[f.key] = v; });
-    const needList = !fieldId || !startFieldId || EST_FIELDS.some(f => !estIds[f.key]);
+    const needList = !fieldId || !startFieldId || !releaseFieldId || EST_FIELDS.some(f => !estIds[f.key]);
     if (needList) {
       const r = await fetch(base + '/rest/api/3/field', { headers: jheaders });
       if (!r.ok) { res.status(502).json({ error: 'jira_http_' + r.status, detail: 'could not list fields to auto-detect fields' }); return; }
@@ -318,6 +323,7 @@ export default async function handler(req, res) {
       const findBy = name => { const n = norm(name); return list.find(f => norm(f.name) === n) || list.find(f => norm(f.name).includes(n)); };
       if (!fieldId) { const h = findBy(END_FIELD_NAME); if (h) fieldId = h.id; }
       if (!startFieldId) { const h = findBy(START_FIELD_NAME); if (h) startFieldId = h.id; }
+      if (!releaseFieldId) { const h = findBy(RELEASE_FIELD_NAME); if (h) releaseFieldId = h.id; }
       EST_FIELDS.forEach(f => { if (!estIds[f.key]) { const h = findBy(f.name); if (h) estIds[f.key] = h.id; } });
     }
     if (!fieldId) { res.status(500).json({ error: 'design_eta_field_not_found', hint: 'Set JIRA_DESIGN_ETA_FIELD, or rename the Jira field to "Design ETA".' }); return; }
@@ -354,7 +360,7 @@ export default async function handler(req, res) {
         if (!key) { results[i] = { id: it && it.id, key, error: 'no_key' }; continue; }
         try {
           const estFieldIds = EST_FIELDS.map(f => estIds[f.key]).filter(Boolean);
-          const fieldsParam = [fieldId, startFieldId, statusFieldId, 'description', 'issuelinks', ...estFieldIds].filter(Boolean).join(',');
+          const fieldsParam = [fieldId, startFieldId, statusFieldId, releaseFieldId, 'description', 'issuelinks', ...estFieldIds].filter(Boolean).join(',');
           const r = await jfetch(base + '/rest/api/3/issue/' + encodeURIComponent(key) + '?fields=' + encodeURIComponent(fieldsParam), { headers: jheaders });
           if (!r.ok) { results[i] = { id: it.id, key, error: 'http_' + r.status }; continue; }
           const j = await r.json();
@@ -368,6 +374,7 @@ export default async function handler(req, res) {
           });
           const endR = extractRange(f[fieldId]);                 // Design ETA -> end
           const startR = startFieldId ? extractRange(f[startFieldId]) : { start: null, end: null };  // Design Start
+          const relR = releaseFieldId ? extractRange(f[releaseFieldId]) : { start: null, end: null }; // Release Date (single day or a quarter range -> use its end)
           const est = {};   // per-discipline estimation numbers
           EST_FIELDS.forEach(fd => { if (estIds[fd.key]) { const n = extractNumber(f[estIds[fd.key]]); if (n !== null) est[fd.key] = n; } });
           results[i] = {
@@ -375,6 +382,7 @@ export default async function handler(req, res) {
             designStart: startR.start || startR.end,             // each field is a single date (start===end)
             designEnd: endR.end || endR.start,
             designStatus: statusFieldId ? extractStatus(f[statusFieldId]) : '',   // customfield_10139
+            releaseDate: relR.end || relR.start || '',              // -> project END date
             est,
             figma: extractFigmaLinks(f.description),             // Figma URLs found in the card description
             linkKeys,                                            // delivery epics/tickets linked to this idea
@@ -387,7 +395,7 @@ export default async function handler(req, res) {
     }
     await Promise.all(Array.from({ length: Math.min(CONCURRENCY, issues.length) }, worker));
     // Each result carries linkKeys (its delivery-epic keys); the client uses them to drive action:'people'.
-    res.status(200).json({ results, syncedAt: Date.now(), fieldId, startFieldId, statusFieldId, estIds });
+    res.status(200).json({ results, syncedAt: Date.now(), fieldId, startFieldId, statusFieldId, releaseFieldId, estIds });
   } catch (e) {
     res.status(500).json({ error: 'server_error', detail: String((e && e.message) || e) });
   }
