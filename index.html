@@ -2466,6 +2466,8 @@ function adoptRemoteData(data, updatedAt, tribesUpdatedAt){
 async function pollRemote(){
   if(!idToken || busy) return;
   if(document.hidden) return;                        // background tab: no polling (catches up on focus)
+  if(Date.now()-_lastPollAt < 10000) return;         // at most one poll per 10s (focus flicker can fire many)
+  _lastPollAt = Date.now();
   if(!initialLoadDone){ if(Date.now()-_lastFullLoad > 60000) syncLoad(); return; }   // first load failed -> retry each minute
   if(modalBg.classList.contains('open')) return;     // editing -> don't interrupt
   try{
@@ -2485,6 +2487,7 @@ async function pollRemote(){
     }
   }catch(e){ /* offline: keep working locally */ }
 }
+let _lastPollAt = 0;
 function startPolling(){ if(pollTimer) clearInterval(pollTimer); pollTimer = setInterval(pollRemote, 15000); }
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && pollTimer) pollRemote(); });
 function stopPolling(){ if(pollTimer) clearInterval(pollTimer); pollTimer = null; stopAutoJiraSync(); }
