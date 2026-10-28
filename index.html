@@ -2684,7 +2684,7 @@ function render(){
   setDisp('#categoryFilterWrap', listView);
   setDisp('#teamFilterWrap', !peopleView && !orgView && curSquads().length>1);   // only meaningful when the tribe has more than one team
   if(peopleView||orgView) setDisp('#assigneeFilterWrap', false);   // renderAssigneeFilter may have shown it; hide here
-  { const sb=document.getElementById('searchBox'); if(sb) { sb.placeholder = (peopleView||orgView) ? 'Search members…' : 'Search projects…  ( / )'; sb.title = listView ? 'Matches every column. Use several words to narrow down, e.g. “nov promotion”. Esc clears.' : ''; } }
+  { const sb=document.getElementById('searchBox'); if(sb) { sb.placeholder = (peopleView||orgView) ? 'Search members…' : 'Search projects…'; sb.title = listView ? 'Matches every column. Use several words to narrow down, e.g. “nov promotion”. Esc clears.' : ''; } }
   if(curSquads().length<=1 && (state.teamFilters||[]).length){ state.teamFilters=[]; }   // clear a stale filter
   renderGantt();
   syncUrl();
