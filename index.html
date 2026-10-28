@@ -2327,7 +2327,7 @@ function conflictMessage(updatedBy, at){
 // save (with the latest data + the fresh base from the 1st) runs when it finishes.
 let _saveInFlight=false, _saveQueued=false;
 async function syncSave(){
-  if(!idToken) return;
+  if(!idToken || !initialLoadDone) return;   // never push before the shared copy has loaded (would write the seed / a stale cache)
   if(_saveInFlight){ _saveQueued=true; return; }
   _saveInFlight=true;
   try{ await syncSaveOnce(); }
@@ -2426,13 +2426,18 @@ async function syncLoad(){
         // server refuses to overwrite a populated board anyway).
         setSync('No shared data yet — edit or import to start', 'bad');
       }
+      initialLoadDone = true;   // only a successful read unlocks saving (prevents pre-load races and seed overwrites)
     } else {
-      setSync('Offline — using local copy', 'bad');
+      const txt = await r.text().catch(()=>''); let j = {}; try{ j = JSON.parse(txt); }catch(e){}
+      const detail = String(j.detail || txt || ('HTTP '+r.status)).replace(/\s+/g,' ').slice(0,300);
+      console.error('[load] failed', r.status, detail);
+      setSync(/plan limit|quota|limit exceeded/i.test(detail) ? 'Database limit reached — not saving' : 'Can’t load shared data — not saving', 'bad', detail);
     }
-  }catch(e){ setSync('Offline — using local copy', 'bad'); }
-  initialLoadDone = true;   // only now may auto-save push to the server (prevents pre-load races)
+  }catch(e){ setSync('Offline — not saving', 'bad', String(e&&e.message||e)); }
+  _lastFullLoad = Date.now();
   render();
 }
+let _lastFullLoad = 0;
 // Replace only the shared data; keep this browser's personal view/tab/zoom/collapse.
 function adoptRemoteData(data, updatedAt, tribesUpdatedAt){
   saveBlocked = false;   // we now hold the good server copy again
@@ -2456,15 +2461,22 @@ function adoptRemoteData(data, updatedAt, tribesUpdatedAt){
   localStorage.setItem(STORE_KEY, JSON.stringify(state));
   render();
 }
+// Polls ask the server "changed since <baseline>?" (a tiny metadata read) and only download the full
+// document when it did. A full read every 12s from every open tab is what exhausted the Upstash plan.
 async function pollRemote(){
   if(!idToken || busy) return;
+  if(document.hidden) return;                        // background tab: no polling (catches up on focus)
+  if(!initialLoadDone){ if(Date.now()-_lastFullLoad > 60000) syncLoad(); return; }   // first load failed -> retry each minute
   if(modalBg.classList.contains('open')) return;     // editing -> don't interrupt
   try{
-    const r = await apiFetch('/api/state', {method:'GET'});
+    const full = Date.now()-_lastFullLoad > 10*60000;   // safety net: a full read every 10 min regardless
+    const r = await apiFetch('/api/state'+(full||!baselineUpdatedAt ? '' : '?since='+baselineUpdatedAt), {method:'GET'});
     if(r.status===401){ handleAuthExpired(); return; }
     if(!r.ok) return;
     const j = await r.json();
     checkVersion(j.version);                          // detect a new deploy even while we hold local edits
+    if(j.unchanged) return;
+    _lastFullLoad = Date.now();
     if(dataJSON() !== lastSyncedJSON) return;         // local data edits pending -> don't adopt over them
     const rec = j.record;
     if(rec && rec.state && (rec.state.tribes || rec.state.squads) && rec.updatedAt > baselineUpdatedAt){
@@ -2473,7 +2485,8 @@ async function pollRemote(){
     }
   }catch(e){ /* offline: keep working locally */ }
 }
-function startPolling(){ if(pollTimer) clearInterval(pollTimer); pollTimer = setInterval(pollRemote, 12000); }
+function startPolling(){ if(pollTimer) clearInterval(pollTimer); pollTimer = setInterval(pollRemote, 15000); }
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && pollTimer) pollRemote(); });
 function stopPolling(){ if(pollTimer) clearInterval(pollTimer); pollTimer = null; stopAutoJiraSync(); }
 // ---- Auto Jira sync: pull from Jira for everyone who has the dashboard open ----
 // Runs silently on load and then on a timer. The 2-hour cadence is coordinated across ALL viewers
@@ -3685,7 +3698,7 @@ function renderDayCalendar(container, sel){
 // Save ONLY the changed people to the server (merged into the current record), so it never overwrites
 // concurrent project/tribe edits by someone else.
 async function patchPeople(patch){
-  if(!idToken || updateAvailable || saveBlocked) return;   // stale tab -> don't write
+  if(!idToken || !initialLoadDone || updateAvailable || saveBlocked) return;   // stale tab -> don't write
   setSync('Saving people…');
   try{
     const r=await apiFetch('/api/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'patchPeople', people:patch})});
@@ -3696,7 +3709,7 @@ async function patchPeople(patch){
 }
 // Save ONLY changed evaluations (merged into the current record, keyed by accountId->period). Admin only.
 async function patchEvals(patch){
-  if(!idToken || updateAvailable || saveBlocked) return;
+  if(!idToken || !initialLoadDone || updateAvailable || saveBlocked) return;
   setSync('Saving evaluation…');
   try{
     const r=await apiFetch('/api/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'patchEvals', evals:patch})});
@@ -5526,7 +5539,7 @@ function wikiState(){ if(!state.wiki||typeof state.wiki!=='object'||Array.isArra
 function wikiPage(id){ return wikiState().pages.find(p=>p.id===id)||null; }
 function wikiChildren(pid){ return wikiState().pages.filter(p=>(p.parentId||'')===(pid||'')).sort((a,b)=>(a.order||0)-(b.order||0)||(a.title||'').localeCompare(b.title||'')); }
 async function saveWiki(){
-  if(!idToken||updateAvailable||saveBlocked) return;
+  if(!idToken||!initialLoadDone||updateAvailable||saveBlocked) return;
   setSync('Saving wiki…');
   try{ const r=await apiFetch('/api/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'patchWiki', wiki:wikiState()})});
     if(r.status===401){ handleAuthExpired(); return; }
@@ -6085,7 +6098,7 @@ function squadWorkflowTemplate(){
   ]};
 }
 async function saveOnboarding(){
-  if(!idToken||updateAvailable||saveBlocked) return;
+  if(!idToken||!initialLoadDone||updateAvailable||saveBlocked) return;
   setSync('Saving onboarding…');
   try{ const r=await apiFetch('/api/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'patchOnboarding', onboarding:onbState()})});
     if(r.status===401){ handleAuthExpired(); return; }

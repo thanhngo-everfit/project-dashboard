@@ -14,6 +14,7 @@ const ALLOWED_DOMAIN = 'everfit.io';
 const ADMIN_EMAIL = 'thanhngo@everfit.io';   // only this user can add/remove squads
 const KEY = 'roadmap:state';
 const HKEY = 'roadmap:history';   // rolling list of prior versions (newest first), for rollback
+const MKEY = 'roadmap:meta';      // { updatedAt, tribesUpdatedAt, updatedBy } — lets polls skip the full read
 // Identifies the currently-deployed build. Serverless functions always run the latest deploy, so a
 // client whose stored version no longer matches this is running an old tab -> it should refresh.
 const VERSION = process.env.APP_VERSION || process.env.VERCEL_GIT_COMMIT_SHA || process.env.VERCEL_DEPLOYMENT_ID || '';
@@ -44,6 +45,20 @@ function allowArea(user, state, area) {
   if (e === ADMIN_EMAIL) return true;
   if (isViewOnlyUser(user, state)) return false;
   return grantedAreas(state, e).indexOf(area) >= 0;
+}
+
+// Every write of the main record goes through here so the small meta key stays in step with it.
+async function putRecord(record) {
+  await redis.set(KEY, record);
+  try { await redis.set(MKEY, { updatedAt: record.updatedAt, tribesUpdatedAt: record.tribesUpdatedAt || 0, updatedBy: record.updatedBy || '' }); }
+  catch (e) { try { await redis.del(MKEY); } catch (x) {} }   // never leave a stale meta that hides a newer record
+}
+// History keeps only the roadmap part (tribes + its metadata). Storing the whole record (people, evals,
+// onboarding, wiki) 30 times over can make up most of the database size. Restore only rolls back the roadmap.
+function historyEntry(rec) {
+  const st = (rec && rec.state) || {};
+  return { updatedAt: rec.updatedAt, updatedBy: rec.updatedBy, tribesUpdatedAt: rec.tribesUpdatedAt,
+    state: { tribes: st.tribes, squads: st.squads, lastJiraSync: st.lastJiraSync, tagCreators: st.tagCreators } };
 }
 
 async function verify(req) {
@@ -88,7 +103,14 @@ export default async function handler(req, res) {
         res.status(200).json({ versions });
         return;
       }
+      // ?since=<updatedAt> -> cheap poll: answer from the small meta key when nothing changed
+      const since = Number(req.query && req.query.since) || 0;
+      if (since > 0) {
+        const meta = await redis.get(MKEY);
+        if (meta && meta.updatedAt && since >= meta.updatedAt) { res.status(200).json({ unchanged: true, version: VERSION }); return; }
+      }
       const record = await redis.get(KEY); // null if never written
+      if (record && record.updatedAt && since > 0) { try { await redis.set(MKEY, { updatedAt: record.updatedAt, tribesUpdatedAt: record.tribesUpdatedAt || 0, updatedBy: record.updatedBy || '' }); } catch (e) {} }   // backfill a missing meta
       res.status(200).json({ record: record || null, version: VERSION });
       return;
     }
@@ -104,9 +126,14 @@ export default async function handler(req, res) {
         if (typeof rec === 'string') { try { rec = JSON.parse(rec); } catch (e) { rec = null; } }
         if (!rec || !rec.state) { res.status(404).json({ error: 'version_not_found' }); return; }
         const cur = await redis.get(KEY);
-        if (cur && cur.state) { try { await redis.lpush(HKEY, cur); await redis.ltrim(HKEY, 0, 29); } catch (e) {} }
-        const record = { state: rec.state, updatedAt: Date.now(), updatedBy: user.email + ' (restore)', tribesUpdatedAt: Date.now() };
-        await redis.set(KEY, record);
+        if (cur && cur.state) { try { await redis.lpush(HKEY, historyEntry(cur)); await redis.ltrim(HKEY, 0, 29); } catch (e) {} }
+        const old = rec.state;
+        const restored = Object.assign({}, (cur && cur.state) || {}, { tribes: old.tribes });
+        if (old.squads !== undefined && old.tribes === undefined) restored.squads = old.squads;
+        if (old.lastJiraSync !== undefined) restored.lastJiraSync = old.lastJiraSync;
+        if (old.tagCreators !== undefined) restored.tagCreators = old.tagCreators;
+        const record = { state: restored, updatedAt: Date.now(), updatedBy: user.email + ' (restore)', tribesUpdatedAt: Date.now() };
+        await putRecord(record);
         res.status(200).json({ ok: true, restored: true, updatedAt: record.updatedAt });
         return;
       }
@@ -122,7 +149,7 @@ export default async function handler(req, res) {
         for (const [k, v] of Object.entries(patch)) { if (v === null) delete merged[k]; else merged[k] = v; }   // null = delete
         state.people = merged;
         const record = { state, updatedAt: Date.now(), updatedBy: user.email, tribesUpdatedAt: (cur && (cur.tribesUpdatedAt || cur.updatedAt)) || Date.now() };
-        await redis.set(KEY, record);
+        await putRecord(record);
         res.status(200).json({ ok: true, updatedAt: record.updatedAt, version: VERSION });
         return;
       }
@@ -143,7 +170,7 @@ export default async function handler(req, res) {
         }
         state.evals = merged;
         const record = { state, updatedAt: Date.now(), updatedBy: user.email, tribesUpdatedAt: (cur && (cur.tribesUpdatedAt || cur.updatedAt)) || Date.now() };
-        await redis.set(KEY, record);
+        await putRecord(record);
         res.status(200).json({ ok: true, updatedAt: record.updatedAt, version: VERSION });
         return;
       }
@@ -156,7 +183,7 @@ export default async function handler(req, res) {
         if (!allowArea(user, state, 'onboarding')) { res.status(403).json({ error: 'forbidden' }); return; }   // super-admin or 'onboarding' grant
         state.onboarding = onb;
         const record = { state, updatedAt: Date.now(), updatedBy: user.email, tribesUpdatedAt: (cur && (cur.tribesUpdatedAt || cur.updatedAt)) || Date.now() };
-        await redis.set(KEY, record);
+        await putRecord(record);
         res.status(200).json({ ok: true, updatedAt: record.updatedAt, version: VERSION });
         return;
       }
@@ -169,7 +196,7 @@ export default async function handler(req, res) {
         if (!allowArea(user, state, 'wiki')) { res.status(403).json({ error: 'forbidden' }); return; }   // super-admin or 'wiki' grant
         state.wiki = wiki;
         const record = { state, updatedAt: Date.now(), updatedBy: user.email, tribesUpdatedAt: (cur && (cur.tribesUpdatedAt || cur.updatedAt)) || Date.now() };
-        await redis.set(KEY, record);
+        await putRecord(record);
         res.status(200).json({ ok: true, updatedAt: record.updatedAt, version: VERSION });
         return;
       }
@@ -189,7 +216,7 @@ export default async function handler(req, res) {
         }
         state.access = merged;
         const record = { state, updatedAt: Date.now(), updatedBy: user.email, tribesUpdatedAt: (cur && (cur.tribesUpdatedAt || cur.updatedAt)) || Date.now() };
-        await redis.set(KEY, record);
+        await putRecord(record);
         res.status(200).json({ ok: true, updatedAt: record.updatedAt, version: VERSION });
         return;
       }
@@ -263,14 +290,14 @@ export default async function handler(req, res) {
       const tribesJSON = st => { try { return JSON.stringify((st && st.tribes) || null); } catch (e) { return null; } };
       const tribesChanged = !existing || !existing.state || tribesJSON(existing.state) !== tribesJSON(body.state);
       if (existing && existing.state && tribesChanged) {
-        try { await redis.lpush(HKEY, existing); await redis.ltrim(HKEY, 0, 29); } catch (e) { /* history is best-effort */ }
+        try { await redis.lpush(HKEY, historyEntry(existing)); await redis.ltrim(HKEY, 0, 29); } catch (e) { /* history is best-effort */ }
       }
       const now = Date.now();
       // tribesUpdatedAt only advances when the projects actually change (drives optimistic concurrency).
       // Optional client-supplied source label (e.g. 'Jira auto-sync') so History / conflicts show WHAT saved, not just whose tab.
       const via = (typeof body.via === 'string' && body.via.trim()) ? (' · ' + body.via.trim().replace(/[^\w .\-]/g, '').slice(0, 40)) : '';
       const record = { state: body.state, updatedAt: now, updatedBy: user.email + via, tribesUpdatedAt: tribesChanged ? now : (exTribesUpdatedAt || now) };
-      await redis.set(KEY, record);
+      await putRecord(record);
       res.status(200).json({ ok: true, updatedAt: record.updatedAt, tribesUpdatedAt: record.tribesUpdatedAt, updatedBy: record.updatedBy });
       return;
     }
