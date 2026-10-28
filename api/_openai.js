@@ -1,4 +1,4 @@
-// Shared OpenAI config + error redaction for the AI endpoints (evaluate, wiki-ai, suggest).
+// Shared OpenAI config + error redaction for the AI endpoints (evaluate, wiki-ai).
 // Underscore-prefixed files in /api are helpers, not deployed as routes.
 
 // Read + validate the env config. Returns { key, model, base } or { error: { status, body } }.
