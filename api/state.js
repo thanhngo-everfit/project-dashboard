@@ -277,6 +277,8 @@ export default async function handler(req, res) {
 
     res.status(405).json({ error: 'method_not_allowed' });
   } catch (e) {
+    let bytes = 0; try { bytes = JSON.stringify(req.body || '').length; } catch (x) {}
+    console.error('[state]', req.method, (req.body && req.body.action) || 'save', 'body bytes:', bytes, e);   // shows in Vercel → Logs
     res.status(500).json({ error: 'server_error', detail: String(e && e.message || e) });
   }
 }

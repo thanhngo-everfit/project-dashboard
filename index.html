@@ -1920,10 +1920,11 @@ function apiFetch(url, opts){
   opts.headers = Object.assign({}, opts.headers, { 'Authorization': 'Bearer ' + idToken });
   return fetch(url, opts);
 }
-function setSync(text, tone){
+function setSync(text, tone, tip){
   const el = document.getElementById('syncStatus');
   if(!el) return;
   el.textContent = text;
+  el.title = tip || '';
   el.style.color = tone === 'bad' ? '#d92d20' : tone === 'ok' ? '#067647' : 'var(--muted)';
 }
 // ---------- Jira sync (admin only) ----------
@@ -2367,6 +2368,7 @@ async function syncSaveOnce(){
     if(r.ok){
       const j = await r.json();
       lastSyncedJSON = payload;
+      _saveRetries = 0;
       baselineUpdatedAt = j.updatedAt || baselineUpdatedAt;
       baseTribesUpdatedAt = j.tribesUpdatedAt || baseTribesUpdatedAt;
       setSync('Saved', 'ok');
@@ -2378,12 +2380,32 @@ async function syncSaveOnce(){
       } else if(j.error==='view_only'){
         setSync('View-only access — change not saved', 'bad');
         await syncLoad();   // revert local change to the shared copy
-      } else setSync('Save failed', 'bad');
+      } else saveFailed(r.status, j, '');
     } else {
-      const j = await r.json().catch(()=>({}));
-      setSync(j.error==='storage_not_configured' ? 'No DB configured' : 'Save failed', 'bad');
+      const txt = await r.text().catch(()=>'');
+      let j = {}; try{ j = JSON.parse(txt); }catch(e){}
+      saveFailed(r.status, j, txt);
     }
-  }catch(e){ setSync('Offline — saved locally', 'bad'); }
+  }catch(e){ setSync('Offline — saved locally', 'bad', String(e&&e.message||e)); retrySave(); }
+}
+// A failed save names its cause in the status (hover for the server's detail) and in the console, and
+// temporary failures (network, 5xx, rate limits) retry on their own so an edit isn't left unsaved.
+let _saveRetries = 0, _saveRetryTimer = null;
+function saveFailed(status, j, rawText){
+  const code = j.error || ('HTTP '+status);
+  const detail = String(j.detail || rawText || '').replace(/\s+/g,' ').slice(0,300);
+  const why = code==='storage_not_configured' ? 'No DB configured'
+            : (status===413 || /too large|max request size|request entity/i.test(detail)) ? 'Save failed — data too large'
+            : /quota|limit exceeded|max daily|max monthly|OOM|maxmemory/i.test(detail) ? 'Save failed — database limit reached'
+            : 'Save failed ('+code+')';
+  console.error('[save] failed', status, code, detail || j);
+  setSync(why, 'bad', detail || code);
+  if(status>=500 || status===429) retrySave();
+}
+function retrySave(){
+  if(_saveRetryTimer || _saveRetries>=3) return;
+  const wait=[3000,10000,30000][_saveRetries++];
+  _saveRetryTimer=setTimeout(()=>{ _saveRetryTimer=null; if(idToken && !saveBlocked && dataJSON()!==lastSyncedJSON) syncSave(); }, wait);
 }
 async function syncLoad(){
   if(!idToken){ render(); return; }
