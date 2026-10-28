@@ -577,6 +577,9 @@
   .mkt-menu-opt:hover{background:#f2f5fb;}
   .mkt-menu-opt.sel{background:#eef2ff;}
   .mkt-menu-opt.sel::after{content:'✓';margin-left:auto;color:#3538cd;font-weight:800;}
+  .mkt-search-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin:0 0 14px;}
+  .mkt-search-bar b{color:var(--text);}
+  .mkt-search-bar .btn{padding:4px 10px;font-size:12px;}
   .mkt-ai-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:#5925dc;background:#f9f5ff;border:1px dashed #d6bbfb;border-radius:10px;padding:8px 12px;margin:0 0 14px;}
   .mkt-ai-bar .btn{margin-left:auto;padding:4px 10px;font-size:12px;}
   .mkt-ai-status{color:#7f56d9;font-weight:700;}
@@ -2650,7 +2653,7 @@ function render(){
   setDisp('#categoryFilterWrap', listView);
   setDisp('#teamFilterWrap', !peopleView && !orgView && curSquads().length>1);   // only meaningful when the tribe has more than one team
   if(peopleView||orgView) setDisp('#assigneeFilterWrap', false);   // renderAssigneeFilter may have shown it; hide here
-  { const sb=document.getElementById('searchBox'); if(sb) sb.placeholder = (peopleView||orgView) ? 'Search members…' : 'Search projects…'; }
+  { const sb=document.getElementById('searchBox'); if(sb) { sb.placeholder = (peopleView||orgView) ? 'Search members…' : 'Search projects…  ( / )'; sb.title = listView ? 'Matches every column. Use several words to narrow down, e.g. “nov promotion”. Esc clears.' : ''; } }
   if(curSquads().length<=1 && (state.teamFilters||[]).length){ state.teamFilters=[]; }   // clear a stale filter
   renderGantt();
   syncUrl();
@@ -3164,13 +3167,23 @@ function renderListByEnd(g){
   // (no release)" projects are excluded — a released item belongs on the calendar regardless of the
   // completed toggle (which isn't even reachable in this view).
   let items=allProjects().filter(x=>x.p.release!=='completed' && teamFilterMatch(x.p) && assigneeFilterMatch(x.p) && tagFilterMatch(x.p.tags) && promoFilterMatch(x.p) && categoryFilterMatch(x.cat.name));
-  if(q) items=items.filter(x=> x.p.name.toLowerCase().includes(q) || (x.cat.name||'').toLowerCase().includes(q) || (x.squad.name||'').toLowerCase().includes(q));
+  const qt=searchTokens(q);
+  if(qt.length) items=items.filter(x=>{ const hay=mktSearchText(x); return qt.every(t=>hay.includes(t)); });
   // group by release month (YYYY-MM of the end date)
   const map=new Map();
   items.forEach(x=>{ const e=x.p.end; const k=validISO(e)?e.slice(0,7):''; if(!map.has(k))map.set(k,[]); map.get(k).push(x); });
   const keys=[...map.keys()].sort((a,b)=> a===''?1 : b===''? -1 : a.localeCompare(b));
   const wrap=document.createElement('div'); wrap.className='mkt';
-  if(!keys.length){ const em=document.createElement('div'); em.className='empty'; em.textContent='No projects yet.'; g.appendChild(em); return; }
+  if(qt.length){   // search summary: result count + clear
+    const sb=document.createElement('div'); sb.className='mkt-search-bar';
+    sb.innerHTML=`${items.length?`<b>${items.length}</b> project${items.length>1?'s':''} match`:'No projects match'} “${esc(q)}” <button class="btn" id="mkt_search_clear">Clear search</button>`;
+    sb.querySelector('#mkt_search_clear').onclick=clearSearch;
+    wrap.appendChild(sb);
+  }
+  if(!keys.length){
+    if(qt.length){ wrap.insertAdjacentHTML('beforeend','<div class="empty">Try a project name, PLAN key, tag, squad, category or month.</div>'); g.appendChild(wrap); return; }
+    const em=document.createElement('div'); em.className='empty'; em.textContent='No projects yet.'; g.appendChild(em); return;
+  }
   const monthLabel=k=>{ if(!k) return 'No release date'; const [y,m]=k.split('-').map(Number); return MONTHS[m-1]+' '+y; };
   const curMonthKey=(()=>{ const n=new Date(); return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0'); })();
   if(isSuperAdmin()){
@@ -3206,20 +3219,17 @@ function renderListByEnd(g){
         const tags = (p.tags&&p.tags.length&&showTagsOn())?p.tags.map(t=>tagChip(t)).join(''):(showTagsOn()?mktSuggChip(p,'tags'):'');
         const relLbl = releaseLabel(p);
         const done = p.done?`<span class="mkt-check" title="${relLbl}">✓</span>`:'';
-        const rel = p.release==='released' ? '<span class="mkt-rel yes">Released</span>'
-                  : p.release==='completed' ? '<span class="mkt-rel done">Completed</span>'
-                  : (projStatusLabel(p)==='Waiting for Start') ? '<span class="mkt-rel wait">Waiting for Start</span>'
-                  : (projStatusLabel(p)==='Overdue') ? '<span class="mkt-rel overdue">Overdue</span>'
-                  : '<span class="mkt-rel no">Not yet</span>';
+        const relTxt = mktReleaseText(p);
+        const rel = `<span class="mkt-rel ${{'Released':'yes','Completed':'done','Waiting for Start':'wait','Overdue':'overdue'}[relTxt]||'no'}">${relTxt}</span>`;
         const scale = p.openScale ? `<span class="mkt-scale s-${esc(p.openScale.toLowerCase())}">${esc(p.openScale)}</span>` : (mktSuggChip(p,'openScale')||dash);
         const linksHtml=indicatorsHTML(p);
         const ed=(f,inner)=>`<span class="mkt-edit" data-f="${f}" title="Click to change">${inner}<span class="mkt-caret">▾</span></span>`;
         const planKey=jiraIssueKey(p.jira);
-        const planCell=planKey?`<a class="mkt-plan" href="${esc(jiraBrowseBase(p.jira)+'/browse/'+planKey)}" target="_blank" rel="noopener" title="Open ${esc(planKey)} in Jira" onclick="event.stopPropagation()">${esc(planKey)}</a>`:'<span class="mkt-dash">—</span>';
+        const planCell=planKey?`<a class="mkt-plan" href="${esc(jiraBrowseBase(p.jira)+'/browse/'+planKey)}" target="_blank" rel="noopener" title="Open ${esc(planKey)} in Jira" onclick="event.stopPropagation()">${highlightTokens(planKey,qt)}</a>`:'<span class="mkt-dash">—</span>';
         row.innerHTML=`
-          <span class="mkt-name">${done}<span class="dot" style="background:${cat.color||'#cdb4f6'}"></span><span class="txt">${esc(p.name)}</span></span>
+          <span class="mkt-name">${done}<span class="dot" style="background:${cat.color||'#cdb4f6'}"></span><span class="txt">${highlightTokens(p.name,qt)}</span></span>
           <span class="mkt-cell">${planCell}</span>
-          <span class="mkt-meta"><span class="cat">${esc(cat.name)}</span></span>
+          <span class="mkt-meta"><span class="cat">${highlightTokens(cat.name,qt)}</span></span>
           <span class="mkt-cell">${ed('priority', priorityChipHTML(p)||mktSuggChip(p,'priority')||dash)}</span>
           <span class="mkt-cell">${ed('size', size)}</span>
           <span class="mkt-cell">${ed('promo', promo)}</span>
@@ -3250,10 +3260,36 @@ function renderListByEnd(g){
   mktQueueSuggestions(items);   // admin-only, async; re-renders when suggestions arrive
   // On entering the view, land the scroll on the current/next month so past releases sit above (scroll up
   // to reach them). Don't re-snap on incidental re-renders while you stay on the view.
+  // While searching, results start at the top instead (matches may sit in past months).
   const cur=wrap.querySelector('[data-cur]');
-  if(cur && _mktLastSquad!==state.activeSquad){ _mktLastSquad=state.activeSquad; requestAnimationFrame(()=>cur.scrollIntoView({block:'start'})); }
+  if(qt.length){ if(q!==_mktLastQ) g.scrollTop=0; }
+  else if(cur && (_mktLastSquad!==state.activeSquad || _mktLastQ)){ requestAnimationFrame(()=>cur.scrollIntoView({block:'start'})); }
+  _mktLastSquad=state.activeSquad; _mktLastQ=q;
 }
-let _mktLastSquad=null;
+let _mktLastSquad=null, _mktLastQ='';
+// Marketing search: the query is split into words and a project matches when EVERY word appears in
+// any of its columns (name, PLAN key, category, squad, tags, priority, size, promotion, status, open
+// scale, assignees, release date/month) — e.g. "nov promotion" or "PLAN-123".
+function searchTokens(q){ return (q||'').toLowerCase().split(/\s+/).filter(Boolean); }
+function mktReleaseText(p){
+  if(p.release==='released') return 'Released';
+  if(p.release==='completed') return 'Completed';
+  const st=projStatusLabel(p);
+  return (st==='Waiting for Start'||st==='Overdue') ? st : 'Not yet';
+}
+function mktSearchText(x){
+  const p=x.p, end=validISO(p.end)?p.end:'';
+  const month = end ? (()=>{ const d=parse(end); return MONTHS[d.getMonth()]+' '+d.getFullYear(); })() : 'no release date';
+  return [p.name, jiraIssueKey(p.jira), x.cat.name, x.squad.name, ...(p.tags||[]), p.priority, p.size,
+    p.promo==='Yes'?'promotion':'', p.openScale, mktReleaseText(p), ...projectAssignees(p).map(a=>a.name),
+    end, end?endLabel(end):'', month].filter(Boolean).join(' \n ').toLowerCase();
+}
+// esc(text) with every occurrence of any token wrapped in <mark>.
+function highlightTokens(text,tokens){
+  text=String(text||''); if(!tokens||!tokens.length) return esc(text);
+  const re=new RegExp('('+tokens.map(t=>t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).sort((a,b)=>b.length-a.length).join('|')+')','gi');
+  return text.split(re).map((part,i)=>i%2?'<mark>'+esc(part)+'</mark>':esc(part)).join('');
+}
 // Logged seconds -> compact hours label ("2h", "2.5h", "45m", "0h").
 function fmtHours(sec){ sec=Number(sec)||0; if(sec<=0) return '0h'; if(sec<3600) return Math.round(sec/60)+'m'; return (Math.round(sec/360)/10)+'h'; }
 function personAvatarHTML(a){
@@ -5249,7 +5285,17 @@ document.getElementById('jiraSyncBtn').onclick=(e)=>{
   else jiraSync();
 };
 document.getElementById('historyBtn').onclick=()=>openVersionHistory();
-(function(){ const sb=document.getElementById('searchBox'); sb.value=state.search||''; sb.oninput=e=>{ state.search=e.target.value; render(); }; })();
+(function(){ const sb=document.getElementById('searchBox'); sb.value=state.search||''; sb.oninput=e=>{ state.search=e.target.value; render(); };
+  sb.addEventListener('keydown',e=>{ if(e.key==='Escape' && sb.value){ e.preventDefault(); e.stopPropagation(); clearSearch(); } });
+  // "/" jumps to the search box on the roadmap (unless you're already typing somewhere)
+  document.addEventListener('keydown',e=>{
+    if(e.key!=='/' || e.metaKey || e.ctrlKey || e.altKey || currentSection!=='roadmap') return;
+    const t=e.target; if(t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+    if(document.querySelector('.modal-bg.open')) return;
+    e.preventDefault(); sb.focus(); sb.select();
+  });
+})();
+function clearSearch(){ state.search=''; const sb=document.getElementById('searchBox'); if(sb){ sb.value=''; sb.focus(); } render(); }
 (function(){
   const btn=document.getElementById('settingsBtn'), menu=document.getElementById('settingsMenu'), tog=document.getElementById('showTags');
   const links=document.getElementById('showLinks'), size=document.getElementById('showSize'), design=document.getElementById('showDesign');
